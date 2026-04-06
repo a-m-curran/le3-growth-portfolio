@@ -1,4 +1,4 @@
-import { getCoachDashboard } from '@/lib/queries'
+import { getCoachDashboard } from '@/lib/demo-queries'
 import { AttentionBanner } from '@/components/coach/AttentionBanner'
 import { CaseloadList } from '@/components/coach/CaseloadList'
 

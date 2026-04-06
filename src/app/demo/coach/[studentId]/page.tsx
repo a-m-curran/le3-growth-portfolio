@@ -1,4 +1,4 @@
-import { getGardenData } from '@/lib/queries'
+import { getGardenData } from '@/lib/demo-queries'
 import { GardenClient } from '@/app/garden/GardenClient'
 import Link from 'next/link'
 

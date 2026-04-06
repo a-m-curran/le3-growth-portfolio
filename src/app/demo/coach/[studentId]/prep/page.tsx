@@ -1,4 +1,4 @@
-import { getSessionPrep } from '@/lib/queries'
+import { getSessionPrep } from '@/lib/demo-queries'
 import { SessionPrep } from '@/components/coach/SessionPrep'
 import Link from 'next/link'
 

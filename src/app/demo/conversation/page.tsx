@@ -1,4 +1,4 @@
-import { getAvailableWork } from '@/lib/queries'
+import { getAvailableWork } from '@/lib/demo-queries'
 import { selectWorkForConversation } from '@/lib/work-selection'
 import { DemoConversationStart } from './DemoConversationStart'
 
