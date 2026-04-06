@@ -639,3 +639,173 @@ export function buildConversationOutputContext(
   parts.push('', 'Generate the structured output JSON.')
   return parts.join('\n').trim()
 }
+
+// ─── SKILL NARRATIVE GENERATION ─────────────────────
+
+export const NARRATIVE_GENERATION_SYSTEM_PROMPT = `You are a narrative writer for a student growth portfolio. Your job is to tell
+the story of a student's development in a specific skill area, drawing from
+their conversations, reflections, assignments, and self-definitions.
+
+VOICE AND STYLE:
+- Write in second person ("you"). Never use the student's name.
+- Mirror the student's own language patterns. If they use short, direct sentences,
+  you should too. If they use metaphors, echo those metaphors. The voice markers
+  provided tell you their style.
+- Be warm but honest. Not effusive, not clinical. Like a thoughtful mentor
+  summarizing what they've observed.
+- Never name the skill explicitly in academic terms. Describe what they DO,
+  not what category it falls into.
+- Reference specific moments from conversations by quoting the student's words
+  (use short quotes from key_moments where provided).
+- Show the arc: where they started, what shifted, where they are now.
+- If there's little data, write a brief but genuine paragraph. Don't pad.
+  "Thin" narratives should be 1-2 paragraphs. "Rich" narratives can be 3-5.
+
+OUTPUT FORMAT (respond with valid JSON only, no markdown):
+{
+  "narrativeText": "The full narrative text. Multiple paragraphs separated by \\n\\n.",
+  "richness": "thin|developing|rich"
+}
+
+RICHNESS GUIDE:
+- thin: 1-2 conversations. Write 1-2 short paragraphs. Focus on first impressions.
+- developing: 3-5 conversations. Write 2-3 paragraphs. Show emerging patterns.
+- rich: 6+ conversations. Write 3-5 paragraphs. Show the full arc with specific moments.
+
+RULES:
+- Use actual quotes from the student's conversations. Short (under 15 words), in quotes.
+- Never fabricate quotes or moments. Only reference what's in the data.
+- If the student revised their skill definition, note the shift in their language.
+- If there's a gap between coach assessment and self-assessment, acknowledge it
+  with curiosity, not judgment.
+- End with a forward-looking sentence — not a grade, but an observation about
+  where the momentum seems to be going.`
+
+export interface NarrativeContext {
+  student: { firstName: string; cohort: string }
+  skillName: string
+  definitions: { text: string; version: number; createdAt: string }[]
+  conversations: {
+    date: string
+    workTitle: string
+    synthesisText: string
+    suggestedInsight: string
+    keyMoments?: { phase: number; quote: string; significance: string }[]
+  }[]
+  assessments: { level: string; assessorType: string; date: string }[]
+  voiceMarkers?: {
+    sentenceLength: string
+    vocabulary: string
+    metaphors: string[]
+    repeatPhrases: string[]
+    emotionalRegister: string
+  }
+}
+
+export function buildNarrativeContext(ctx: NarrativeContext): string {
+  const parts = [
+    `STUDENT: ${ctx.student.firstName} (${ctx.student.cohort})`,
+    `SKILL: ${ctx.skillName}`,
+    `DATA DEPTH: ${ctx.conversations.length} conversation(s)`,
+    '',
+  ]
+
+  if (ctx.definitions.length > 0) {
+    parts.push('DEFINITION JOURNEY:')
+    ctx.definitions.forEach(d => {
+      parts.push(`  v${d.version} (${d.createdAt}): "${d.text}"`)
+    })
+    parts.push('')
+  }
+
+  if (ctx.assessments.length > 0) {
+    parts.push('ASSESSMENT HISTORY:')
+    ctx.assessments.forEach(a => {
+      parts.push(`  ${a.date}: ${a.assessorType} assessed at ${a.level}`)
+    })
+    parts.push('')
+  }
+
+  if (ctx.voiceMarkers) {
+    parts.push('VOICE MARKERS (mirror this style):')
+    parts.push(`  Sentence length: ${ctx.voiceMarkers.sentenceLength}`)
+    parts.push(`  Vocabulary: ${ctx.voiceMarkers.vocabulary}`)
+    parts.push(`  Emotional register: ${ctx.voiceMarkers.emotionalRegister}`)
+    if (ctx.voiceMarkers.metaphors.length > 0) {
+      parts.push(`  Metaphors they use: ${ctx.voiceMarkers.metaphors.join(', ')}`)
+    }
+    if (ctx.voiceMarkers.repeatPhrases.length > 0) {
+      parts.push(`  Phrases they repeat: ${ctx.voiceMarkers.repeatPhrases.join(', ')}`)
+    }
+    parts.push('')
+  }
+
+  parts.push('CONVERSATIONS (chronological):')
+  ctx.conversations.forEach((c, i) => {
+    parts.push(`  ${i + 1}. ${c.date} — "${c.workTitle}"`)
+    parts.push(`     Synthesis: ${c.synthesisText}`)
+    parts.push(`     Insight: ${c.suggestedInsight}`)
+    if (c.keyMoments && c.keyMoments.length > 0) {
+      c.keyMoments.forEach(m => {
+        parts.push(`     Key moment (Phase ${m.phase}): "${m.quote}" — ${m.significance}`)
+      })
+    }
+  })
+
+  parts.push('', 'Generate the skill narrative. Return JSON.')
+  return parts.join('\n').trim()
+}
+
+// ─── CAREER OUTPUT PROMPT ───────────────────────────
+
+export const CAREER_OUTPUT_SYSTEM_PROMPT = `You are a career development advisor synthesizing a student's growth portfolio
+into professional language they can use on resumes, cover letters, and in interviews.
+
+INPUT: You'll receive the student's skill narratives (their growth story for each skill).
+
+OUTPUT FORMAT (respond with valid JSON only, no markdown):
+{
+  "resumeSummary": "3-4 sentence professional summary suitable for the top of a resume. Emphasize transferable skills and growth mindset. Use action verbs. Write in third person.",
+  "skillDescriptions": [
+    {
+      "skillId": "skill_...",
+      "skillName": "...",
+      "resumeLanguage": "1-2 sentences in resume style. Action verb + specific accomplishment + result. Professional but authentic.",
+      "talkingPoints": [
+        "Interview-ready talking point 1 (1-2 sentences, STAR format where possible)",
+        "Interview-ready talking point 2"
+      ]
+    }
+  ]
+}
+
+RULES:
+- Resume language should use strong action verbs: demonstrated, developed, cultivated,
+  navigated, initiated, adapted, facilitated, synthesized, etc.
+- Ground claims in specific examples from the narratives where possible.
+- Don't oversell. The student's actual growth is impressive on its own.
+- Talking points should be conversational, as if the student is telling the story
+  in an interview. First person ("I").
+- Include 2-3 talking points per skill that has a narrative. Skip skills with no narrative.
+- The resume summary should feel cohesive, not just a list of skills.`
+
+export function buildCareerOutputContext(
+  studentName: string,
+  narratives: { skillName: string; skillId: string; narrativeText: string }[]
+): string {
+  const parts = [
+    `STUDENT: ${studentName}`,
+    `SKILLS WITH NARRATIVES: ${narratives.length}`,
+    '',
+    'SKILL NARRATIVES:',
+  ]
+
+  for (const n of narratives) {
+    parts.push(`--- ${n.skillName} (${n.skillId}) ---`)
+    parts.push(n.narrativeText)
+    parts.push('')
+  }
+
+  parts.push('Generate the career output JSON. Include all skills that have narratives.')
+  return parts.join('\n').trim()
+}

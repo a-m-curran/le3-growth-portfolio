@@ -11,6 +11,8 @@ import {
   SKILL_TAG_SYSTEM_PROMPT,
   WORK_SKILL_TAG_SYSTEM_PROMPT,
   CONVERSATION_OUTPUT_SYSTEM_PROMPT,
+  NARRATIVE_GENERATION_SYSTEM_PROMPT,
+  CAREER_OUTPUT_SYSTEM_PROMPT,
   buildPhase1Context,
   buildPhase2Context,
   buildPhase3Context,
@@ -19,7 +21,10 @@ import {
   buildWorkSkillTagContext,
   buildReflectionPhase1Context,
   buildConversationOutputContext,
+  buildNarrativeContext,
+  buildCareerOutputContext,
   type ConversationContext,
+  type NarrativeContext,
 } from './llm-prompts'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -159,6 +164,43 @@ export async function generateConversationOutput(
         emotionalRegister: 'neutral',
       },
     }
+  }
+}
+
+export async function generateCareerOutput(
+  studentName: string,
+  narratives: { skillName: string; skillId: string; narrativeText: string }[]
+): Promise<{ resumeSummary: string; skillDescriptions: { skillId: string; skillName: string; resumeLanguage: string; talkingPoints: string[] }[] }> {
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    temperature: 0.4,
+    max_tokens: 2000,
+    system: CAREER_OUTPUT_SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: buildCareerOutputContext(studentName, narratives) }],
+  })
+  const text = extractText(response)
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { resumeSummary: text, skillDescriptions: [] }
+  }
+}
+
+export async function generateSkillNarrative(
+  ctx: NarrativeContext
+): Promise<{ narrativeText: string; richness: 'thin' | 'developing' | 'rich' }> {
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    temperature: 0.5,
+    max_tokens: 2000,
+    system: NARRATIVE_GENERATION_SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: buildNarrativeContext(ctx) }],
+  })
+  const text = extractText(response)
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { narrativeText: text, richness: 'thin' }
   }
 }
 

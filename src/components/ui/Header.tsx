@@ -40,6 +40,26 @@ export function Header() {
               Conversation
             </Link>
             <Link
+              href="/narrative"
+              className={`px-2 py-1 rounded ${
+                pathname.startsWith('/narrative')
+                  ? 'text-green-800 bg-green-100'
+                  : 'text-gray-600 hover:text-green-800'
+              }`}
+            >
+              Narratives
+            </Link>
+            <Link
+              href="/career"
+              className={`px-2 py-1 rounded ${
+                pathname.startsWith('/career')
+                  ? 'text-green-800 bg-green-100'
+                  : 'text-gray-600 hover:text-green-800'
+              }`}
+            >
+              Career
+            </Link>
+            <Link
               href="/coach"
               className={`px-2 py-1 rounded ${
                 pathname.startsWith('/coach')

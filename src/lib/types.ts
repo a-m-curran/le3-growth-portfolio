@@ -327,6 +327,40 @@ export interface ConversationOutput {
   createdAt: string
 }
 
+// ─── SKILL NARRATIVES ──────────────────────────────
+
+export interface SkillNarrative {
+  id: string
+  studentId: string
+  skillId: string
+  version: number
+  narrativeText: string
+  narrativeRichness: 'thin' | 'developing' | 'rich'
+  dataSourcesUsed: {
+    conversationCount: number
+    assignmentCount: number
+    hasC2aData: boolean
+    hasDefinitions: boolean
+  }
+  generatedAt: string
+}
+
+// ─── CAREER OUTPUT ─────────────────────────────────
+
+export interface CareerOutput {
+  id: string
+  studentId: string
+  version: number
+  resumeSummary: string
+  skillDescriptions: {
+    skillId: string
+    skillName: string
+    resumeLanguage: string
+    talkingPoints: string[]
+  }[]
+  generatedAt: string
+}
+
 // ─── SKILL COVERAGE ────────────────────────────────
 
 export interface SkillCoverageData {
