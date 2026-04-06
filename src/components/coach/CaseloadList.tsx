@@ -57,7 +57,7 @@ export function CaseloadList({ students, coachId, baseUrl = '' }: CaseloadListPr
               View Garden
             </Link>
             <Link
-              href={`/coach/${student.id}/prep?coach=${coachId}`}
+              href={`${baseUrl}/coach/${student.id}/prep?coach=${coachId}`}
               className="text-xs px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
             >
               Prep for Session
