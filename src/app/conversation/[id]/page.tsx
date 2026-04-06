@@ -1,3 +1,5 @@
+import { getCurrentStudent } from '@/lib/queries'
+import { redirect } from 'next/navigation'
 import { ConversationFlow } from './ConversationFlow'
 
 interface Props {
@@ -5,12 +7,13 @@ interface Props {
   searchParams: { student?: string }
 }
 
-export default function ConversationDetailPage({ params, searchParams }: Props) {
-  const studentId = searchParams.student || 'stu_aja'
+export default async function ConversationDetailPage({ params, searchParams }: Props) {
+  const student = await getCurrentStudent(searchParams.student)
+  if (!student) redirect('/login')
 
   return (
     <main className="max-w-2xl mx-auto px-4 py-8">
-      <ConversationFlow workId={params.id} studentId={studentId} />
+      <ConversationFlow workId={params.id} studentId={student.id} />
     </main>
   )
 }

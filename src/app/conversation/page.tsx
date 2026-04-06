@@ -1,5 +1,6 @@
-import { getAvailableWork } from '@/lib/queries'
+import { getAvailableWork, getCurrentStudent } from '@/lib/queries'
 import { selectWorkForConversation } from '@/lib/work-selection'
+import { redirect } from 'next/navigation'
 import { ConversationStart } from './ConversationStart'
 
 interface Props {
@@ -7,7 +8,9 @@ interface Props {
 }
 
 export default async function ConversationPage({ searchParams }: Props) {
-  const studentId = searchParams.student || 'stu_aja'
+  const student = await getCurrentStudent(searchParams.student)
+  if (!student) redirect('/login')
+  const studentId = student.id
   const availableWork = await getAvailableWork(studentId)
   const selection = selectWorkForConversation(availableWork)
 
