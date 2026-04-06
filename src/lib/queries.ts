@@ -355,6 +355,30 @@ export async function getConversationsForSkill(
   })
 }
 
+export async function getAllStudentConversations(studentId: string): Promise<GrowthConversation[]> {
+  if (isDemoMode) return staticData.getStudentConversations(studentId)
+
+  const supabase = await getSupabase()
+  const { data } = await supabase
+    .from('growth_conversation')
+    .select('*, conversation_skill_tag(*), student_work(title)')
+    .eq('student_id', studentId)
+    .in('status', ['in_progress', 'completed'])
+    .order('started_at', { ascending: false })
+
+  return (data || []).map(row => {
+    const conv = snakeToCamel(row) as unknown as GrowthConversation
+    conv.skillTags = (row.conversation_skill_tag || []).map(
+      (t: Record<string, unknown>) => snakeToCamel(t)
+    )
+    // Attach work title
+    if (row.student_work) {
+      (conv as unknown as Record<string, unknown>).workTitle = (row.student_work as Record<string, unknown>).title
+    }
+    return conv
+  })
+}
+
 // ─── WORK QUERIES ───────────────────────────────────
 
 export async function getAvailableWork(studentId: string): Promise<StudentWork[]> {
