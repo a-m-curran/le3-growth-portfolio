@@ -6,7 +6,9 @@ import {
   generatePhase3Question,
   generateSynthesis,
   suggestSkillTags,
+  generateConversationOutput,
 } from '@/lib/conversation-engine-live'
+import { createAdminClient } from '@/lib/supabase-admin'
 import { determineTargetSkill, buildSkillLevelMap } from '@/lib/llm-prompts'
 import type { ConversationContext } from '@/lib/llm-prompts'
 import type { Student, StudentWork, GrowthConversation, SkillAssessment, SdtLevel } from '@/lib/types'
@@ -193,6 +195,40 @@ export async function POST(
             }))
           )
       }
+
+      // Generate structured output for C2A (fire-and-forget, don't block response)
+      const admin = createAdminClient()
+      generateConversationOutput(
+        {
+          promptPhase1: rawConversation.prompt_phase_1,
+          responsePhase1: rawConversation.response_phase_1,
+          promptPhase2: rawConversation.prompt_phase_2,
+          responsePhase2: rawConversation.response_phase_2,
+          promptPhase3: rawConversation.prompt_phase_3,
+          responsePhase3: studentResponse,
+          synthesisText: synthesis.synthesisText,
+        },
+        skillTags,
+        {}, // rubric descriptors — TODO: fetch from DB
+        (prevConvosResult.data || []).map((c: Record<string, unknown>) => ({
+          synthesisText: c.synthesis_text as string,
+          suggestedInsight: c.suggested_insight as string,
+        }))
+      ).then(async (output) => {
+        await admin.from('conversation_output').insert({
+          conversation_id: params.id,
+          evidence_strength: output.evidenceStrength,
+          evidence_rationale: output.evidenceRationale,
+          behavioral_indicators: output.behavioralIndicators,
+          sdt_level_signals: output.sdtLevelSignals,
+          growth_trajectory: output.growthTrajectory,
+          trajectory_rationale: output.trajectoryRationale,
+          key_moments: output.keyMoments,
+          voice_markers: output.voiceMarkers,
+        })
+      }).catch(err => {
+        console.error('Failed to generate conversation output:', err)
+      })
 
       return NextResponse.json({
         synthesis: synthesis.synthesisText,

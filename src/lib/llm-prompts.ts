@@ -532,3 +532,110 @@ export function buildReflectionPhase1Context(ctx: ConversationContext, reflectio
     'an experience they want to reflect on. Help them tell the story of what happened.',
   ].join('\n').trim()
 }
+
+// ─── C2A STRUCTURED OUTPUT PROMPT ───────────────────
+
+export const CONVERSATION_OUTPUT_SYSTEM_PROMPT = `You are an analytical system that extracts structured developmental data from
+completed reflective conversations. Your output feeds a quantitative assessment
+tool (C2A) and a narrative generator.
+
+OUTPUT FORMAT (respond with valid JSON only, no markdown):
+{
+  "evidenceStrength": "thin|moderate|strong|compelling",
+  "evidenceRationale": "1 sentence explaining why",
+  "behavioralIndicators": [
+    {
+      "skillId": "skill_...",
+      "descriptor": "The specific rubric descriptor observed",
+      "sdtLevel": "external|introjected|identified|integrated|intrinsic",
+      "observed": true
+    }
+  ],
+  "sdtLevelSignals": {
+    "skill_...": {
+      "signalLevel": "external|introjected|identified|integrated|intrinsic",
+      "confidence": 0.75,
+      "rationale": "1-2 sentences with evidence from the conversation"
+    }
+  },
+  "growthTrajectory": "emerging|developing|stable|accelerating|plateau",
+  "trajectoryRationale": "1 sentence",
+  "keyMoments": [
+    {
+      "phase": 1,
+      "quote": "Exact quote from the student",
+      "significance": "Why this moment matters developmentally"
+    }
+  ],
+  "voiceMarkers": {
+    "sentenceLength": "short|medium|long",
+    "vocabulary": "simple|conversational|academic",
+    "metaphors": ["list of metaphors or figurative language the student used"],
+    "repeatPhrases": ["phrases the student repeated or emphasized"],
+    "emotionalRegister": "1-word descriptor: guarded, warm, analytical, etc."
+  }
+}
+
+RULES:
+- Extract ACTUAL QUOTES, never paraphrase. Use the student's exact words.
+- Match behavioral indicators against the rubric descriptors provided. Only mark
+  as observed if you see clear evidence in the conversation text.
+- SDT level signals should be based on HOW the student talks about their experience:
+  * External: talks about compliance, requirements, what others told them to do
+  * Introjected: talks about avoiding judgment, comparing to others, seeking approval
+  * Identified: talks about personal reasons, career relevance, values alignment
+  * Integrated: talks about identity ("this is who I am"), cross-context consistency
+  * Intrinsic: talks about joy, absorption, the process itself being rewarding
+- Growth trajectory compares this conversation to previous ones (if provided):
+  * Emerging: first signs of awareness in this skill area
+  * Developing: growing awareness and intentionality
+  * Stable: consistent level, neither growing nor declining
+  * Accelerating: rapid growth visible across recent conversations
+  * Plateau: was growing but has leveled off
+- Voice markers capture the student's linguistic fingerprint for future narrative generation.
+  Listen for their natural speech patterns, not their "school voice."
+- Key moments: select 2-4 moments where the student reveals something developmentally
+  significant. Prioritize moments of genuine reflection over surface-level description.`
+
+export function buildConversationOutputContext(
+  conversation: { promptPhase1?: string; responsePhase1?: string; promptPhase2?: string; responsePhase2?: string; promptPhase3?: string; responsePhase3?: string; synthesisText?: string },
+  skillTags: { skillId: string }[],
+  rubricDescriptors: Record<string, Record<string, string[]>>,
+  previousConversations?: { synthesisText?: string; suggestedInsight?: string }[]
+): string {
+  const parts = [
+    'CONVERSATION TRANSCRIPT:',
+    '',
+    `Phase 1 Prompt: ${conversation.promptPhase1 || ''}`,
+    `Phase 1 Response: ${conversation.responsePhase1 || ''}`,
+    '',
+    `Phase 2 Prompt: ${conversation.promptPhase2 || ''}`,
+    `Phase 2 Response: ${conversation.responsePhase2 || ''}`,
+    '',
+    `Phase 3 Prompt: ${conversation.promptPhase3 || ''}`,
+    `Phase 3 Response: ${conversation.responsePhase3 || ''}`,
+    '',
+    `Synthesis: ${conversation.synthesisText || ''}`,
+    '',
+    'TAGGED SKILLS: ' + skillTags.map(t => t.skillId).join(', '),
+    '',
+    'RUBRIC DESCRIPTORS FOR TAGGED SKILLS:',
+  ]
+
+  for (const [skillId, levels] of Object.entries(rubricDescriptors)) {
+    parts.push(`  ${skillId}:`)
+    for (const [level, descriptors] of Object.entries(levels)) {
+      parts.push(`    ${level}: ${(descriptors as string[]).join('; ')}`)
+    }
+  }
+
+  if (previousConversations && previousConversations.length > 0) {
+    parts.push('', 'PREVIOUS CONVERSATION INSIGHTS (for trajectory assessment):')
+    previousConversations.slice(0, 5).forEach((c, i) => {
+      parts.push(`  ${i + 1}. ${c.suggestedInsight || c.synthesisText?.substring(0, 100) || 'No insight recorded'}`)
+    })
+  }
+
+  parts.push('', 'Generate the structured output JSON.')
+  return parts.join('\n').trim()
+}

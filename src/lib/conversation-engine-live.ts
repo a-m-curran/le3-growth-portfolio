@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import type { StudentWork } from './types'
+import type { StudentWork, ConversationOutput } from './types'
 import {
   MODEL,
   TEMPERATURE,
@@ -10,6 +10,7 @@ import {
   SYNTHESIS_SYSTEM_PROMPT,
   SKILL_TAG_SYSTEM_PROMPT,
   WORK_SKILL_TAG_SYSTEM_PROMPT,
+  CONVERSATION_OUTPUT_SYSTEM_PROMPT,
   buildPhase1Context,
   buildPhase2Context,
   buildPhase3Context,
@@ -17,6 +18,7 @@ import {
   buildSkillTagContext,
   buildWorkSkillTagContext,
   buildReflectionPhase1Context,
+  buildConversationOutputContext,
   type ConversationContext,
 } from './llm-prompts'
 
@@ -121,6 +123,42 @@ export async function autoTagWork(
     return JSON.parse(text)
   } catch {
     return []
+  }
+}
+
+export async function generateConversationOutput(
+  conversation: { promptPhase1?: string; responsePhase1?: string; promptPhase2?: string; responsePhase2?: string; promptPhase3?: string; responsePhase3?: string; synthesisText?: string },
+  skillTags: { skillId: string }[],
+  rubricDescriptors: Record<string, Record<string, string[]>>,
+  previousConversations?: { synthesisText?: string; suggestedInsight?: string }[]
+): Promise<Omit<ConversationOutput, 'id' | 'conversationId' | 'createdAt'>> {
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    temperature: 0.2,
+    max_tokens: 1500,
+    system: CONVERSATION_OUTPUT_SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: buildConversationOutputContext(conversation, skillTags, rubricDescriptors, previousConversations) }],
+  })
+  const text = extractText(response)
+  try {
+    return JSON.parse(text)
+  } catch {
+    return {
+      evidenceStrength: 'thin',
+      evidenceRationale: 'Failed to parse structured output',
+      behavioralIndicators: [],
+      sdtLevelSignals: {},
+      growthTrajectory: 'emerging',
+      trajectoryRationale: 'Unable to assess',
+      keyMoments: [],
+      voiceMarkers: {
+        sentenceLength: 'medium',
+        vocabulary: 'conversational',
+        metaphors: [],
+        repeatPhrases: [],
+        emotionalRegister: 'neutral',
+      },
+    }
   }
 }
 

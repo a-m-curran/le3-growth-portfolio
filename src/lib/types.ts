@@ -280,3 +280,61 @@ export interface SessionPrepData {
   currentGoals: StudentGoal[]
   lastNote: CoachNote | null
 }
+
+// ─── C2A STRUCTURED OUTPUT ─────────────────────────
+
+export interface BehavioralIndicator {
+  skillId: string
+  descriptor: string
+  sdtLevel: SdtLevel
+  observed: boolean
+}
+
+export interface SdtLevelSignal {
+  signalLevel: SdtLevel
+  confidence: number
+  rationale: string
+}
+
+export interface KeyMoment {
+  phase: 1 | 2 | 3
+  quote: string
+  significance: string
+}
+
+export interface VoiceMarkers {
+  sentenceLength: 'short' | 'medium' | 'long'
+  vocabulary: 'simple' | 'conversational' | 'academic'
+  metaphors: string[]
+  repeatPhrases: string[]
+  emotionalRegister: string
+}
+
+export type EvidenceStrength = 'thin' | 'moderate' | 'strong' | 'compelling'
+export type GrowthTrajectory = 'emerging' | 'developing' | 'stable' | 'accelerating' | 'plateau'
+
+export interface ConversationOutput {
+  id: string
+  conversationId: string
+  evidenceStrength: EvidenceStrength
+  evidenceRationale?: string
+  behavioralIndicators: BehavioralIndicator[]
+  sdtLevelSignals: Record<string, SdtLevelSignal>
+  growthTrajectory: GrowthTrajectory
+  trajectoryRationale?: string
+  keyMoments: KeyMoment[]
+  voiceMarkers: VoiceMarkers
+  createdAt: string
+}
+
+// ─── SKILL COVERAGE ────────────────────────────────
+
+export interface SkillCoverageData {
+  skillId: string
+  skillName: string
+  pillarId: string
+  pillarName: string
+  taggedAssignments: number
+  completedConversations: number
+  coverageRatio: number
+}

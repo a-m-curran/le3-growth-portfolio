@@ -379,6 +379,111 @@ export async function getAllStudentConversations(studentId: string): Promise<Gro
   })
 }
 
+// ─── SKILL COVERAGE ─────────────────────────────────
+
+export async function getSkillCoverage(studentId: string): Promise<import('./types').SkillCoverageData[]> {
+  if (isDemoMode) {
+    // In demo mode, derive coverage from static data
+    const activeSkills = skills.filter(s => s.isActive)
+    return activeSkills.map(skill => {
+      const pillar = pillars.find(p => p.id === skill.pillarId)
+      const convos = staticData.getConversationsForSkill(studentId, skill.id)
+      return {
+        skillId: skill.id,
+        skillName: skill.name,
+        pillarId: skill.pillarId,
+        pillarName: pillar?.name || '',
+        taggedAssignments: convos.length, // approximate
+        completedConversations: convos.length,
+        coverageRatio: convos.length > 0 ? 1 : 0,
+      }
+    })
+  }
+
+  const supabase = await getSupabase()
+
+  // Get all active skills with pillars
+  const { data: skillRows } = await supabase
+    .from('durable_skill')
+    .select('id, name, pillar_id, pillar:pillar_id(name)')
+    .eq('is_active', true)
+    .order('display_order')
+
+  // Get tagged assignment counts per skill
+  const { data: tagCounts } = await supabase
+    .from('work_skill_tag')
+    .select('skill_id, work_id, student_work!inner(student_id)')
+    .eq('student_work.student_id', studentId)
+
+  // Get completed conversation counts per skill
+  const { data: convoCounts } = await supabase
+    .from('conversation_skill_tag')
+    .select('skill_id, growth_conversation!inner(student_id, status)')
+    .eq('growth_conversation.student_id', studentId)
+    .eq('growth_conversation.status', 'completed')
+
+  // Count per skill
+  const tagCountMap = new Map<string, number>()
+  for (const t of (tagCounts || [])) {
+    tagCountMap.set(t.skill_id, (tagCountMap.get(t.skill_id) || 0) + 1)
+  }
+
+  const convoCountMap = new Map<string, number>()
+  for (const c of (convoCounts || [])) {
+    convoCountMap.set(c.skill_id, (convoCountMap.get(c.skill_id) || 0) + 1)
+  }
+
+  return (skillRows || []).map((row: Record<string, unknown>) => {
+    const skillId = row.id as string
+    const tagged = tagCountMap.get(skillId) || 0
+    const completed = convoCountMap.get(skillId) || 0
+    return {
+      skillId,
+      skillName: row.name as string,
+      pillarId: row.pillar_id as string,
+      pillarName: ((row.pillar as Record<string, unknown>)?.name as string) || '',
+      taggedAssignments: tagged,
+      completedConversations: completed,
+      coverageRatio: tagged > 0 ? completed / tagged : 0,
+    }
+  })
+}
+
+// ─── WORK WITH SKILL TAGS ───────────────────────────
+
+export async function getAvailableWorkWithTags(studentId: string): Promise<(import('./types').StudentWork & { skillTags: { skillId: string; skillName: string }[] })[]> {
+  if (isDemoMode) {
+    return staticData.getAvailableWork(studentId).map(w => ({ ...w, skillTags: [] }))
+  }
+
+  const supabase = await getSupabase()
+
+  const { data: allWork } = await supabase
+    .from('student_work')
+    .select('*, work_skill_tag(skill_id, durable_skill(name))')
+    .eq('student_id', studentId)
+    .order('submitted_at', { ascending: false })
+
+  const { data: convos } = await supabase
+    .from('growth_conversation')
+    .select('work_id')
+    .eq('student_id', studentId)
+    .in('status', ['completed', 'in_progress'])
+
+  const reflectedWorkIds = new Set((convos || []).map(c => c.work_id).filter(Boolean))
+
+  return (allWork || [])
+    .filter(w => !reflectedWorkIds.has(w.id))
+    .map(w => {
+      const work = snakeToCamel(w) as unknown as import('./types').StudentWork
+      const tags = (w.work_skill_tag || []).map((t: Record<string, unknown>) => ({
+        skillId: t.skill_id as string,
+        skillName: ((t.durable_skill as Record<string, unknown>)?.name as string) || '',
+      }))
+      return { ...work, skillTags: tags }
+    })
+}
+
 // ─── WORK QUERIES ───────────────────────────────────
 
 export async function getAvailableWork(studentId: string): Promise<StudentWork[]> {
