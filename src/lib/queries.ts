@@ -95,6 +95,34 @@ export async function getAllCoaches(): Promise<Coach[]> {
   return (data || []).map(c => snakeToCamel(c) as unknown as Coach)
 }
 
+export async function getCurrentCoach(coachId?: string): Promise<Coach | null> {
+  if (isDemoMode) {
+    return staticData.getCoach(coachId || 'coach_elizabeth') ?? null
+  }
+
+  const supabase = await getSupabase()
+
+  if (coachId) {
+    const { data } = await supabase
+      .from('coach')
+      .select('*')
+      .eq('id', coachId)
+      .single()
+    return data ? snakeToCamel(data) as unknown as Coach : null
+  }
+
+  // Get from auth session
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const { data } = await supabase
+    .from('coach')
+    .select('*')
+    .eq('auth_user_id', user.id)
+    .single()
+  return data ? snakeToCamel(data) as unknown as Coach : null
+}
+
 // ─── GARDEN DATA ────────────────────────────────────
 
 export async function getGardenData(studentId: string): Promise<GardenData> {

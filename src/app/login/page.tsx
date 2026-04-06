@@ -1,64 +1,112 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { students, coaches } from '@/data'
+import { createBrowserClient } from '@supabase/auth-helpers-nextjs'
+import { useState, useRef } from 'react'
+import Link from 'next/link'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 export default function LoginPage() {
-  const router = useRouter()
+  const [email, setEmail] = useState('')
+  const [sent, setSent] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const supabaseRef = useRef<SupabaseClient | null>(null)
+
+  function getSupabase() {
+    if (!supabaseRef.current) {
+      supabaseRef.current = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      )
+    }
+    return supabaseRef.current
+  }
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+
+    const supabase = getSupabase()
+    const { error: authError } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: `${window.location.origin}/api/auth/callback` },
+    })
+
+    if (authError) {
+      setError(authError.message)
+      setLoading(false)
+      return
+    }
+
+    setSent(true)
+    setLoading(false)
+  }
+
+  if (sent) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-green-50 px-4">
+        <div className="max-w-sm w-full text-center space-y-4">
+          <div className="text-4xl">📬</div>
+          <h1 className="text-xl font-bold text-green-900">Check your email</h1>
+          <p className="text-sm text-gray-600">
+            We sent a sign-in link to <strong>{email}</strong>.
+            Click the link in your email to sign in.
+          </p>
+          <button
+            onClick={() => { setSent(false); setEmail('') }}
+            className="text-sm text-green-700 hover:underline"
+          >
+            Use a different email
+          </button>
+        </div>
+      </main>
+    )
+  }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-green-50 px-4 py-12">
-      <div className="max-w-lg w-full space-y-8">
+    <main className="min-h-screen flex items-center justify-center bg-green-50 px-4">
+      <div className="max-w-sm w-full space-y-6">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-green-900">LE3 Growth Portfolio</h1>
-          <p className="text-sm text-gray-600 mt-2">Choose a person to explore the demo</p>
+          <p className="text-sm text-gray-600 mt-2">Enter your NLU email to sign in</p>
         </div>
 
-        {/* Students */}
-        <div>
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Students</h2>
-          <div className="grid gap-3">
-            {students.map(s => (
-              <button
-                key={s.id}
-                onClick={() => router.push(`/garden?student=${s.id}`)}
-                className="w-full text-left px-4 py-3 bg-white border border-gray-200 rounded-lg hover:border-green-400 hover:shadow-sm transition-all group"
-              >
-                <div className="font-medium text-green-900 group-hover:text-green-700">
-                  {s.firstName} {s.lastName}
-                </div>
-                <div className="text-xs text-gray-500 mt-0.5">
-                  {s.cohort}
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
+        <form onSubmit={handleLogin} className="space-y-4">
+          <input
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="you@nlu.edu"
+            required
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          />
 
-        {/* Coaches */}
-        <div>
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Coaches</h2>
-          <div className="grid gap-3">
-            {coaches.map(c => (
-              <button
-                key={c.id}
-                onClick={() => router.push(`/coach?coach=${c.id}`)}
-                className="w-full text-left px-4 py-3 bg-white border border-gray-200 rounded-lg hover:border-green-400 hover:shadow-sm transition-all group"
-              >
-                <div className="font-medium text-green-900 group-hover:text-green-700">
-                  {c.name}
-                </div>
-                <div className="text-xs text-gray-500 mt-0.5">
-                  Coach
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
+          {error && (
+            <p className="text-sm text-red-600">{error}</p>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading || !email}
+            className="w-full py-3 bg-green-700 text-white rounded-lg text-sm font-medium hover:bg-green-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? 'Sending...' : 'Send Sign-In Link'}
+          </button>
+        </form>
 
         <p className="text-xs text-gray-400 text-center">
-          This is a demo. In the live version, users sign in with their NLU email.
+          No password needed. We&apos;ll email you a secure link.
         </p>
+
+        <div className="text-center pt-2 border-t border-gray-200">
+          <Link
+            href="/demo"
+            className="text-sm text-green-700 hover:text-green-900 hover:underline"
+          >
+            Just exploring? Try the demo &rarr;
+          </Link>
+        </div>
       </div>
     </main>
   )

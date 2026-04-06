@@ -1,13 +1,14 @@
-import { getAvailableWork, getCurrentStudent } from '@/lib/queries'
+import { getAvailableWork } from '@/lib/queries'
 import { selectWorkForConversation } from '@/lib/work-selection'
-import { redirect } from 'next/navigation'
-import { ConversationStart } from './ConversationStart'
+import { DemoConversationStart } from './DemoConversationStart'
 
-export default async function ConversationPage() {
-  const student = await getCurrentStudent()
-  if (!student) redirect('/login')
+interface Props {
+  searchParams: { student?: string }
+}
 
-  const availableWork = await getAvailableWork(student.id)
+export default async function DemoConversationPage({ searchParams }: Props) {
+  const studentId = searchParams.student || 'stu_aja'
+  const availableWork = await getAvailableWork(studentId)
   const selection = selectWorkForConversation(availableWork)
 
   return (
@@ -18,8 +19,8 @@ export default async function ConversationPage() {
       </p>
 
       {selection ? (
-        <ConversationStart
-          studentId={student.id}
+        <DemoConversationStart
+          studentId={studentId}
           primary={selection.primary}
           alternatives={selection.alternatives}
         />
@@ -27,7 +28,7 @@ export default async function ConversationPage() {
         <div className="text-center py-12 text-gray-500">
           <p className="text-lg mb-2">No work available for reflection.</p>
           <p className="text-sm">
-            All your submitted work has already been reflected on. Check back after submitting new assignments.
+            All submitted work has already been reflected on.
           </p>
         </div>
       )}

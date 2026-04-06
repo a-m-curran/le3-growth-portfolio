@@ -1,23 +1,21 @@
-import { getGardenData, getCurrentCoach } from '@/lib/queries'
-import { redirect } from 'next/navigation'
+import { getGardenData } from '@/lib/queries'
 import { GardenClient } from '@/app/garden/GardenClient'
 import Link from 'next/link'
 
 interface Props {
   params: { studentId: string }
+  searchParams: { coach?: string }
 }
 
-export default async function CoachStudentPage({ params }: Props) {
-  const coach = await getCurrentCoach()
-  if (!coach) redirect('/login')
-
+export default async function DemoCoachStudentPage({ params, searchParams }: Props) {
   const data = await getGardenData(params.studentId)
+  const coachId = searchParams.coach || 'coach_elizabeth'
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-6">
       <div className="flex items-center gap-4 mb-4">
         <Link
-          href="/coach"
+          href={`/demo/coach?coach=${coachId}`}
           className="text-sm text-gray-500 hover:text-gray-700"
         >
           &larr; Back to Caseload

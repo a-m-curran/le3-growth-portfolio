@@ -8,9 +8,10 @@ import { Badge } from '@/components/ui/Badge'
 interface CaseloadListProps {
   students: CoachStudentSummary[]
   coachId: string
+  baseUrl?: string
 }
 
-export function CaseloadList({ students, coachId }: CaseloadListProps) {
+export function CaseloadList({ students, coachId, baseUrl = '' }: CaseloadListProps) {
   return (
     <div className="space-y-4">
       {students.map(({ student, conversationsThisQuarter, latestPullQuote, skillLevels }) => (
@@ -50,7 +51,7 @@ export function CaseloadList({ students, coachId }: CaseloadListProps) {
           {/* Action buttons */}
           <div className="flex gap-2">
             <Link
-              href={`/coach/${student.id}?coach=${coachId}`}
+              href={`${baseUrl}/coach/${student.id}?coach=${coachId}`}
               className="text-xs px-3 py-1.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors"
             >
               View Garden

@@ -4,9 +4,18 @@ import type { NextRequest } from 'next/server'
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
+  const { pathname } = req.nextUrl
 
-  // Demo mode: no auth required
-  if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') return res
+  // Public routes — no auth required
+  if (
+    pathname.startsWith('/demo') ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/onboarding') ||
+    pathname.startsWith('/api/auth') ||
+    pathname.startsWith('/api/onboarding')
+  ) {
+    return res
+  }
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -28,8 +37,7 @@ export async function middleware(req: NextRequest) {
 
   const { data: { session } } = await supabase.auth.getSession()
 
-  // Not logged in → redirect to login
-  if (!session && !req.nextUrl.pathname.startsWith('/login')) {
+  if (!session) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
@@ -37,5 +45,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|login|api/auth).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 }

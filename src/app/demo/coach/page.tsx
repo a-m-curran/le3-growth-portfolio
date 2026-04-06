@@ -1,13 +1,14 @@
-import { getCoachDashboard, getCurrentCoach } from '@/lib/queries'
-import { redirect } from 'next/navigation'
+import { getCoachDashboard } from '@/lib/queries'
 import { AttentionBanner } from '@/components/coach/AttentionBanner'
 import { CaseloadList } from '@/components/coach/CaseloadList'
 
-export default async function CoachPage() {
-  const coach = await getCurrentCoach()
-  if (!coach) redirect('/login')
+interface Props {
+  searchParams: { coach?: string }
+}
 
-  const data = await getCoachDashboard(coach.id)
+export default async function DemoCoachPage({ searchParams }: Props) {
+  const coachId = searchParams.coach || 'coach_elizabeth'
+  const data = await getCoachDashboard(coachId)
 
   const totalConvos = data.students.reduce(
     (sum, s) => sum + s.conversationsThisQuarter,
@@ -24,7 +25,7 @@ export default async function CoachPage() {
       </p>
 
       <AttentionBanner items={data.attentionItems} />
-      <CaseloadList students={data.students} coachId={coach.id} />
+      <CaseloadList students={data.students} coachId={coachId} baseUrl="/demo" />
     </main>
   )
 }

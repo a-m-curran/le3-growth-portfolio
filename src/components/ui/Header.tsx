@@ -2,11 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { PersonSelector } from './PersonSelector'
 
 export function Header() {
   const pathname = usePathname()
-  const isCoach = pathname.startsWith('/coach')
+
+  // Hide on demo, login, and onboarding routes (they have their own headers/layouts)
+  if (pathname.startsWith('/demo') || pathname === '/login' || pathname === '/onboarding') {
+    return null
+  }
 
   return (
     <header className="border-b border-green-200 bg-white/80 backdrop-blur-sm sticky top-0 z-40">
@@ -48,7 +51,12 @@ export function Header() {
             </Link>
           </nav>
         </div>
-        <PersonSelector isCoach={isCoach} />
+        <Link
+          href="/login"
+          className="text-sm text-gray-500 hover:text-green-700"
+        >
+          Sign out
+        </Link>
       </div>
     </header>
   )
