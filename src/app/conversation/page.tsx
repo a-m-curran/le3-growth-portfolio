@@ -27,12 +27,26 @@ export default async function ConversationPage() {
             Reflect on your work through guided conversations.
           </p>
         </div>
-        <Link
-          href="/work/submit"
-          className="text-sm px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 transition-colors whitespace-nowrap"
-        >
-          + Submit Work
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href="/reflection/new"
+            className="text-sm px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors whitespace-nowrap"
+          >
+            + Reflect
+          </Link>
+          <Link
+            href="/work/submit"
+            className="text-sm px-3 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 transition-colors whitespace-nowrap"
+          >
+            + Submit
+          </Link>
+          <Link
+            href="/work/import"
+            className="text-sm px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
+          >
+            Import
+          </Link>
+        </div>
       </div>
 
       {/* In-progress conversations */}
@@ -103,9 +117,10 @@ function ConversationCard({
   conversation: GrowthConversation & { workTitle?: string }
   completed?: boolean
 }) {
-  const workTitle = (conversation as unknown as { workTitle?: string }).workTitle
-    || conversation.workContext
-    || 'Reflection'
+  const isReflection = conversation.conversationType === 'open_reflection'
+  const workTitle = isReflection
+    ? (conversation.reflectionDescription?.substring(0, 60) || 'Open Reflection')
+    : ((conversation as unknown as { workTitle?: string }).workTitle || conversation.workContext || 'Reflection')
 
   const date = new Date(conversation.startedAt).toLocaleDateString('en-US', {
     month: 'short',
@@ -119,7 +134,7 @@ function ConversationCard({
 
   return (
     <Link
-      href={completed ? '#' : `/conversation/${conversation.workId}`}
+      href={completed ? '#' : `/conversation/${conversation.workId || conversation.id}`}
       className={`block p-4 rounded-xl bg-white border transition-colors ${
         completed
           ? 'border-gray-200 opacity-75'

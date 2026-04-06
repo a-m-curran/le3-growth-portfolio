@@ -12,18 +12,19 @@ UPDATE pillar SET name = 'Creative & Curious Thinkers' WHERE name = 'Creative & 
 UPDATE pillar SET name = 'Leaders with Purpose & Agency' WHERE name = 'Lead Themselves & Others';
 UPDATE pillar SET name = 'Thrivers in Change' WHERE name = 'Thrive in Change';
 
--- ─── UPDATE SDT LEVEL CHECK CONSTRAINT ──────────────
+-- ─── MIGRATE EXISTING SDT LEVEL DATA (before constraint change) ──
 
+-- Drop old constraint first so we can update values
 ALTER TABLE skill_assessment DROP CONSTRAINT IF EXISTS skill_assessment_sdt_level_check;
-ALTER TABLE skill_assessment ADD CONSTRAINT skill_assessment_sdt_level_check
-  CHECK (sdt_level IN ('external', 'introjected', 'identified', 'integrated', 'intrinsic'));
-
--- ─── MIGRATE EXISTING SDT LEVEL DATA ────────────────
 
 UPDATE skill_assessment SET sdt_level = 'external' WHERE sdt_level = 'noticing';
 UPDATE skill_assessment SET sdt_level = 'identified' WHERE sdt_level = 'practicing';
 UPDATE skill_assessment SET sdt_level = 'integrated' WHERE sdt_level = 'integrating';
 UPDATE skill_assessment SET sdt_level = 'intrinsic' WHERE sdt_level = 'evolving';
+
+-- Now add the new constraint
+ALTER TABLE skill_assessment ADD CONSTRAINT skill_assessment_sdt_level_check
+  CHECK (sdt_level IN ('external', 'introjected', 'identified', 'integrated', 'intrinsic'));
 
 -- ─── MOVE RESILIENCE TO THRIVE PILLAR ───────────────
 

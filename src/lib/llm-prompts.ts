@@ -421,3 +421,114 @@ export function buildSkillLevelMap(
   }
   return map
 }
+
+// ─── WORK AUTO-TAGGING PROMPT ───────────────────────
+
+export const WORK_SKILL_TAG_SYSTEM_PROMPT = `You are a skill classification system for a student development portfolio.
+Given an assignment or work product, identify which durable skills are most
+likely to be developed or demonstrated through this work.
+
+THE DURABLE SKILLS FRAMEWORK (12 skills across 4 pillars):
+
+PILLAR: Creative & Curious Thinkers
+- Creative Problem Solving (skill_creative_problem_solving): Generates original solutions; reframes problems
+- Critical Thinking (skill_critical_thinking): Analyzes information deeply; evaluates evidence
+- Curiosity (skill_curiosity): Asks meaningful questions; seeks to understand beyond surface-level
+
+PILLAR: Leaders with Purpose & Agency
+- Initiative (skill_initiative): Takes proactive steps; does not wait to be told what to do
+- Empathy (skill_empathy): Understands and respects others' feelings and perspectives
+- Communication (skill_communication): Clearly articulates ideas for different audiences
+
+PILLAR: Thrivers in Change
+- Adaptability (skill_adaptability): Adjusts approach as new information or challenges arise
+- Resilience (skill_resilience): Perseveres through challenges; maintains effort despite obstacles
+
+PILLAR: Network Builders
+- Collaboration (skill_collaboration): Works well with others toward shared goals
+- Networking (skill_networking): Builds professional connections across contexts
+- Relationship Building (skill_relationship_building): Develops and maintains meaningful relationships
+- Social Awareness (skill_social_awareness): Reads social context; navigates group dynamics
+
+OUTPUT FORMAT (respond with valid JSON array only, no markdown):
+[
+  {
+    "skillId": "skill_critical_thinking",
+    "confidence": 0.75,
+    "rationale": "1-2 sentences explaining why this skill is likely developed through this work."
+  }
+]
+
+RULES:
+- Return 1-3 skill tags. Most assignments touch 1-2 skills primarily.
+- Confidence threshold: 0.4+ (lower than conversation tagging since we're
+  predicting from assignment metadata, not observing demonstrated behavior).
+- Tag based on what skills the assignment COULD develop, not what the student
+  demonstrated. We haven't seen their reflection yet.
+- If the assignment content is available, use specific details. If only title
+  and metadata are available, make reasonable inferences.
+- Use exact skill IDs from the framework above.`
+
+export function buildWorkSkillTagContext(
+  work: StudentWork,
+  coverageCounts?: Record<string, number>
+): string {
+  let context = `
+ASSIGNMENT:
+- Title: ${work.title}
+- Type: ${work.workType}
+- Course: ${work.courseName || 'N/A'} ${work.courseCode || ''}
+- Description: ${work.description || 'No description available'}
+- Content: ${work.content ? work.content.substring(0, 3000) : 'No content available'}
+
+Tag which durable skills this assignment is most likely to develop. Return JSON array.`
+
+  if (coverageCounts) {
+    const entries = Object.entries(coverageCounts)
+      .sort(([, a], [, b]) => a - b)
+      .map(([skillId, count]) => `  ${skillId}: ${count} conversations`)
+      .join('\n')
+
+    context += `
+
+COVERAGE CONTEXT (skills with fewer conversations should be weighted slightly higher):
+${entries}
+
+If two skills are equally likely, prefer the one with fewer existing conversations.`
+  }
+
+  return context.trim()
+}
+
+// ─── OPEN REFLECTION CONTEXT ────────────────────────
+
+export function buildReflectionPhase1Context(ctx: ConversationContext, reflectionDescription: string, taggedSkillName: string): string {
+  const targetSkillLevel = ctx.skillLevels.get(ctx.targetSkillId) || 'external'
+
+  const prevConvos = ctx.previousConversations.slice(0, 5).map(c => {
+    const title = c.work?.title || 'general reflection'
+    const insight = c.suggestedInsight || 'none recorded'
+    const said = c.responsePhase1?.substring(0, 150) || ''
+    return `  - ${c.startedAt}: Discussed "${title}"\n    Insight: ${insight}\n    Student said: "${said}..."`
+  }).join('\n')
+
+  return [
+    `STUDENT: ${ctx.student.firstName} ${ctx.student.lastName}`,
+    `COHORT: ${ctx.student.cohort}`,
+    `CURRENT QUARTER: ${ctx.quarter}`,
+    '',
+    'OPEN REFLECTION (student-initiated, not tied to a specific assignment):',
+    `- Description: ${reflectionDescription}`,
+    `- Student tagged this as related to: ${taggedSkillName}`,
+    '  (Do NOT mention this skill name in your question. Use it only to guide your approach.)',
+    '',
+    `STUDENT'S SDT LEVEL FOR THE RELEVANT SKILL: ${targetSkillLevel}`,
+    '(Adjust question complexity accordingly. Do NOT mention this level or the skill name.)',
+    '',
+    'PREVIOUS CONVERSATIONS (most recent first, for continuity — reference if relevant):',
+    prevConvos,
+    '',
+    'Generate ONE question for Phase 1 (What Happened). The student has described',
+    'an experience they want to reflect on. Help them tell the story of what happened.',
+  ].join('\n').trim()
+}

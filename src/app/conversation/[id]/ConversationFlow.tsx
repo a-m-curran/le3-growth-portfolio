@@ -9,11 +9,12 @@ import type { ConversationSkillTag } from '@/lib/types'
 interface Props {
   workId: string
   studentId?: string
+  existingConversationId?: string
 }
 
 type FlowPhase = 'phase1' | 'phase2' | 'phase3' | 'synthesis'
 
-export function ConversationFlow({ workId }: Props) {
+export function ConversationFlow({ workId, existingConversationId }: Props) {
   const router = useRouter()
   const [currentPhase, setCurrentPhase] = useState<FlowPhase>('phase1')
   const [loading, setLoading] = useState(true)
@@ -28,14 +29,16 @@ export function ConversationFlow({ workId }: Props) {
   const [submitting, setSubmitting] = useState(false)
   const [workContext, setWorkContext] = useState<string>('')
 
-  // Start conversation via API
+  // Start or resume conversation via API
   useEffect(() => {
     async function startConversation() {
       try {
+        // If we have an existing conversation ID (e.g. from open reflection),
+        // use /api/conversation/start which will detect and resume it
         const res = await fetch('/api/conversation/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ workId }),
+          body: JSON.stringify({ workId: existingConversationId || workId }),
         })
 
         const data = await res.json()
@@ -50,12 +53,10 @@ export function ConversationFlow({ workId }: Props) {
         setWorkContext(data.workContext || '')
 
         if (data.resuming) {
-          // Resume an existing in-progress conversation
           if (data.prompts) setPrompts(data.prompts)
           if (data.responses) setResponses(data.responses)
           setCurrentPhase(`phase${data.currentPhase}` as FlowPhase)
         } else {
-          // Fresh conversation
           setPrompts(prev => ({ ...prev, phase1: data.firstPrompt }))
         }
 
@@ -67,7 +68,7 @@ export function ConversationFlow({ workId }: Props) {
     }
 
     startConversation()
-  }, [workId])
+  }, [workId, existingConversationId])
 
   const handleSubmit = async (phase: 1 | 2 | 3, response: string) => {
     if (!conversationId) return

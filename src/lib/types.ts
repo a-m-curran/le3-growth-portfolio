@@ -63,6 +63,8 @@ export type WorkType =
   | 'portfolio_piece'
   | 'other'
 
+export type WorkSource = 'manual' | 'csv_import' | 'd2l_api' | 'reflection'
+
 export interface StudentWork {
   id: string
   studentId: string
@@ -76,11 +78,38 @@ export interface StudentWork {
   weekNumber?: number
   content?: string
   grade?: string
+  source?: WorkSource
+  externalId?: string
+  importedAt?: string
+}
+
+export interface WorkSkillTag {
+  id: string
+  workId: string
+  skillId: string
+  confidence: number
+  rationale?: string
+  source: 'llm_auto' | 'student_manual' | 'coach_manual'
+  taggedAt: string
+}
+
+export interface WorkImportBatch {
+  id: string
+  studentId: string
+  source: 'csv' | 'd2l_api'
+  filename?: string
+  totalItems: number
+  processedItems: number
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+  createdAt: string
+  completedAt?: string
 }
 
 // ─── GROWTH CONVERSATION ────────────────────────────
 
 export type ConversationStatus = 'in_progress' | 'completed' | 'abandoned'
+
+export type ConversationType = 'work_based' | 'open_reflection'
 
 export interface GrowthConversation {
   id: string
@@ -89,6 +118,9 @@ export interface GrowthConversation {
   quarter: string
   weekNumber?: number
   status: ConversationStatus
+  conversationType?: ConversationType
+  reflectionDescription?: string
+  studentTaggedSkillId?: string
   startedAt: string // ISO datetime
   completedAt?: string
   durationSeconds?: number

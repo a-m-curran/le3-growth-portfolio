@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import type { StudentWork } from './types'
 import {
   MODEL,
   TEMPERATURE,
@@ -8,11 +9,14 @@ import {
   PHASE_3_SYSTEM_PROMPT,
   SYNTHESIS_SYSTEM_PROMPT,
   SKILL_TAG_SYSTEM_PROMPT,
+  WORK_SKILL_TAG_SYSTEM_PROMPT,
   buildPhase1Context,
   buildPhase2Context,
   buildPhase3Context,
   buildSynthesisContext,
   buildSkillTagContext,
+  buildWorkSkillTagContext,
+  buildReflectionPhase1Context,
   type ConversationContext,
 } from './llm-prompts'
 
@@ -99,6 +103,40 @@ export async function suggestSkillTags(
   } catch {
     return []
   }
+}
+
+export async function autoTagWork(
+  work: StudentWork,
+  coverageCounts?: Record<string, number>
+): Promise<{ skillId: string; confidence: number; rationale: string }[]> {
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    temperature: 0.2,
+    max_tokens: 500,
+    system: WORK_SKILL_TAG_SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: buildWorkSkillTagContext(work, coverageCounts) }],
+  })
+  const text = extractText(response)
+  try {
+    return JSON.parse(text)
+  } catch {
+    return []
+  }
+}
+
+export async function generateReflectionPhase1Question(
+  context: ConversationContext,
+  reflectionDescription: string,
+  taggedSkillName: string
+): Promise<string> {
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    temperature: TEMPERATURE,
+    max_tokens: MAX_TOKENS,
+    system: PHASE_1_SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: buildReflectionPhase1Context(context, reflectionDescription, taggedSkillName) }],
+  })
+  return extractText(response)
 }
 
 function extractText(response: Anthropic.Message): string {
