@@ -43,10 +43,11 @@ export interface Rubric {
   id: string
   skillId: string
   version: number
-  noticingDescriptors: string[]
-  practicingDescriptors: string[]
-  integratingDescriptors: string[]
-  evolvingDescriptors: string[]
+  externalDescriptors: string[]
+  introjectedDescriptors: string[]
+  identifiedDescriptors: string[]
+  integratedDescriptors: string[]
+  intrinsicDescriptors: string[]
   isCurrent: boolean
 }
 
@@ -139,7 +140,7 @@ export interface StudentSkillDefinition {
 
 // ─── ASSESSMENTS ────────────────────────────────────
 
-export type SdtLevel = 'noticing' | 'practicing' | 'integrating' | 'evolving'
+export type SdtLevel = 'external' | 'introjected' | 'identified' | 'integrated' | 'intrinsic'
 export type AssessorType = 'self' | 'coach'
 
 export interface SkillAssessment {

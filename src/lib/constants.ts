@@ -1,23 +1,26 @@
 // src/lib/constants.ts
 
 export const SDT_LEVELS = {
-  1: { name: 'Noticing', emoji: '🌱', color: '#93c5fd', bg: '#eff6ff' },
-  2: { name: 'Practicing', emoji: '🌱', color: '#4ade80', bg: '#f0fdf4' },
-  3: { name: 'Integrating', emoji: '🌿', color: '#16a34a', bg: '#dcfce7' },
-  4: { name: 'Evolving', emoji: '🌸', color: '#166534', bg: '#bbf7d0' },
+  1: { name: 'External', emoji: '🌰', color: '#94a3b8', bg: '#f1f5f9' },
+  2: { name: 'Introjected', emoji: '🌱', color: '#93c5fd', bg: '#eff6ff' },
+  3: { name: 'Identified', emoji: '🌿', color: '#4ade80', bg: '#f0fdf4' },
+  4: { name: 'Integrated', emoji: '🌳', color: '#16a34a', bg: '#dcfce7' },
+  5: { name: 'Intrinsic', emoji: '🌸', color: '#166534', bg: '#bbf7d0' },
 } as const
 
 export const SDT_LEVEL_MAP: Record<string, number> = {
-  noticing: 1,
-  practicing: 2,
-  integrating: 3,
-  evolving: 4,
+  external: 1,
+  introjected: 2,
+  identified: 3,
+  integrated: 4,
+  intrinsic: 5,
 }
 
 export const PILLAR_COLORS = {
-  pillar_creative: { bg: '#eff6ff', border: '#93c5fd', text: '#1e40af', name: 'Creative & Curious Mindset' },
-  pillar_lead: { bg: '#f0fdf4', border: '#86efac', text: '#166534', name: 'Lead Themselves & Others' },
-  pillar_thrive: { bg: '#fff7ed', border: '#fdba74', text: '#9a3412', name: 'Thrive in Change' },
+  pillar_creative: { bg: '#eff6ff', border: '#93c5fd', text: '#1e40af', name: 'Creative & Curious Thinkers' },
+  pillar_lead: { bg: '#faf5ff', border: '#c4b5fd', text: '#5b21b6', name: 'Leaders with Purpose & Agency' },
+  pillar_thrive: { bg: '#fff7ed', border: '#fdba74', text: '#9a3412', name: 'Thrivers in Change' },
+  pillar_network: { bg: '#f0fdf4', border: '#86efac', text: '#166534', name: 'Network Builders' },
 } as const
 
 export const GARDEN = {

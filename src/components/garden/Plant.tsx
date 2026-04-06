@@ -10,7 +10,7 @@ interface PlantProps {
 }
 
 export function Plant({ plant, onClick }: PlantProps) {
-  const level = plant.sdtLevel as 1 | 2 | 3 | 4
+  const level = plant.sdtLevel as 1 | 2 | 3 | 4 | 5
   const config = SDT_LEVELS[level]
 
   return (
@@ -24,14 +24,15 @@ export function Plant({ plant, onClick }: PlantProps) {
           {/* Soil */}
           <ellipse cx="50" cy="130" rx="30" ry="6" fill="#7c5d3a" opacity="0.3" />
 
-          {level === 1 && <NoticingPlant />}
-          {level === 2 && <PracticingPlant />}
-          {level === 3 && <IntegratingPlant conversations={plant.conversations} />}
-          {level === 4 && <EvolvingPlant conversations={plant.conversations} />}
+          {level === 1 && <ExternalPlant />}
+          {level === 2 && <IntrojectedPlant />}
+          {level === 3 && <IdentifiedPlant conversations={plant.conversations} />}
+          {level === 4 && <IntegratedPlant conversations={plant.conversations} />}
+          {level === 5 && <IntrinsicPlant conversations={plant.conversations} />}
         </svg>
 
         {/* Conversation leaves overlaid */}
-        {(level === 1 || level === 2) && plant.conversations.length > 0 && (
+        {(level <= 2) && plant.conversations.length > 0 && (
           <div className="absolute top-2 right-0 flex flex-col gap-0.5">
             {plant.conversations.slice(0, 4).map((conv, i) => (
               <Leaf key={conv.id} quarter={conv.quarter} size="sm" index={i} />
@@ -62,7 +63,7 @@ export function Plant({ plant, onClick }: PlantProps) {
   )
 }
 
-function NoticingPlant() {
+function ExternalPlant() {
   return (
     <g>
       {/* Seed */}
@@ -75,7 +76,7 @@ function NoticingPlant() {
   )
 }
 
-function PracticingPlant() {
+function IntrojectedPlant() {
   return (
     <g>
       {/* Stem */}
@@ -90,7 +91,7 @@ function PracticingPlant() {
   )
 }
 
-function IntegratingPlant({ conversations }: { conversations: { id: string; quarter: string }[] }) {
+function IdentifiedPlant({ conversations }: { conversations: { id: string; quarter: string }[] }) {
   return (
     <g>
       {/* Main stem */}
@@ -124,7 +125,7 @@ function IntegratingPlant({ conversations }: { conversations: { id: string; quar
   )
 }
 
-function EvolvingPlant({ conversations }: { conversations: { id: string; quarter: string }[] }) {
+function IntegratedPlant({ conversations }: { conversations: { id: string; quarter: string }[] }) {
   return (
     <g>
       {/* Thick main stem */}
@@ -161,6 +162,52 @@ function EvolvingPlant({ conversations }: { conversations: { id: string; quarter
         const rad = (angle * Math.PI) / 180
         const cx = 50 + Math.cos(rad) * (18 + i * 2)
         const cy = 90 + Math.sin(rad) * 10 - i * 5
+        return (
+          <Leaf key={conv.id} quarter={conv.quarter} cx={cx} cy={cy} svg />
+        )
+      })}
+    </g>
+  )
+}
+
+function IntrinsicPlant({ conversations }: { conversations: { id: string; quarter: string }[] }) {
+  return (
+    <g>
+      {/* Thick trunk */}
+      <path d="M50 128 Q49 75 50 30" stroke="#166534" strokeWidth="4" fill="none" strokeLinecap="round" />
+      {/* Left branches */}
+      <path d="M50 90 Q30 75 15 58" stroke="#166534" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+      <path d="M50 65 Q35 52 25 38" stroke="#16a34a" strokeWidth="2" fill="none" strokeLinecap="round" />
+      {/* Right branches */}
+      <path d="M50 82 Q70 65 82 48" stroke="#166534" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+      <path d="M50 58 Q65 48 75 35" stroke="#16a34a" strokeWidth="2" fill="none" strokeLinecap="round" />
+      {/* Rich canopy */}
+      <ellipse cx="40" cy="110" rx="11" ry="5.5" fill="#4ade80" transform="rotate(-30, 40, 110)" />
+      <ellipse cx="62" cy="100" rx="11" ry="5.5" fill="#4ade80" transform="rotate(25, 62, 100)" />
+      <ellipse cx="35" cy="90" rx="10" ry="5" fill="#86efac" transform="rotate(-20, 35, 90)" />
+      <ellipse cx="65" cy="80" rx="10" ry="5" fill="#86efac" transform="rotate(20, 65, 80)" />
+      <ellipse cx="18" cy="55" rx="10" ry="5" fill="#86efac" transform="rotate(-40, 18, 55)" />
+      <ellipse cx="80" cy="45" rx="10" ry="5" fill="#86efac" transform="rotate(40, 80, 45)" />
+      <ellipse cx="27" cy="35" rx="8" ry="4" fill="#86efac" transform="rotate(-30, 27, 35)" />
+      <ellipse cx="73" cy="32" rx="8" ry="4" fill="#86efac" transform="rotate(30, 73, 32)" />
+      <ellipse cx="50" cy="28" rx="9" ry="4.5" fill="#4ade80" />
+      {/* Abundant flowers */}
+      <circle cx="50" cy="26" r="6" fill="#f472b6" opacity="0.9" />
+      <circle cx="50" cy="26" r="3" fill="#ec4899" />
+      <circle cx="17" cy="52" r="4.5" fill="#c084fc" opacity="0.9" />
+      <circle cx="17" cy="52" r="2" fill="#a855f7" />
+      <circle cx="82" cy="43" r="4.5" fill="#f472b6" opacity="0.9" />
+      <circle cx="82" cy="43" r="2" fill="#ec4899" />
+      <circle cx="28" cy="33" r="4" fill="#fbbf24" opacity="0.9" />
+      <circle cx="28" cy="33" r="2" fill="#f59e0b" />
+      <circle cx="73" cy="30" r="4" fill="#c084fc" opacity="0.9" />
+      <circle cx="73" cy="30" r="2" fill="#a855f7" />
+      {/* Conversation leaves */}
+      {conversations.slice(0, 10).map((conv, i) => {
+        const angle = (i * 36) - 180
+        const rad = (angle * Math.PI) / 180
+        const cx = 50 + Math.cos(rad) * (20 + i * 1.5)
+        const cy = 85 + Math.sin(rad) * 12 - i * 4
         return (
           <Leaf key={conv.id} quarter={conv.quarter} cx={cx} cy={cy} svg />
         )

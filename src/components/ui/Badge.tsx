@@ -5,9 +5,9 @@ interface BadgeProps {
 }
 
 export function Badge({ level }: BadgeProps) {
-  const config = SDT_LEVELS[level as 1 | 2 | 3 | 4] || SDT_LEVELS[1]
+  const config = SDT_LEVELS[level as 1 | 2 | 3 | 4 | 5] || SDT_LEVELS[1]
   const filled = level
-  const empty = 4 - level
+  const empty = 5 - level
 
   return (
     <span className="inline-flex gap-0.5" title={config.name}>

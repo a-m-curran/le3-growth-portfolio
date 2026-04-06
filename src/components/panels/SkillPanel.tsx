@@ -15,7 +15,7 @@ interface SkillPanelProps {
 export function SkillPanel({ plant, onClose }: SkillPanelProps) {
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
-  const level = plant.sdtLevel as 1 | 2 | 3 | 4
+  const level = plant.sdtLevel as 1 | 2 | 3 | 4 | 5
   const config = SDT_LEVELS[level]
 
   useEffect(() => {
@@ -37,7 +37,7 @@ export function SkillPanel({ plant, onClose }: SkillPanelProps) {
   }, [handleKeyDown])
 
   const selfLevelName = plant.selfLevel
-    ? SDT_LEVELS[plant.selfLevel as 1 | 2 | 3 | 4].name
+    ? SDT_LEVELS[plant.selfLevel as 1 | 2 | 3 | 4 | 5].name
     : null
   const aligned = plant.selfLevel === plant.sdtLevel
 

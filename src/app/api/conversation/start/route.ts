@@ -139,7 +139,7 @@ export async function POST(request: Request) {
       ) as unknown as ConversationContext['currentDefinitions'],
       skillLevels,
       targetSkillId,
-      targetSkillLevel: skillLevels.get(targetSkillId) || 'noticing' as const,
+      targetSkillLevel: skillLevels.get(targetSkillId) || 'external' as const,
       quarter: getCurrentQuarter(),
     }
 

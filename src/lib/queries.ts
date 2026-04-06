@@ -469,7 +469,7 @@ export async function getCoachDashboard(coachId: string): Promise<CoachDashboard
         return {
           skillId: skill.id,
           skillName: skill.name,
-          sdtLevel: (assessment?.sdtLevel || 'noticing') as SdtLevel,
+          sdtLevel: (assessment?.sdtLevel || 'external') as SdtLevel,
         }
       })
 
@@ -505,7 +505,7 @@ function buildCoachDashboardFromStatic(coachId: string): CoachDashboardData {
       return {
         skillId: skill.id,
         skillName: skill.name,
-        sdtLevel: (assessment?.sdtLevel || 'noticing') as SdtLevel,
+        sdtLevel: (assessment?.sdtLevel || 'external') as SdtLevel,
       }
     })
 

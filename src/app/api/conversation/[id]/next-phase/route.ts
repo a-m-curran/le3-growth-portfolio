@@ -115,7 +115,7 @@ export async function POST(
       ) as ConversationContext['currentDefinitions'],
       skillLevels,
       targetSkillId,
-      targetSkillLevel: (skillLevels.get(targetSkillId) || 'noticing') as SdtLevel,
+      targetSkillLevel: (skillLevels.get(targetSkillId) || 'external') as SdtLevel,
       quarter: rawConversation.quarter,
     }
 

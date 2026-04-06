@@ -49,8 +49,10 @@ RULES:
   include 1-2 sentences of context before it ("You submitted X this week
   while also dealing with Y.") but the question must be brief.
 - NEVER mention any skill name (resilience, initiative, creative problem
-  solving, critical thinking, self-directed learning). NEVER. The student
-  should not know which skill you're interested in.
+  solving, critical thinking, curiosity, empathy, communication,
+  adaptability, collaboration, networking, relationship building, social
+  awareness). NEVER. The student should not know which skill you're
+  interested in.
 - NEVER assess, evaluate, praise, or judge. No "That sounds like you showed
   great resilience." You are curious, not evaluative.
 - Match the student's probable emotional register. If the work context
@@ -58,16 +60,21 @@ RULES:
   excitement or pride, match that energy.
 
 ADJUST BASED ON SDT LEVEL:
-- If the student is at Noticing (early stage), help them simply recall and
-  describe: "Tell me what happened when..." Keep it concrete.
-- If the student is at Practicing, ask about decision points: "Walk me through
-  the moment you decided to..." They're beginning to act with awareness.
-- If the student is at Integrating, push for cross-context connection: "You
-  did X at school and Y at work this week — do those feel related?" They're
-  ready to see patterns across domains.
-- If the student is at Evolving, invite them to teach or mentor: "If a
-  first-year student came to you with the same situation, what would you
-  tell them?" They're ready to externalize their understanding.
+- If the student is at External (compliance stage), help them simply recall and
+  describe. "Tell me what happened when..." Keep it concrete and safe.
+- If the student is at Introjected (approval-seeking stage), ask about moments
+  of self-doubt or comparison. "Was there a point where you weren't sure if
+  you were doing it right?"
+- If the student is at Identified (personal value stage), ask about decision
+  points and reasoning. "Walk me through the moment you decided to..." They're
+  beginning to own their choices.
+- If the student is at Integrated (identity stage), push for cross-context
+  connection. "You did X at school and Y at work this week — do those feel
+  related?" They see this as part of who they are.
+- If the student is at Intrinsic (flow/joy stage), invite them to teach,
+  mentor, or explore the experience itself. "If a first-year student came to
+  you with the same situation, what would you tell them?" They're energized
+  by the process.
 
 TONE:
 - Warm, curious, specific. Like a thoughtful friend who pays attention.
@@ -181,22 +188,18 @@ were demonstrated or practiced.
 
 THE DURABLE SKILLS FRAMEWORK:
 
-Pillar 1: Creative & Curious Mindset
-- Creative Problem Solving (skill_creative_problem_solving): Approaching challenges from novel angles,
-  questioning default approaches, combining ideas across domains
-- Critical Thinking (skill_critical_thinking): Analyzing information carefully, questioning assumptions,
-  evaluating evidence, distinguishing fact from opinion
-- Self-Directed Learning (skill_self_directed_learning): Identifying learning needs, seeking resources
-  independently, learning without external structure
-
-Pillar 2: Lead Themselves & Others
-- Resilience (skill_resilience): Navigating setbacks, adapting plans, seeking help when needed,
-  recovering from failure, managing stress productively
-- Initiative (skill_initiative): Acting without being prompted, creating opportunities,
-  volunteering, proposing new approaches, stepping into leadership
-
-Pillar 3: Thrive in Change
-(Future skills — not yet active in the framework)
+- Creative Problem Solving (skill_creative_problem_solving): Generates original solutions; reframes problems
+- Critical Thinking (skill_critical_thinking): Analyzes information deeply; evaluates evidence
+- Curiosity (skill_curiosity): Asks meaningful questions; seeks to understand beyond surface-level
+- Initiative (skill_initiative): Takes proactive steps; does not wait to be told what to do
+- Empathy (skill_empathy): Understands and respects others' feelings and perspectives
+- Communication (skill_communication): Clearly articulates ideas for different audiences
+- Adaptability (skill_adaptability): Adjusts approach as new information or challenges arise
+- Resilience (skill_resilience): Perseveres through challenges; maintains effort despite obstacles
+- Collaboration (skill_collaboration): Works well with others toward shared goals
+- Networking (skill_networking): Builds professional connections across contexts
+- Relationship Building (skill_relationship_building): Develops and maintains meaningful relationships
+- Social Awareness (skill_social_awareness): Reads social context; navigates group dynamics
 
 OUTPUT FORMAT (respond with valid JSON array only, no markdown):
 [
@@ -218,13 +221,15 @@ RULES:
 - Rationale should reference specific phrases or moments from the student's
   responses, not generic descriptions.
 - Use these exact skill IDs: skill_creative_problem_solving,
-  skill_critical_thinking, skill_self_directed_learning, skill_resilience,
-  skill_initiative`
+  skill_critical_thinking, skill_curiosity, skill_initiative,
+  skill_empathy, skill_communication, skill_adaptability,
+  skill_resilience, skill_collaboration, skill_networking,
+  skill_relationship_building, skill_social_awareness`
 
 // ─── CONTEXT BUILDERS ────────────────────────────────
 
 export function buildPhase1Context(ctx: ConversationContext): string {
-  const targetSkillLevel = ctx.skillLevels.get(ctx.targetSkillId) || 'noticing'
+  const targetSkillLevel = ctx.skillLevels.get(ctx.targetSkillId) || 'external'
 
   return `
 STUDENT: ${ctx.student.firstName} ${ctx.student.lastName}
@@ -371,7 +376,14 @@ export function determineTargetSkill(
     skill_initiative: ['volunteer', 'lead', 'start', 'create', 'propose', 'organize', 'step up', 'opportunity', 'own', 'initiative'],
     skill_creative_problem_solving: ['creative', 'novel', 'approach', 'solution', 'innovate', 'design', 'experiment', 'different angle'],
     skill_critical_thinking: ['analyze', 'evaluate', 'evidence', 'argument', 'reason', 'question', 'assumption', 'perspective'],
-    skill_self_directed_learning: ['learn', 'research', 'self-taught', 'resource', 'independent', 'explore', 'curiosity', 'figure out'],
+    skill_curiosity: ['question', 'wonder', 'explore', 'curious', 'discover', 'investigate', 'ask', 'dig deeper'],
+    skill_empathy: ['understand', 'feel', 'perspective', 'listen', 'care', 'support', 'compassion', 'relate'],
+    skill_communication: ['present', 'write', 'express', 'articulate', 'explain', 'argue', 'persuade', 'audience'],
+    skill_adaptability: ['change', 'adjust', 'pivot', 'flexible', 'adapt', 'shift', 'unexpected', 'new approach'],
+    skill_collaboration: ['team', 'group', 'together', 'cooperate', 'contribute', 'shared', 'collective', 'partner'],
+    skill_networking: ['connect', 'professional', 'mentor', 'contact', 'outreach', 'relationship', 'introduce'],
+    skill_relationship_building: ['trust', 'bond', 'maintain', 'friendship', 'rapport', 'connection', 'community'],
+    skill_social_awareness: ['observe', 'context', 'dynamic', 'navigate', 'read the room', 'appropriate', 'culture'],
   }
 
   let bestSkill = 'skill_resilience'
@@ -387,7 +399,7 @@ export function determineTargetSkill(
 
   // If no clear signal, pick the skill with the lowest assessment level (most room to grow)
   if (bestScore === 0 && assessments.length > 0) {
-    const levelOrder: Record<string, number> = { noticing: 1, practicing: 2, integrating: 3, evolving: 4 }
+    const levelOrder: Record<string, number> = { external: 1, introjected: 2, identified: 3, integrated: 4, intrinsic: 5 }
     const sorted = [...assessments].sort(
       (a, b) => (levelOrder[a.sdtLevel] || 1) - (levelOrder[b.sdtLevel] || 1)
     )
