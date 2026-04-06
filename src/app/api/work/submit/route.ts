@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/auth-helpers-nextjs'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { extractText, isSupported } from '@/lib/extract-text'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
@@ -28,7 +29,6 @@ export async function POST(request: Request) {
 
     const admin = createAdminClient()
 
-    // Get student record
     const { data: student } = await admin
       .from('student')
       .select('id')
@@ -39,7 +39,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Student not found' }, { status: 404 })
     }
 
-    const { title, description, workType, courseName } = await request.json()
+    // Parse form data (supports file upload)
+    const formData = await request.formData()
+    const title = formData.get('title') as string
+    const description = (formData.get('description') as string) || null
+    const workType = (formData.get('workType') as string) || 'other'
+    const courseName = (formData.get('courseName') as string) || null
+    const file = formData.get('file') as File | null
 
     if (!title) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 })
@@ -48,6 +54,57 @@ export async function POST(request: Request) {
     const validTypes = ['essay', 'project', 'discussion_post', 'presentation', 'exam', 'lab_report', 'portfolio_piece', 'other']
     if (!validTypes.includes(workType)) {
       return NextResponse.json({ error: 'Invalid work type' }, { status: 400 })
+    }
+
+    // Extract text from file if provided
+    let content: string | null = null
+    let fileUrl: string | null = null
+
+    if (file && file.size > 0) {
+      // Validate file
+      if (!isSupported(file.name)) {
+        return NextResponse.json(
+          { error: 'Unsupported file type. Use PDF, DOCX, TXT, or MD.' },
+          { status: 400 }
+        )
+      }
+
+      if (file.size > 4 * 1024 * 1024) {
+        return NextResponse.json(
+          { error: 'File too large. Maximum size is 4MB.' },
+          { status: 400 }
+        )
+      }
+
+      // Extract text content
+      const buffer = Buffer.from(await file.arrayBuffer())
+      try {
+        content = await extractText(buffer, file.name)
+      } catch (err) {
+        console.error('Text extraction error:', err)
+        // Continue without extracted content — the file will still be stored
+      }
+
+      // Upload to Supabase Storage
+      const ext = file.name.split('.').pop()
+      const storagePath = `${student.id}/${Date.now()}.${ext}`
+
+      const { error: uploadError } = await admin.storage
+        .from('student-work')
+        .upload(storagePath, buffer, {
+          contentType: file.type,
+          upsert: false,
+        })
+
+      if (uploadError) {
+        console.error('Storage upload error:', uploadError)
+        // Continue without stored file — we still have extracted text
+      } else {
+        const { data: urlData } = admin.storage
+          .from('student-work')
+          .getPublicUrl(storagePath)
+        fileUrl = urlData.publicUrl
+      }
     }
 
     // Determine quarter
@@ -60,7 +117,6 @@ export async function POST(request: Request) {
     else if (month < 9) quarter = `Summer ${year}`
     else quarter = `Fall ${year}`
 
-    // Calculate approximate week number in the quarter
     const quarterStartMonth = Math.floor(month / 3) * 3
     const quarterStart = new Date(year, quarterStartMonth, 1)
     const weekNumber = Math.ceil((now.getTime() - quarterStart.getTime()) / (7 * 24 * 60 * 60 * 1000))
@@ -70,12 +126,13 @@ export async function POST(request: Request) {
       .insert({
         student_id: student.id,
         title,
-        description: description || null,
+        description,
         work_type: workType,
-        course_name: courseName || null,
+        course_name: courseName,
         submitted_at: now.toISOString(),
         quarter,
         week_number: weekNumber,
+        content,
       })
       .select('id')
       .single()
@@ -85,7 +142,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to submit work' }, { status: 500 })
     }
 
-    return NextResponse.json({ workId: work.id })
+    return NextResponse.json({ workId: work.id, fileUrl, hasContent: !!content })
   } catch (error) {
     console.error('Work submit error:', error)
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })

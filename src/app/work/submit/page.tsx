@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 
 const WORK_TYPES = [
@@ -14,14 +14,29 @@ const WORK_TYPES = [
   { value: 'other', label: 'Other' },
 ]
 
+const ACCEPTED_TYPES = '.pdf,.docx,.txt,.md'
+
 export default function SubmitWorkPage() {
   const router = useRouter()
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [workType, setWorkType] = useState('essay')
   const [courseName, setCourseName] = useState('')
+  const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0] || null
+    if (selected && selected.size > 4 * 1024 * 1024) {
+      setError('File too large. Maximum size is 4MB.')
+      setFile(null)
+      return
+    }
+    setError(null)
+    setFile(selected)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -29,10 +44,18 @@ export default function SubmitWorkPage() {
     setError(null)
 
     try {
+      const formData = new FormData()
+      formData.append('title', title)
+      formData.append('description', description)
+      formData.append('workType', workType)
+      formData.append('courseName', courseName)
+      if (file) {
+        formData.append('file', file)
+      }
+
       const res = await fetch('/api/work/submit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description, workType, courseName }),
+        body: formData,
       })
 
       const data = await res.json()
@@ -103,9 +126,61 @@ export default function SubmitWorkPage() {
           />
         </div>
 
+        {/* File Upload */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Upload Your Work <span className="text-gray-400">(optional)</span>
+          </label>
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className={`w-full px-4 py-6 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors ${
+              file
+                ? 'border-green-400 bg-green-50'
+                : 'border-gray-300 hover:border-green-400 hover:bg-green-50/50'
+            }`}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPTED_TYPES}
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            {file ? (
+              <div>
+                <p className="text-sm font-medium text-green-800">{file.name}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {(file.size / 1024).toFixed(0)} KB &middot;{' '}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setFile(null)
+                      if (fileInputRef.current) fileInputRef.current.value = ''
+                    }}
+                    className="text-red-500 hover:underline"
+                  >
+                    Remove
+                  </button>
+                </p>
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm text-gray-600">
+                  Click to upload a PDF, Word doc, or text file
+                </p>
+                <p className="text-xs text-gray-400 mt-1">Max 4MB &middot; PDF, DOCX, TXT, MD</p>
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-gray-400 mt-1.5">
+            Text is extracted so the AI can ask you more specific questions about your work.
+          </p>
+        </div>
+
         <div>
           <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-            Brief Description <span className="text-gray-400">(optional)</span>
+            Brief Description <span className="text-gray-400">(optional if file uploaded)</span>
           </label>
           <textarea
             id="description"
@@ -126,7 +201,7 @@ export default function SubmitWorkPage() {
           disabled={loading || !title}
           className="w-full py-3 bg-green-700 text-white rounded-lg text-sm font-medium hover:bg-green-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? 'Submitting...' : 'Submit & Start Reflection'}
+          {loading ? (file ? 'Uploading & processing...' : 'Submitting...') : 'Submit & Start Reflection'}
         </button>
       </form>
     </main>
