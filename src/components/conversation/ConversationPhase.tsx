@@ -114,7 +114,7 @@ export function ConversationPhase({
       <div className="flex justify-end">
         <button
           onClick={() => onSubmit(response || prewrittenResponse || '')}
-          disabled={!isTypingComplete && isDemoMode}
+          disabled={isDemoMode ? !isTypingComplete : !response.trim()}
           className="px-5 py-2 bg-green-700 text-white rounded-full text-sm font-medium hover:bg-green-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Continue →
