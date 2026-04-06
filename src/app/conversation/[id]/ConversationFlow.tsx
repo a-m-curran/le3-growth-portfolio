@@ -41,17 +41,24 @@ export function ConversationFlow({ workId }: Props) {
         const data = await res.json()
 
         if (!res.ok) {
-          if (res.status === 409 && data.conversationId) {
-            setConversationId(data.conversationId)
-          }
           setError(data.error || 'Failed to start conversation')
           setLoading(false)
           return
         }
 
         setConversationId(data.conversationId)
-        setPrompts(prev => ({ ...prev, phase1: data.firstPrompt }))
         setWorkContext(data.workContext || '')
+
+        if (data.resuming) {
+          // Resume an existing in-progress conversation
+          if (data.prompts) setPrompts(data.prompts)
+          if (data.responses) setResponses(data.responses)
+          setCurrentPhase(`phase${data.currentPhase}` as FlowPhase)
+        } else {
+          // Fresh conversation
+          setPrompts(prev => ({ ...prev, phase1: data.firstPrompt }))
+        }
+
         setLoading(false)
       } catch {
         setError('Failed to connect. Please check your internet connection.')

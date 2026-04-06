@@ -48,19 +48,37 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Student record not found' }, { status: 404 })
     }
 
-    // Check for existing in-progress conversation
+    // Check for existing in-progress conversation — resume it
     const { data: existing } = await supabase
       .from('growth_conversation')
-      .select('id')
+      .select('*')
       .eq('student_id', student.id)
       .eq('status', 'in_progress')
       .limit(1)
 
     if (existing && existing.length > 0) {
-      return NextResponse.json(
-        { error: 'You already have a conversation in progress', conversationId: existing[0].id },
-        { status: 409 }
-      )
+      const conv = existing[0]
+      // Determine current phase from what's been filled in
+      let currentPhase = 1
+      if (conv.response_phase_1 && conv.prompt_phase_2) currentPhase = 2
+      if (conv.response_phase_2 && conv.prompt_phase_3) currentPhase = 3
+
+      return NextResponse.json({
+        conversationId: conv.id,
+        resuming: true,
+        currentPhase,
+        workContext: conv.work_context,
+        prompts: {
+          phase1: conv.prompt_phase_1,
+          phase2: conv.prompt_phase_2,
+          phase3: conv.prompt_phase_3,
+        },
+        responses: {
+          phase1: conv.response_phase_1,
+          phase2: conv.response_phase_2,
+          phase3: conv.response_phase_3,
+        },
+      })
     }
 
     // Fetch the selected work

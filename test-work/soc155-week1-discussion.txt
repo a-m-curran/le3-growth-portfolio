@@ -1,0 +1,16 @@
+SOC 155 - Building Collaborative Cultures
+Week 1 Discussion Post: Organizational Structure at My Workplace
+
+I work part-time at a mid-sized nonprofit that runs after-school programs in three different cities. On paper, the org chart is pretty flat — there's an executive director, three program directors (one per city), and then site coordinators like me. But in practice, the structure feels way more hierarchical than it looks.
+
+Everything has to go through the program director before anything changes. Last month I noticed that our attendance tracking system was creating duplicate entries, which meant our grant reports were inflated. I flagged it to my program director, who said she'd "look into it." Two weeks later, nothing had happened. I asked again and she said she'd brought it up to the ED but hadn't heard back.
+
+What frustrated me was that I could have fixed it myself in about 20 minutes — it was literally a Google Sheets formula issue. But the chain of command meant I needed permission to edit a shared document that I use every single day. The formal structure created a bottleneck that slowed down a simple fix by weeks.
+
+This connects to what we learned about mechanistic vs. organic organizational designs. My nonprofit talks about being collaborative and flexible (organic), but the actual decision-making process is very mechanistic — centralized authority, rigid role definitions, and top-down communication. The mission statement says "we empower our team," but the structure doesn't match.
+
+I think this is what happens when organizations grow without intentionally redesigning their structure. When the org was just the ED and a few people, informal communication worked fine. But as it grew to 30+ staff across three cities, those informal norms calcified into a hierarchy that nobody consciously chose.
+
+The Organisational Structures video helped me see that there isn't one "right" structure — it depends on what the organization needs. But I think my org needs to at least acknowledge the gap between how they describe themselves and how they actually operate.
+
+Word count: 298

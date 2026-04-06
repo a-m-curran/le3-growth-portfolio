@@ -1,0 +1,21 @@
+SOC 155 - Building Collaborative Cultures
+Week 2 Friday Assignment: Social Network Analysis
+
+Part 1: Map a Social Network
+
+For this assignment I mapped the informal social network at my workplace (an after-school nonprofit). I focused on how information actually flows when there's a problem to solve, rather than how the org chart says it should flow.
+
+Key findings:
+- Maria (a site coordinator, same level as me) is the real information hub. She's been there 8 years and everyone calls her first when something goes wrong — not the program director. She's what Granovetter would call a "bridge" between the three city teams because she used to work at two of the other sites.
+- The three city teams are pretty siloed from each other. The only regular cross-site communication happens at monthly all-staff meetings, which are mostly one-directional updates from the ED.
+- New hires tend to get connected through whoever trained them, creating small clusters. I was trained by Maria, so I'm connected to her network, which gave me access to institutional knowledge that other people hired at the same time didn't have.
+
+Part 2: Analysis
+
+The Granovetter video about "weak ties" really clicked for me here. The people who are most effective at my org aren't the ones with the most connections — they're the ones with connections across different clusters. Maria is effective not because she knows the most people, but because she bridges groups that otherwise don't talk to each other.
+
+This also helped me understand why our innovation feels stuck. Most ideas stay within one city's team. When someone at the Springfield site figures out a better way to run homework help, the Lawrence and Worcester teams never hear about it. There's no structural mechanism for sharing innovations across sites. The "weak ties" that would carry those ideas don't exist because the three teams rarely interact informally.
+
+Part 3: Recommendation
+
+I think the organization could benefit from creating intentional cross-site connections — maybe paired mentoring between coordinators at different sites, or a shared Slack channel for problem-solving. The current structure assumes that formal all-staff meetings are enough for knowledge sharing, but as we learned this week, most real organizational knowledge flows through informal networks. If you don't build those networks, the knowledge stays trapped.

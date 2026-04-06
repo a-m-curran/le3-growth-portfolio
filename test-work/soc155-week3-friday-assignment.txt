@@ -1,0 +1,28 @@
+SOC 155 - Building Collaborative Cultures
+Week 3 Friday Assignment: Power and Culture Case Analysis
+
+Case: The "Open Door" That Wasn't
+
+My program director, Janet, always says she has an "open door policy" and that anyone can come to her with concerns. But there's an unwritten rule that everyone knows: if you go to Janet with a problem, you'd better also have a solution. And if your solution involves changing something she set up, she takes it personally.
+
+Last quarter, two site coordinators independently raised concerns about our new client intake process — it was adding 45 minutes to every family's first visit, and families were leaving frustrated. The first coordinator, DeShawn, brought it up in a team meeting. Janet's response was, "I spent three months designing that process with the grants team. What specifically would you change?" DeShawn didn't have a detailed alternative ready, so the conversation died.
+
+The second coordinator, Lisa, went about it differently. She quietly modified the intake process at her site, cutting it to 20 minutes by removing redundant questions. Her numbers were fine. But when Janet found out, she was upset that Lisa had changed the process "without consulting the team" — even though Lisa's version was clearly working better.
+
+Analysis Using Schein's Model:
+
+Using Edgar Schein's three levels of organizational culture, I can see what's happening:
+
+Artifacts (visible level): The open door, the team meeting format, the written policy manual. These all suggest a participatory, feedback-friendly culture.
+
+Espoused values (stated beliefs): "We value transparency, collaboration, and continuous improvement." Janet genuinely believes this about herself and the organization.
+
+Basic assumptions (deep, often unconscious): The real operating assumption is that authority flows downward, and that the people who designed systems have ownership over them. Challenging a system means challenging the person who built it. Initiative is welcome only when it stays within existing boundaries.
+
+The gap between espoused values and basic assumptions is where DeShawn and Lisa both got stuck. The culture says "speak up" but the underlying power dynamics say "don't threaten the status quo."
+
+Connection to Eric Liu's TED Talk:
+
+Liu talks about how power is not just about formal authority — it's about who sets the norms, who defines what's acceptable, and who decides what counts as a "good idea." Janet has formal authority as program director, but she also has cultural power: she defines what "bringing a solution" looks like, she decides what counts as "consulting the team," and her emotional reactions set the boundaries of what's discussable.
+
+What I found most interesting is that this isn't malicious. Janet probably doesn't realize she's doing it. But the effect is the same — people learn to route around her rather than through her, which means she loses access to the very feedback she says she wants.
