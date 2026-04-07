@@ -14,6 +14,16 @@ export default function DemoConversationPage({ searchParams }: Props) {
   const allWorkWithTags = getWorkWithTags(studentId)
   const activeSkills = skills.filter(s => s.isActive)
 
+  // These work items show as "ready to click through" in the demo
+  const demoReadyIds = new Set([
+    'work_aja_soc155_week3_discussion',
+    'work_aja_soc155_network_analysis',
+    'work_aja_workplace_conflict',
+    'work_aja_peer_feedback',
+    'work_aja_budget_proposal',
+    'work_aja_final_presentation',
+  ])
+
   // Build coverage data
   const coverage: SkillCoverageData[] = activeSkills.map(skill => {
     const pillar = pillars.find(p => p.id === skill.pillarId)
@@ -72,6 +82,7 @@ export default function DemoConversationPage({ searchParams }: Props) {
       {(() => {
         // Get unreflected work with tags
         const unreflected = allWorkWithTags.filter(w => {
+          if (demoReadyIds.has(w.id)) return true
           const hasConvo = allConversations.some(c => c.workId === w.id)
           return !hasConvo && w.skillTags.length > 0
         })
@@ -168,14 +179,17 @@ export default function DemoConversationPage({ searchParams }: Props) {
         </section>
       )}
 
-      {/* Completed conversations */}
-      {allConversations.length > 0 && (
+      {/* Completed conversations (excluding demo-ready ones) */}
+      {(() => {
+        const completedConvos = allConversations.filter(c => !c.workId || !demoReadyIds.has(c.workId))
+        if (completedConvos.length === 0) return null
+        return (
         <section>
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-            Completed ({allConversations.length})
+            Completed ({completedConvos.length})
           </h2>
           <div className="space-y-3">
-            {allConversations.slice().reverse().map(conv => {
+            {completedConvos.slice().reverse().map(conv => {
               const work = conv.workId ? staticData.getStudentWork(conv.workId) : null
               return (
                 <div
@@ -199,7 +213,8 @@ export default function DemoConversationPage({ searchParams }: Props) {
             })}
           </div>
         </section>
-      )}
+        )
+      })()}
     </main>
   )
 }
