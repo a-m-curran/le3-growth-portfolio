@@ -69,7 +69,7 @@ export default function DemoConversationPage({ searchParams }: Props) {
           <p className="text-sm text-gray-500">Reflect on your work through guided conversations.</p>
         </div>
         <div className="flex gap-2">
-          <Link href="/demo/reflection/new" className="text-sm px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors whitespace-nowrap">
+          <Link href="/demo/reflect" className="text-sm px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors whitespace-nowrap">
             + Reflect
           </Link>
           <Link href="/demo/work/import" className="text-sm px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap">

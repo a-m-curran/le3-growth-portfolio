@@ -57,7 +57,7 @@ export default async function ConversationPage() {
         </div>
         <div className="flex gap-2">
           <Link
-            href="/reflection/new"
+            href="/reflect"
             className="text-sm px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors whitespace-nowrap"
           >
             + Reflect
@@ -149,7 +149,7 @@ export default async function ConversationPage() {
               Submit Work
             </Link>
             <Link
-              href="/reflection/new"
+              href="/reflect"
               className="px-5 py-2.5 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors"
             >
               Create Reflection

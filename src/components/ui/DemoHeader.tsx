@@ -43,9 +43,9 @@ export function DemoHeader() {
               Conversation
             </Link>
             <Link
-              href="/demo/reflection/new"
+              href="/demo/reflect"
               className={`px-2 py-1 rounded ${
-                pathname.startsWith('/demo/reflection')
+                pathname.startsWith('/demo/reflect')
                   ? 'text-green-800 bg-green-100'
                   : 'text-gray-600 hover:text-green-800'
               }`}
