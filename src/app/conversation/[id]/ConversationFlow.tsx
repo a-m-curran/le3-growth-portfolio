@@ -4,17 +4,19 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ConversationPhase } from '@/components/conversation/ConversationPhase'
 import { Synthesis } from '@/components/conversation/Synthesis'
+import { ReflectionSynthesis } from '@/components/conversation/ReflectionSynthesis'
 import type { ConversationSkillTag } from '@/lib/types'
 
 interface Props {
   workId: string
   studentId?: string
   existingConversationId?: string
+  isReflection?: boolean
 }
 
 type FlowPhase = 'phase1' | 'phase2' | 'phase3' | 'synthesis'
 
-export function ConversationFlow({ workId, existingConversationId }: Props) {
+export function ConversationFlow({ workId, existingConversationId, isReflection = false }: Props) {
   const router = useRouter()
   const [currentPhase, setCurrentPhase] = useState<FlowPhase>('phase1')
   const [loading, setLoading] = useState(true)
@@ -27,6 +29,7 @@ export function ConversationFlow({ workId, existingConversationId }: Props) {
     skillTags: ConversationSkillTag[]
   } | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [detectedReflection, setDetectedReflection] = useState(isReflection)
   const [workContext, setWorkContext] = useState<string>('')
 
   // Start or resume conversation via API
@@ -51,6 +54,11 @@ export function ConversationFlow({ workId, existingConversationId }: Props) {
 
         setConversationId(data.conversationId)
         setWorkContext(data.workContext || '')
+
+        // Detect if this is an open reflection
+        if (data.conversationType === 'open_reflection') {
+          setDetectedReflection(true)
+        }
 
         if (data.resuming) {
           if (data.prompts) setPrompts(data.prompts)
@@ -184,21 +192,28 @@ export function ConversationFlow({ workId, existingConversationId }: Props) {
       )}
 
       {currentPhase === 'synthesis' && synthesisData && (
-        <Synthesis
-          synthesisText={synthesisData.text}
-          skillTags={synthesisData.skillTags}
-          onDone={() => router.push('/garden')}
-          onTagsChange={(updatedTags) => {
-            // Save tag changes to the server
-            if (conversationId) {
-              fetch(`/api/conversation/${conversationId}/tags`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tags: updatedTags }),
-              }).catch(console.error)
-            }
-          }}
-        />
+        detectedReflection ? (
+          <ReflectionSynthesis
+            synthesisText={synthesisData.text}
+            skillTags={synthesisData.skillTags}
+            onDone={() => router.push('/reflect')}
+          />
+        ) : (
+          <Synthesis
+            synthesisText={synthesisData.text}
+            skillTags={synthesisData.skillTags}
+            onDone={() => router.push('/garden')}
+            onTagsChange={(updatedTags) => {
+              if (conversationId) {
+                fetch(`/api/conversation/${conversationId}/tags`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ tags: updatedTags }),
+                }).catch(console.error)
+              }
+            }}
+          />
+        )
       )}
 
       {submitting && (

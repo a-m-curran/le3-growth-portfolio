@@ -68,6 +68,7 @@ export async function POST(request: Request) {
         resuming: true,
         currentPhase,
         workContext: conv.work_context,
+        conversationType: conv.conversation_type || 'work_based',
         prompts: {
           phase1: conv.prompt_phase_1,
           phase2: conv.prompt_phase_2,
