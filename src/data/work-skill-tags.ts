@@ -164,6 +164,92 @@ export const workSkillTags: DemoWorkSkillTag[] = [
     rationale: 'Demonstrated sophisticated self-analysis by tracing patterns across three quarters of experience.',
   },
 
+  // ─── AJA — UNREFLECTED WORK TAGS ──────────────────
+
+  // work_aja_soc155_week3_discussion — Power Dynamics Discussion
+  {
+    workId: 'work_aja_soc155_week3_discussion',
+    skillId: 'skill_social_awareness',
+    confidence: 0.85,
+    rationale: 'Analyzed informal power dynamics and unwritten rules in organizational culture.',
+  },
+  {
+    workId: 'work_aja_soc155_week3_discussion',
+    skillId: 'skill_critical_thinking',
+    confidence: 0.75,
+    rationale: 'Applied Schein\'s framework to identify gaps between stated and actual organizational values.',
+  },
+
+  // work_aja_soc155_network_analysis — Social Network Analysis
+  {
+    workId: 'work_aja_soc155_network_analysis',
+    skillId: 'skill_collaboration',
+    confidence: 0.8,
+    rationale: 'Mapped collaborative networks and proposed structural solutions to improve cross-team communication.',
+  },
+  {
+    workId: 'work_aja_soc155_network_analysis',
+    skillId: 'skill_networking',
+    confidence: 0.7,
+    rationale: 'Identified key network connectors and proposed intentional relationship-building across organizational silos.',
+  },
+
+  // work_aja_workplace_conflict — Workplace Conflict
+  {
+    workId: 'work_aja_workplace_conflict',
+    skillId: 'skill_communication',
+    confidence: 0.85,
+    rationale: 'Practiced and delivered a difficult conversation with her supervisor, proposing a solution alongside the concern.',
+  },
+  {
+    workId: 'work_aja_workplace_conflict',
+    skillId: 'skill_resilience',
+    confidence: 0.65,
+    rationale: 'Pushed through discomfort to advocate for herself in a power-imbalanced relationship.',
+  },
+
+  // work_aja_peer_feedback — Peer Feedback Exercise
+  {
+    workId: 'work_aja_peer_feedback',
+    skillId: 'skill_empathy',
+    confidence: 0.8,
+    rationale: 'Navigated the tension between honesty and kindness in giving feedback, recognizing that vague praise isn\'t helpful.',
+  },
+  {
+    workId: 'work_aja_peer_feedback',
+    skillId: 'skill_communication',
+    confidence: 0.7,
+    rationale: 'Practiced delivering critical feedback constructively in a structured peer review setting.',
+  },
+
+  // work_aja_budget_proposal — Budget Proposal
+  {
+    workId: 'work_aja_budget_proposal',
+    skillId: 'skill_initiative',
+    confidence: 0.9,
+    rationale: 'Independently identified a budget inefficiency and built a data-backed proposal without being asked.',
+  },
+  {
+    workId: 'work_aja_budget_proposal',
+    skillId: 'skill_creative_problem_solving',
+    confidence: 0.7,
+    rationale: 'Reframed the budget question from "how do we spend the same" to "how do we match spending to actual demand."',
+  },
+
+  // work_aja_final_presentation — Final Presentation
+  {
+    workId: 'work_aja_final_presentation',
+    skillId: 'skill_communication',
+    confidence: 0.85,
+    rationale: 'Delivered a presentation without notes for the first time, articulating organizational redesign recommendations to an audience.',
+  },
+  {
+    workId: 'work_aja_final_presentation',
+    skillId: 'skill_adaptability',
+    confidence: 0.7,
+    rationale: 'Proposed structural changes to an organization she works in, demonstrating flexibility in thinking about how systems can evolve.',
+  },
+
   // ─── MARCUS CHEN ──────────────────────────────────
 
   // work_marcus_onboarding — Program Onboarding

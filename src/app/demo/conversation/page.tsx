@@ -1,7 +1,5 @@
-import { skills, pillars, getStudentConversations, getWorkWithTags, getAvailableWork } from '@/data'
-import { selectWorkForConversation } from '@/lib/work-selection'
+import { skills, pillars, getStudentConversations, getWorkWithTags } from '@/data'
 import Link from 'next/link'
-import { DemoConversationStart } from './DemoConversationStart'
 import { SkillCoverageBar } from '@/components/conversation/SkillCoverageBar'
 import type { SkillCoverageData } from '@/lib/types'
 import * as staticData from '@/data'
@@ -14,8 +12,6 @@ export default function DemoConversationPage({ searchParams }: Props) {
   const studentId = searchParams.student || 'stu_aja'
   const allConversations = getStudentConversations(studentId)
   const allWorkWithTags = getWorkWithTags(studentId)
-  const availableWork = getAvailableWork(studentId)
-  const selection = selectWorkForConversation(availableWork)
   const activeSkills = skills.filter(s => s.isActive)
 
   // Build coverage data
@@ -72,19 +68,77 @@ export default function DemoConversationPage({ searchParams }: Props) {
         </div>
       </div>
 
-      {/* Start new conversation (if available work exists) */}
-      {selection && (
-        <section className="mb-8">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-            Start New Reflection
-          </h2>
-          <DemoConversationStart
-            studentId={studentId}
-            primary={selection.primary}
-            alternatives={selection.alternatives}
-          />
-        </section>
-      )}
+      {/* Waiting for conversations — grouped by skill */}
+      {(() => {
+        // Get unreflected work with tags
+        const unreflected = allWorkWithTags.filter(w => {
+          const hasConvo = allConversations.some(c => c.workId === w.id)
+          return !hasConvo && w.skillTags.length > 0
+        })
+
+        if (unreflected.length === 0) return null
+
+        // Group by primary skill, sorted by coverage priority
+        const bySkill = new Map<string, typeof unreflected>()
+        for (const w of unreflected) {
+          const primary = w.skillTags[0].skillId
+          if (!bySkill.has(primary)) bySkill.set(primary, [])
+          bySkill.get(primary)!.push(w)
+        }
+
+        return (
+          <section className="mb-8">
+            <h2 className="text-sm font-semibold text-amber-700 uppercase tracking-wide mb-3">
+              Ready for Reflection ({unreflected.length})
+            </h2>
+            <div className="space-y-4">
+              {sortedCoverage.map(cov => {
+                const works = bySkill.get(cov.skillId)
+                if (!works || works.length === 0) return null
+                return (
+                  <div key={cov.skillId}>
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-sm font-medium text-gray-700">{cov.skillName}</h3>
+                      <div className="w-24">
+                        <SkillCoverageBar coverage={cov} />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {works.map(w => (
+                        <Link
+                          key={w.id}
+                          href={`/demo/conversation/${w.id}?student=${studentId}`}
+                          className="block p-3 rounded-lg border border-amber-200 bg-white hover:border-green-400 hover:shadow-sm transition-colors"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-sm font-medium text-gray-900 truncate">{w.title}</h4>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                {w.courseName && `${w.courseName} · `}
+                                {new Date(w.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                              </p>
+                            </div>
+                            <span className="text-xs text-green-700 font-medium shrink-0 ml-2">Start →</span>
+                          </div>
+                          {w.skillTags.length > 1 && (
+                            <div className="flex gap-1 mt-1.5">
+                              {w.skillTags.slice(1).map(t => (
+                                <span key={t.skillId} className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded-full">
+                                  {t.skillName}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        )
+      })()}
 
       {/* Skill coverage overview */}
       {coverage.some(c => c.taggedAssignments > 0 || c.completedConversations > 0) && (
