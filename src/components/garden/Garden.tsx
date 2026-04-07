@@ -61,7 +61,6 @@ export function Garden({ data, onPlantClick }: GardenProps) {
           href={`/conversation?student=${data.student.id}`}
           className="inline-flex items-center gap-2 px-5 py-2.5 bg-green-700 text-white rounded-full text-sm font-medium hover:bg-green-800 transition-colors"
         >
-          <span>🌱</span>
           Start a Growth Conversation
         </Link>
       </div>

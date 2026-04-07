@@ -27,7 +27,7 @@ export function Header() {
                   : 'text-gray-600 hover:text-green-800'
               }`}
             >
-              Garden
+              Portfolio
             </Link>
             <Link
               href="/conversation"

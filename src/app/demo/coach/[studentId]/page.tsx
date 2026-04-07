@@ -22,7 +22,7 @@ export default async function DemoCoachStudentPage({ params, searchParams }: Pro
         </Link>
       </div>
       <h1 className="text-2xl font-bold text-green-900 mb-1">
-        {data.student.firstName}&apos;s Growth Garden
+        {data.student.firstName}&apos;s Growth Portfolio
       </h1>
       <p className="text-xs text-gray-500 mb-4">Coach view</p>
       <GardenClient data={data} />

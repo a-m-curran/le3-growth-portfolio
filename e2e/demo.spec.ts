@@ -17,7 +17,7 @@ test.describe('Demo — Person Selector', () => {
     await page.goto('/demo')
     await page.getByRole('button', { name: /Aja Williams/ }).click()
     await expect(page).toHaveURL(/\/demo\/garden/)
-    await expect(page.getByText("Aja's Growth Garden")).toBeVisible()
+    await expect(page.getByText("Aja's Growth Portfolio")).toBeVisible()
   })
 
   test('clicking a coach navigates to their caseload', async ({ page }) => {
@@ -33,18 +33,18 @@ test.describe('Demo — Navigation', () => {
     await page.goto('/demo/garden')
     await expect(page.getByText('Demo', { exact: true })).toBeVisible()
     const nav = page.locator('nav')
-    await expect(nav.getByRole('link', { name: 'Garden' })).toBeVisible()
+    await expect(nav.getByRole('link', { name: 'Portfolio' })).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Conversation' })).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Coach' })).toBeVisible()
   })
 
   test('person selector dropdown switches students', async ({ page }) => {
     await page.goto('/demo/garden?student=stu_aja')
-    await expect(page.getByText("Aja's Growth Garden")).toBeVisible()
+    await expect(page.getByText("Aja's Growth Portfolio")).toBeVisible()
 
     await page.getByLabel('Select student').selectOption('stu_marcus')
     await expect(page).toHaveURL(/student=stu_marcus/)
-    await expect(page.getByText("Marcus's Growth Garden")).toBeVisible()
+    await expect(page.getByText("Marcus's Growth Portfolio")).toBeVisible()
   })
 
   test('sign in link is visible in demo header', async ({ page }) => {
@@ -56,7 +56,7 @@ test.describe('Demo — Navigation', () => {
 test.describe('Demo — Garden Page', () => {
   test('shows garden with skill plants for Aja', async ({ page }) => {
     await page.goto('/demo/garden?student=stu_aja')
-    await expect(page.getByText("Aja's Growth Garden")).toBeVisible()
+    await expect(page.getByText("Aja's Growth Portfolio")).toBeVisible()
     await expect(page.getByText('Resilience').first()).toBeVisible()
   })
 
@@ -67,7 +67,7 @@ test.describe('Demo — Garden Page', () => {
       ['stu_sofia', 'Sofia'],
     ]) {
       await page.goto(`/demo/garden?student=${id}`)
-      await expect(page.getByText(`${name}'s Growth Garden`)).toBeVisible()
+      await expect(page.getByText(`${name}'s Growth Portfolio`)).toBeVisible()
     }
   })
 })
@@ -107,9 +107,9 @@ test.describe('Demo — Coach Dashboard', () => {
     await expect(page.getByText('Aja Williams')).toBeVisible()
   })
 
-  test('View Garden link navigates to student garden', async ({ page }) => {
+  test('View Portfolio link navigates to student garden', async ({ page }) => {
     await page.goto('/demo/coach?coach=coach_elizabeth')
-    await page.getByText('View Garden').first().click()
+    await page.getByText('View Portfolio').first().click()
     await expect(page).toHaveURL(/\/demo\/coach\//)
     await expect(page.getByText('Coach view')).toBeVisible()
   })
@@ -123,7 +123,7 @@ test.describe('Demo — Coach Dashboard', () => {
 
   test('back to caseload link works', async ({ page }) => {
     await page.goto('/demo/coach?coach=coach_elizabeth')
-    await page.getByText('View Garden').first().click()
+    await page.getByText('View Portfolio').first().click()
     await page.getByText('← Back to Caseload').click()
     await expect(page).toHaveURL(/\/demo\/coach/)
   })

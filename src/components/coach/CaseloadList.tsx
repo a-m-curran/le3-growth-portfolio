@@ -54,7 +54,7 @@ export function CaseloadList({ students, coachId, baseUrl = '' }: CaseloadListPr
               href={`${baseUrl}/coach/${student.id}?coach=${coachId}`}
               className="text-xs px-3 py-1.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors"
             >
-              View Garden
+              View Portfolio
             </Link>
             <Link
               href={`${baseUrl}/coach/${student.id}/prep?coach=${coachId}`}

@@ -72,6 +72,6 @@ test.describe('Auth Redirects', () => {
   test('demo garden is accessible without auth', async ({ page }) => {
     await page.goto('/demo/garden')
     await expect(page).toHaveURL(/\/demo\/garden/)
-    await expect(page.getByText("Growth Garden")).toBeVisible()
+    await expect(page.getByText("Aja's Growth Portfolio")).toBeVisible()
   })
 })
