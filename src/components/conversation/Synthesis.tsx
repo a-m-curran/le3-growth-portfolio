@@ -8,9 +8,11 @@ interface SynthesisProps {
   skillTags: ConversationSkillTag[]
   currentDefinition?: string | null
   onDone: () => void
+  onTagsChange?: (tags: ConversationSkillTag[]) => void
+  editable?: boolean
 }
 
-export function Synthesis({ synthesisText, skillTags, currentDefinition, onDone }: SynthesisProps) {
+export function Synthesis({ synthesisText, skillTags, currentDefinition, onDone, onTagsChange, editable = true }: SynthesisProps) {
   return (
     <div className="space-y-6">
       {/* Synthesis */}
@@ -24,7 +26,16 @@ export function Synthesis({ synthesisText, skillTags, currentDefinition, onDone 
       {/* Skill Tags */}
       <div>
         <p className="text-sm text-gray-500 mb-2">This conversation touched on:</p>
-        <SkillTagSelector tags={skillTags} />
+        <SkillTagSelector
+          tags={skillTags}
+          editable={editable}
+          onTagsChange={onTagsChange}
+        />
+        {editable && (
+          <p className="text-xs text-gray-400 mt-2">
+            Confirm, remove, or add skill tags. Your input helps track your growth accurately.
+          </p>
+        )}
       </div>
 
       {/* Definition evolution prompt (if applicable) */}

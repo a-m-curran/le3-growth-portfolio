@@ -188,6 +188,16 @@ export function ConversationFlow({ workId, existingConversationId }: Props) {
           synthesisText={synthesisData.text}
           skillTags={synthesisData.skillTags}
           onDone={() => router.push('/garden')}
+          onTagsChange={(updatedTags) => {
+            // Save tag changes to the server
+            if (conversationId) {
+              fetch(`/api/conversation/${conversationId}/tags`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tags: updatedTags }),
+              }).catch(console.error)
+            }
+          }}
         />
       )}
 
