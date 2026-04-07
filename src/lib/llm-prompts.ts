@@ -8,10 +8,8 @@ import type {
 } from './types'
 
 // ─── LLM CONFIG ──────────────────────────────────────
-
-export const MODEL = 'claude-sonnet-4-5-20250929'
-export const TEMPERATURE = 0.4
-export const MAX_TOKENS = 500
+// Model and provider are now configured in src/lib/llm-client.ts
+// via environment variables: LLM_PROVIDER, ANTHROPIC_MODEL, GEMINI_MODEL
 
 // ─── CONVERSATION CONTEXT ────────────────────────────
 
