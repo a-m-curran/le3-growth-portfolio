@@ -75,11 +75,11 @@ test.describe('Demo — Garden Page', () => {
 test.describe('Demo — Conversation Flow', () => {
   test('conversation page loads for Aja', async ({ page }) => {
     await page.goto('/demo/conversation?student=stu_aja')
-    await expect(page.getByText('Growth Conversation')).toBeVisible()
-    // Aja's work is all reflected on, so either work appears or "no work" message
-    const hasWork = await page.getByText("Let's look at something you did recently.").isVisible().catch(() => false)
-    const noWork = await page.getByText('No work available').isVisible().catch(() => false)
-    expect(hasWork || noWork).toBeTruthy()
+    await expect(page.getByText('Growth Conversations')).toBeVisible()
+    // Should show skill coverage and/or completed conversations
+    const hasCoverage = await page.getByText('Skill Coverage').isVisible().catch(() => false)
+    const hasCompleted = await page.getByText('Completed').isVisible().catch(() => false)
+    expect(hasCoverage || hasCompleted).toBeTruthy()
   })
 
   test('conversation page loads for Marcus with available work', async ({ page }) => {

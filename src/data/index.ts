@@ -9,6 +9,9 @@ import { skillDefinitions } from './skill-definitions'
 import { assessments } from './assessments'
 import { goals } from './goals'
 import { coachNotes } from './coach-notes'
+import { workSkillTags } from './work-skill-tags'
+import { skillNarratives } from './skill-narratives'
+import { careerOutputs } from './career-output'
 
 export {
   pillars,
@@ -22,6 +25,9 @@ export {
   assessments,
   goals,
   coachNotes,
+  workSkillTags,
+  skillNarratives,
+  careerOutputs,
 }
 
 // ─── LOOKUP HELPERS ─────────────────────────────────
@@ -120,3 +126,30 @@ export const getAvailableWork = (studentId: string) => {
     w => w.studentId === studentId && !completedWorkIds.has(w.id)
   )
 }
+
+// ─── NEW FEATURE HELPERS ────────────────────────────
+
+export const getWorkSkillTags = (workId: string) =>
+  workSkillTags.filter(t => t.workId === workId)
+
+export const getWorkWithTags = (studentId: string) =>
+  studentWork
+    .filter(w => w.studentId === studentId)
+    .map(w => ({
+      ...w,
+      skillTags: workSkillTags
+        .filter(t => t.workId === w.id)
+        .map(t => ({
+          skillId: t.skillId,
+          skillName: skills.find(s => s.id === t.skillId)?.name || '',
+        })),
+    }))
+
+export const getSkillNarrative = (studentId: string, skillId: string) =>
+  skillNarratives.find(n => n.studentId === studentId && n.skillId === skillId)
+
+export const getAllSkillNarratives = (studentId: string) =>
+  skillNarratives.filter(n => n.studentId === studentId)
+
+export const getCareerOutput = (studentId: string) =>
+  careerOutputs.find(c => c.studentId === studentId)
