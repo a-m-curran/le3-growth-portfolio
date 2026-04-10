@@ -8,11 +8,16 @@ import { NextResponse } from 'next/server'
 import type { WorkType } from '@/lib/types'
 
 /**
- * POST /api/work/d2l-sync
+ * POST /api/work/d2l-sync — DEPRECATED
  *
- * Syncs assignments from D2L Brightspace for the authenticated student.
- * Pulls assignments + submissions, downloads files, extracts text,
- * creates student_work records, and auto-tags with skills.
+ * Was: Poll-based sync via Valence REST API. Pulls assignments and
+ * submissions for a course, downloads files, extracts text, and creates
+ * student_work records.
+ *
+ * Now: LTI Asset Processor (see /api/lti/notice) is the active path.
+ * It's push-based — Brightspace notifies us when students submit, and
+ * we download via the LTI Asset Service with no polling. The Valence
+ * approach is kept as a fallback only.
  *
  * Body: { courseId: string, courseName: string }
  */

@@ -1,17 +1,18 @@
 /**
- * D2L Brightspace Valence API Client
+ * D2L Brightspace Valence API Client — DEPRECATED
  *
- * Integrates with D2L's REST API to pull assignments and submissions.
- * Uses OAuth2 Bearer token auth (Client Credentials or Authorization Code grant).
+ * This client was written before we discovered NLU's Brightspace supports
+ * LTI Asset Processor (https://standards.1edtech.org/lti/specifications/proposals/asset-processor).
+ * The Asset Processor flow handles submission retrieval via push-based
+ * LtiAssetProcessorSubmissionNotice through the Platform Notification Service,
+ * which is a cleaner integration than polling the proprietary Valence REST API.
+ *
+ * Active integration: see src/lib/lti/* and src/app/api/lti/notice/route.ts
+ *
+ * This file is kept for reference and as a fallback if the Asset Processor
+ * path becomes unavailable. It is NOT imported anywhere in active code paths.
  *
  * Docs: https://docs.valence.desire2learn.com/
- *
- * Required env vars:
- *   D2L_INSTANCE_URL    — e.g. https://nlu.brightspace.com
- *   D2L_CLIENT_ID       — from Manage Extensibility in Brightspace
- *   D2L_CLIENT_SECRET   — (for Authorization Code grant)
- *   D2L_ACCESS_TOKEN    — OAuth2 bearer token (or implement token exchange)
- *   D2L_API_VERSION     — e.g. "1.82" (default)
  */
 
 // ─── D2L API TYPES (matching Valence schema) ────────

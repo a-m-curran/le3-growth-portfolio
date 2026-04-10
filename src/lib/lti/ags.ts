@@ -2,12 +2,11 @@
  * LTI 1.3 Assignment and Grade Services (AGS) client
  *
  * Used to fetch line items (assignments) for a course after an LTI launch.
- * Authentication: client credentials grant against the platform's token endpoint,
- * using a signed client assertion JWT from our tool.
+ * Note: AGS only returns gradebook entries (title, due date, score). For
+ * actual submission file content, use the Asset Processor flow instead.
  */
 
-import { signToolJwt } from './jwt'
-import { getPlatformConfig } from './config'
+import { getServiceToken, SCOPES } from './token'
 
 export interface LineItem {
   id: string
@@ -22,53 +21,10 @@ export interface LineItem {
 }
 
 /**
- * Request a service access token for AGS from the platform.
- * Uses a client assertion JWT signed with our private key.
- */
-export async function getServiceToken(scopes: string[]): Promise<string> {
-  const { tokenUrl, clientId } = getPlatformConfig()
-
-  // The client assertion is a JWT signed by our tool that proves we are
-  // the registered client. The aud is the platform's token endpoint.
-  const clientAssertion = await signToolJwt(
-    {
-      iss: clientId,
-      sub: clientId,
-      aud: tokenUrl,
-      jti: crypto.randomUUID(),
-    },
-    300
-  )
-
-  const body = new URLSearchParams({
-    grant_type: 'client_credentials',
-    client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
-    client_assertion: clientAssertion,
-    scope: scopes.join(' '),
-  })
-
-  const res = await fetch(tokenUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  })
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`AGS token request failed: ${res.status} ${text}`)
-  }
-
-  const data = await res.json()
-  return data.access_token as string
-}
-
-/**
  * Fetch all line items (assignments) for a course from the AGS endpoint.
  */
 export async function fetchLineItems(lineitemsUrl: string): Promise<LineItem[]> {
-  const token = await getServiceToken([
-    'https://purl.imsglobal.org/spec/lti-ags/scope/lineitem.readonly',
-  ])
+  const token = await getServiceToken([SCOPES.AGS_LINEITEM_READONLY])
 
   const res = await fetch(lineitemsUrl, {
     headers: {

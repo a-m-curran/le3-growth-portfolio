@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyPlatformJwt } from '@/lib/lti/jwt'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { subscribeAll } from '@/lib/lti/notice-subscription'
 import {
   LTI_CLAIMS,
   getMessageType,
@@ -54,6 +55,18 @@ export async function POST(req: NextRequest) {
     const payload = await verifyPlatformJwt(idToken, cookieNonce)
 
     const messageType = getMessageType(payload)
+
+    // Opportunistically subscribe to the Platform Notification Service
+    // whenever we see a launch with the PNS endpoint claim. The platform
+    // treats re-subscribing as idempotent, and subscribing on every launch
+    // means the first instructor who launches the tool self-provisions
+    // the notice handler without needing a manual admin trigger.
+    const pnsEndpoint = payload[LTI_CLAIMS.PNS_ENDPOINT]
+    if (pnsEndpoint?.platform_notification_service_url) {
+      subscribeAll(pnsEndpoint).catch(err => {
+        console.error('PNS subscription failed (non-fatal):', err)
+      })
+    }
 
     // Deep linking request — route to the deep link flow
     if (messageType === 'LtiDeepLinkingRequest') {

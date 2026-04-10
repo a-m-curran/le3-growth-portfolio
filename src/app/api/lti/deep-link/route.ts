@@ -71,20 +71,43 @@ export async function POST(req: NextRequest) {
         { onConflict: 'platform_issuer,resource_link_id' }
       )
 
-    // Build ContentItem that points to our launch URL, with our custom
-    // resource_link_id that the platform will pass back on student launch
+    // Build ContentItem based on what the platform is willing to accept.
+    // For Asset Processor attachments (accept_types includes ltiAssetProcessor),
+    // we return an asset processor content item. Otherwise we fall back to
+    // a resource link for course navigation placement.
     const { toolUrl } = getToolConfig()
-    const contentItems = [
-      {
-        type: 'ltiResourceLink',
-        title,
-        text: body ? body.substring(0, 200) : undefined,
-        url: `${toolUrl}/api/lti/launch`,
-        custom: {
-          resource_link_id: generatedResourceLinkId,
-        },
-      },
-    ]
+    const acceptTypes = deepLinkSettings.accept_types || []
+    const isAssetProcessor = acceptTypes.includes('ltiAssetProcessor')
+
+    const contentItems = isAssetProcessor
+      ? [
+          {
+            type: 'ltiAssetProcessor',
+            title: title || 'LE3 Growth Portfolio',
+            text: 'Students reflect on this submission through an AI-guided conversation. The portfolio surfaces skill insights from their reflection.',
+            icon: {
+              url: `${toolUrl}/favicon.ico`,
+              width: 48,
+              height: 48,
+            },
+            custom: {
+              resource_link_id: generatedResourceLinkId,
+              instructor_title: title,
+              ...(body ? { instructor_body: body.substring(0, 2000) } : {}),
+            },
+          },
+        ]
+      : [
+          {
+            type: 'ltiResourceLink',
+            title,
+            text: body ? body.substring(0, 200) : undefined,
+            url: `${toolUrl}/api/lti/launch`,
+            custom: {
+              resource_link_id: generatedResourceLinkId,
+            },
+          },
+        ]
 
     // Sign response JWT
     const responseJwt = await signDeepLinkingResponse(

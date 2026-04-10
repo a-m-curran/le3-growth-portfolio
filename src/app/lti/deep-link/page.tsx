@@ -71,11 +71,12 @@ export default function DeepLinkPage() {
 
   return (
     <main className="max-w-lg mx-auto px-4 py-8">
-      <h1 className="text-xl font-bold text-green-900 mb-1">Embed Assignment</h1>
+      <h1 className="text-xl font-bold text-green-900 mb-1">Attach Growth Portfolio</h1>
       <p className="text-sm text-gray-500 mb-6">
-        Paste your assignment instructions below. When students click this link
-        in your course, they&apos;ll be asked to reflect on their submission using
-        these instructions as context.
+        The Growth Portfolio will receive each student&apos;s submission and guide
+        them through a reflective conversation about their work. Add the
+        assignment instructions below so the AI can ask specific questions
+        grounded in the actual assignment.
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -117,8 +118,9 @@ export default function DeepLinkPage() {
           type="submit"
           disabled={loading || !title.trim()}
           className="w-full py-3 bg-green-700 text-white rounded-lg text-sm font-medium hover:bg-green-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label="Attach Growth Portfolio to this assignment"
         >
-          {loading ? 'Embedding...' : 'Add to Course'}
+          {loading ? 'Attaching...' : 'Attach to Assignment'}
         </button>
       </form>
     </main>

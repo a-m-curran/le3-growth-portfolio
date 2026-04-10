@@ -20,11 +20,33 @@ export const LTI_CLAIMS = {
   DEEP_LINKING_SETTINGS: 'https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings',
   DEEP_LINKING_CONTENT_ITEMS: 'https://purl.imsglobal.org/spec/lti-dl/claim/content_items',
   DEEP_LINKING_DATA: 'https://purl.imsglobal.org/spec/lti-dl/claim/data',
+
+  // Platform Notification Service
+  PNS_ENDPOINT: 'https://purl.imsglobal.org/spec/lti/claim/platformnotificationservice',
+  NOTICE: 'https://purl.imsglobal.org/spec/lti/claim/notice',
+
+  // Asset Processor
+  FOR_USER: 'https://purl.imsglobal.org/spec/lti/claim/for_user',
+  ACTIVITY: 'https://purl.imsglobal.org/spec/lti/claim/activity',
+  SUBMISSION: 'https://purl.imsglobal.org/spec/lti/claim/submission',
+  ASSET_SERVICE: 'https://purl.imsglobal.org/spec/lti/claim/assetservice',
+  ASSET_REPORT: 'https://purl.imsglobal.org/spec/lti/claim/assetreport',
+  EULA_SERVICE: 'https://purl.imsglobal.org/spec/lti/claim/eulaservice',
+  ASSETREPORT_TYPE: 'https://purl.imsglobal.org/spec/lti/claim/assetreport_type',
+  ASSET: 'https://purl.imsglobal.org/spec/lti/claim/asset',
 } as const
 
 export type LtiMessageType =
   | 'LtiResourceLinkRequest'
   | 'LtiDeepLinkingRequest'
+  | 'LtiAssetProcessorSettingsRequest'
+  | 'LtiReportReviewRequest'
+  | 'LtiEulaRequest'
+
+export type LtiNoticeType =
+  | 'LtiAssetProcessorSubmissionNotice'
+  | 'LtiHelloWorldNotice'
+  | 'LtiContextCopyNotice'
 
 export const ROLES = {
   STUDENT: 'http://purl.imsglobal.org/vocab/lis/v2/membership#Learner',
@@ -63,6 +85,65 @@ export interface LtiDeepLinkingSettingsClaim {
   data?: string
 }
 
+// ─── Platform Notification Service ──────────────────
+
+export interface LtiPnsEndpointClaim {
+  platform_notification_service_url: string
+  scope: string[]
+  notice_types_supported: string[]
+}
+
+export interface LtiNoticeClaim {
+  id: string
+  timestamp: string
+  type: LtiNoticeType
+}
+
+// ─── Asset Processor ────────────────────────────────
+
+export interface LtiForUserClaim {
+  user_id: string
+  person_sourcedid?: string
+  name?: string
+  given_name?: string
+  family_name?: string
+  email?: string
+}
+
+export interface LtiActivityClaim {
+  id: string
+  title?: string
+  description?: string
+}
+
+export interface LtiSubmissionClaim {
+  id: string
+  started_at?: string
+  submitted_at?: string
+  attempt?: number
+}
+
+export interface LtiAsset {
+  asset_id: string
+  url: string
+  sha256_checksum?: string
+  timestamp?: string
+  size?: number
+  content_type?: string
+  title?: string
+  filename?: string
+}
+
+export interface LtiAssetServiceClaim {
+  scope: string[]
+  assets: LtiAsset[]
+}
+
+export interface LtiAssetReportClaim {
+  scope: string[]
+  report_url: string
+}
+
 export interface LtiJwtPayload {
   iss: string
   aud: string | string[]
@@ -90,6 +171,15 @@ export interface LtiJwtPayload {
   [LTI_CLAIMS.AGS_ENDPOINT]?: LtiAgsEndpointClaim
   [LTI_CLAIMS.DEEP_LINKING_SETTINGS]?: LtiDeepLinkingSettingsClaim
   [LTI_CLAIMS.CUSTOM]?: Record<string, string>
+
+  // PNS + Asset Processor claims
+  [LTI_CLAIMS.PNS_ENDPOINT]?: LtiPnsEndpointClaim
+  [LTI_CLAIMS.NOTICE]?: LtiNoticeClaim
+  [LTI_CLAIMS.FOR_USER]?: LtiForUserClaim
+  [LTI_CLAIMS.ACTIVITY]?: LtiActivityClaim
+  [LTI_CLAIMS.SUBMISSION]?: LtiSubmissionClaim
+  [LTI_CLAIMS.ASSET_SERVICE]?: LtiAssetServiceClaim
+  [LTI_CLAIMS.ASSET_REPORT]?: LtiAssetReportClaim
 }
 
 export function isStudent(payload: LtiJwtPayload): boolean {
@@ -109,4 +199,12 @@ export function isInstructor(payload: LtiJwtPayload): boolean {
 
 export function getMessageType(payload: LtiJwtPayload): LtiMessageType | undefined {
   return payload[LTI_CLAIMS.MESSAGE_TYPE]
+}
+
+export function getNoticeType(payload: LtiJwtPayload): LtiNoticeType | undefined {
+  return payload[LTI_CLAIMS.NOTICE]?.type
+}
+
+export function isAssetProcessorSubmissionNotice(payload: LtiJwtPayload): boolean {
+  return getNoticeType(payload) === 'LtiAssetProcessorSubmissionNotice'
 }

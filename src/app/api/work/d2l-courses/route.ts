@@ -4,10 +4,12 @@ import { NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 
 /**
- * GET /api/work/d2l-courses
+ * GET /api/work/d2l-courses — DEPRECATED
  *
- * Lists courses available in D2L for the authenticated service account.
- * Returns 503 if D2L is not configured.
+ * Lists courses available in D2L for the authenticated Valence service account.
+ * Kept as a fallback. The active path is LTI Asset Processor
+ * (see src/app/api/lti/notice/route.ts) which is push-based and doesn't
+ * need a Valence registration.
  */
 export async function GET() {
   try {
