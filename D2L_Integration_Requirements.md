@@ -1,134 +1,245 @@
-# D2L Brightspace Integration — Requirements from NLU
+# LE3 Growth Portfolio × NLU Brightspace — Integration Requirements
 
-## What We Need
+## Overview
 
-### 1. API Access Registration
+The LE3 Growth Portfolio integrates with NLU's Brightspace as an **LTI 1.3 tool**
+with the **Asset Processor** extension enabled. This gives us a single, standards-based
+integration that handles everything we need:
 
-**Who to ask:** Brightspace system administrator (IT department)
+1. **Single sign-on** — Students click a link in Brightspace and land in the portfolio
+   authenticated. No separate account creation, no magic links.
+2. **Course context** — The portfolio knows which course, which assignment, and which
+   student is viewing it, without any manual configuration.
+3. **Automatic submission delivery (Asset Processor)** — When a student submits work
+   to a dropbox that has the Growth Portfolio attached as an Asset Processor,
+   Brightspace pushes us the submission and we pull the files via a standard LTI
+   service. No polling, no credentials to manage, no separate API.
+4. **Processing reports back to Brightspace** — The portfolio reports back to the
+   dropbox when a student's submission has been received and processed.
 
-**What to request:** Register an OAuth2 application in Brightspace's **Manage Extensibility** tool.
-
-**Two options for grant type:**
-
-| Option | Best For | What You Get |
-|--------|----------|--------------|
-| **Client Credentials Grant** (recommended) | Server-to-server sync, no user interaction needed | Client ID + JWKS URL. App acts as a service account. |
-| **Authorization Code Grant** | Per-user access, each student authenticates | Client ID + Client Secret + Redirect URI. Users authorize via browser. |
-
-**Recommendation:** Start with **Client Credentials Grant** so the system can pull assignments automatically without each student needing to authorize D2L separately. Assign a service user (e.g., a coach or admin account) that has read access to course assignments and submissions.
-
-**Registration fields to provide:**
-- Application Name: `LE3 Growth Portfolio`
-- OAuth2 Scopes needed (space-delimited):
-  ```
-  dropbox:folders:read
-  enrollment:orgunit:read
-  core:*:*
-  ```
-- JWKS URL (for Client Credentials): We'll generate this and provide it
-- Access Token Lifetime: `72000` (20 hours, maximum allowed)
+This replaces the previous plan that used the proprietary Valence REST API.
+Asset Processor is an IMS Global / 1EdTech extension to LTI 1.3 that NLU IT has
+confirmed Brightspace supports.
 
 ---
 
-### 2. Instance URL
+## What NLU IT Needs to Do
 
-**What:** The Brightspace instance URL for NLU.
+Everything below happens in **one place** in Brightspace: the LTI Advantage
+registration screen (Admin Tools → Manage Extensibility → LTI Advantage, or
+Admin Tools → External Learning Tools depending on the version).
 
-**Format:** `https://[something].brightspace.com` (e.g., `https://nlu.brightspace.com`)
+### Step 1: Register the tool
 
-**Where to find it:** It's the URL students and faculty use to log into Brightspace/D2L.
-
----
-
-### 3. Service User Assignment (for Client Credentials)
-
-**What:** A user account that the API will act as when pulling data.
-
-**Requirements:**
-- Must be enrolled in the courses we want to sync (or have admin-level access)
-- Must have permission to view assignment submissions and student class lists
-- Can be a coach account, admin account, or dedicated service account
-
-**Why:** The Client Credentials grant makes API calls as this user. If the user can't see a course's assignments, neither can our app.
-
----
-
-### 4. LE3 Program Course Identification
-
-**What:** A way to identify which courses in Brightspace are part of the LE3 program so the system can sync all of them.
-
-**Context:** The Growth Portfolio serves the entire LE3 program, not a single course. A student might take SOC 155, HUM 150, BUS 200, and other LE3 courses across multiple quarters — assignments from all of them should flow into their portfolio and be tagged with durable skills.
-
-**Options (in order of preference):**
-1. **Org Unit parent/type** — If all LE3 courses share a common parent org unit or program-level container in Brightspace, we can query for all child courses automatically.
-2. **Course code pattern** — If LE3 courses follow a naming convention or have a tag/attribute, we can filter by that.
-3. **Manual course list** — Provide Org Unit IDs for all current LE3 course sections. We'd need this updated each quarter as new sections are created.
-4. **Enrollment-based** — The service user is enrolled in all LE3 courses, and we sync everything the service user can see.
-
-**Where to find Org Unit IDs:** In the Brightspace URL when viewing a course:
-`https://nlu.brightspace.com/d2l/home/[THIS_NUMBER]`
-
-**Ideal scenario:** The service user is enrolled in all LE3 courses (current and future), and we sync all of them automatically. New courses added to the program would be picked up on the next sync.
-
----
-
-### 5. Student ID Mapping
-
-**What:** A way to match D2L user IDs to our student records.
-
-**Options (in order of preference):**
-1. **Email match** — If D2L student emails match what students use to sign into our app (e.g., `@nlu.edu`), we can match automatically. This is the easiest.
-2. **OrgDefinedId match** — D2L's `OrgDefinedId` field on classlist users could map to our `nlu_id` field if it contains the NLU student ID.
-3. **Manual mapping** — We provide a CSV mapping D2L user IDs to our student IDs. Least preferred.
-
-**Question for NLU:** Do Brightspace student accounts use the same @nlu.edu email addresses that students will use to sign into the Growth Portfolio?
-
----
-
-## What We'll Set as Environment Variables
-
-Once NLU provides the above, we configure three values in Vercel:
+NLU IT registers the Growth Portfolio as a new LTI 1.3 tool. We'll provide a
+**Tool Configuration URL** that returns all the values Brightspace needs:
 
 ```
-D2L_INSTANCE_URL=https://nlu.brightspace.com
-D2L_ACCESS_TOKEN=<bearer-token-from-oauth>
-D2L_API_VERSION=1.82
+https://le3-growth-portfolio.vercel.app/api/lti/config
 ```
 
-For Client Credentials, we'll also need to implement JWT assertion generation (one-time setup using the Client ID and a generated key pair).
+Brightspace can consume this URL directly, or IT can copy the individual values
+from it manually. Either way, the configuration specifies:
+
+- **OIDC Login URL:** `https://le3-growth-portfolio.vercel.app/api/lti/login`
+- **Target Link URI:** `https://le3-growth-portfolio.vercel.app/api/lti/launch`
+- **Public JWKS URL:** `https://le3-growth-portfolio.vercel.app/api/lti/jwks`
+- **Redirect URIs:** the launch URL above
+- **Deployment:** a single deployment covering the LE3 program
+
+### Step 2: Grant the required scopes
+
+When registering the tool, IT should enable these five LTI Advantage scopes:
+
+| Scope | Purpose |
+|---|---|
+| `https://purl.imsglobal.org/spec/lti/scope/noticehandlers` | Receive submission notifications via the Platform Notification Service |
+| `https://purl.imsglobal.org/spec/lti/scope/asset.readonly` | Download files students submitted to Brightspace dropboxes |
+| `https://purl.imsglobal.org/spec/lti/scope/report` | Report processing status back to the dropbox |
+| `https://purl.imsglobal.org/spec/lti-ags/scope/lineitem.readonly` | Read assignment metadata (Assignment and Grade Services) |
+| `https://purl.imsglobal.org/spec/lti-ags/scope/result.readonly` | Read assignment results (Assignment and Grade Services) |
+
+These are all standard LTI Advantage scopes. No proprietary Brightspace scopes
+are required.
+
+### Step 3: Enable the tool placements
+
+The tool configuration declares three placements, all of which should be enabled:
+
+| Placement | What it does |
+|---|---|
+| **Assignment Attachment** (`assignment_attachment`) | Lets instructors attach the Growth Portfolio as an Asset Processor to an individual dropbox assignment. This is the key placement for automatic submission delivery. |
+| **Link Selection** (`link_selection`) | Lets instructors add a "Growth Portfolio" link anywhere in a course page or module, with per-link configuration. |
+| **Course Navigation** (`course_navigation`) | Adds "Growth Portfolio" to the course navigation bar so students can access their portfolio from any LE3 course. |
+
+Only Assignment Attachment is strictly required for the Asset Processor flow.
+The other two are for convenience — students can also reach the portfolio by
+clicking a link in their course.
+
+### Step 4: Send us the generated credentials
+
+After registration, Brightspace generates two values that we need:
+
+- **Client ID** — a UUID identifying our tool to Brightspace
+- **Deployment ID** — identifies this particular deployment
+
+We'll set these as environment variables in our hosting environment. We also
+need two URLs from Brightspace, which are standard per-platform and public:
+
+- **Platform issuer** — e.g., `https://nlu.brightspace.com`
+- **Platform JWKS URL** — e.g., `https://nlu.brightspace.com/d2l/.well-known/jwks`
+- **Platform auth URL** — e.g., `https://auth.brightspace.com/oauth2/auth`
+- **Platform token URL** — e.g., `https://auth.brightspace.com/core/connect/token`
 
 ---
 
-## What the Integration Does Once Connected
+## How the Integration Works End-to-End
 
-1. **System syncs all LE3 courses** — either on a schedule or triggered by a coach/admin
-2. For each course, calls D2L API to get all assignment/dropbox folders
-3. For each assignment, for each enrolled student:
-   - Pulls submission metadata (who submitted, when, grade if available)
-   - Downloads submitted files (PDF, DOCX, TXT)
-   - Extracts text content from files
-   - Creates a `student_work` record linked to that student
-   - AI auto-tags the assignment with 1-3 of the 12 durable skills
-4. Tagged assignments from **all courses** appear in each student's conversation hub, grouped by skill — not by course
-5. Students click any assignment to start a reflective conversation
-6. The conversation engine uses the actual assignment content to ask specific, relevant questions
-7. Over time, a student's portfolio accumulates work from every LE3 course they take, building a cross-course picture of skill development
+### Instructor attaches the portfolio to an assignment (once per assignment)
 
-**Scale:** The system is designed for the full LE3 program — multiple courses, multiple cohorts, multiple quarters. A student who takes 4 LE3 courses in a year will see assignments from all 4 in their hub, and their narratives will draw from conversations across all of them.
+1. Instructor opens an assignment dropbox in Brightspace and edits it
+2. In the "Attachments" / "External Tools" section, they add **Growth Portfolio**
+3. Brightspace opens our deep-linking page. The instructor optionally pastes the
+   assignment title and prompt so the AI can ask grounded questions
+4. The instructor clicks "Attach to Assignment" and returns to Brightspace
+5. The Growth Portfolio is now attached as an Asset Processor for that dropbox
 
-**Deduplication:** Assignments are tracked by external ID (`d2l:{courseId}:{folderId}`). Re-syncing won't create duplicates.
+### Student submits work (automatic from this point on)
 
-**Graceful fallback:** If D2L is not configured, CSV import remains fully functional as an alternative.
+1. Student submits a file (PDF, DOCX, TXT, or MD) to the dropbox in Brightspace
+2. Brightspace sends the Growth Portfolio an `LtiAssetProcessorSubmissionNotice`
+   via the Platform Notification Service — this is push-based, no polling
+3. The portfolio receives the notice, downloads the submitted file(s) via the
+   LTI Asset Service, and extracts the text
+4. A `student_work` record is created, tagged with 1-3 durable skills by AI,
+   and linked to the student's portfolio
+5. The portfolio sends a "processed" report back to the dropbox via the LTI
+   Asset Report Service, so the instructor can see the portfolio received it
+
+### Student reflects on their work
+
+1. Student clicks "Growth Portfolio" in the course navigation (or any other
+   entry point) and is SSO'd into their portfolio
+2. The assignment they just submitted appears at the top of their conversation hub
+3. They click it and start a reflective conversation with the AI about the work
+4. Over time, their portfolio accumulates work from every LE3 course they take,
+   grouped by durable skill — not by course
 
 ---
 
-## Questions for NLU
+## Student Identity Mapping
 
-1. What is NLU's Brightspace instance URL?
-2. Can we register an OAuth2 application in Manage Extensibility, or does IT need to do this?
-3. Is Client Credentials grant acceptable, or does institutional policy require per-user authorization?
-4. Which user account should serve as the service user for API access?
-5. Do Brightspace student emails match @nlu.edu emails used elsewhere?
-6. How are LE3 courses organized in Brightspace? Is there a program-level container, a naming convention, or another way to identify all LE3 course sections?
-7. Are there any institutional data governance requirements for API integrations that we need to comply with (FERPA documentation, data handling agreements)?
-8. Is there an API sandbox or test environment available, or should we test against production with a test course?
+LTI 1.3 provides a stable opaque `sub` claim for each user. We store this as the
+student's NLU ID (prefixed with `lti:`) on first launch. LTI also provides the
+student's email and full name, which we use for display and to populate the
+student record.
+
+**The portfolio never needs NLU's student ID system directly** — LTI's `sub`
+claim serves as the permanent unique identifier and it's guaranteed stable across
+sessions by the spec.
+
+---
+
+## What Happens If a Student Never Launches the Portfolio
+
+If a student submits to a dropbox that has the Growth Portfolio attached but
+has never actually clicked into the portfolio, we receive the submission notice
+but have no student record to attach it to. In that case we silently skip
+processing and do not send a report back.
+
+The next time the student launches the portfolio for any reason, we can
+optionally backfill their submissions — but for the pilot, we expect instructors
+to have students launch the portfolio once at the start of the quarter as part
+of program onboarding, which creates their record.
+
+---
+
+## LE3 Program Course Identification
+
+Unlike the Valence approach, we don't need to know which courses are part of LE3
+in advance. The tool is available to **any course** where an instructor has
+added it, and the Asset Processor only fires for **assignments where an instructor
+has explicitly attached the Growth Portfolio**.
+
+This means:
+
+- NLU IT doesn't need to maintain a list of "LE3 courses" anywhere
+- The portfolio only receives submissions it's been explicitly attached to,
+  which is the correct privacy default
+- New LE3 courses and sections each quarter automatically work as long as the
+  tool is registered at the org level
+
+If NLU wants to pre-attach the portfolio to every LE3 assignment automatically
+(rather than relying on each instructor to do it), that's also possible via
+Brightspace's bulk course administration tools — but it's not required.
+
+---
+
+## Data Handling
+
+- **What we store:** student name, email, NLU ID (from LTI `sub`), program
+  start date, submitted assignments (metadata + extracted text), reflective
+  conversations, AI-generated skill tags, AI-generated narratives
+- **What we don't store:** Brightspace grades, roster data for students who
+  haven't launched the portfolio, any course data beyond what's required to
+  display assignments
+- **Where it lives:** PostgreSQL database on Supabase (SOC 2 Type II certified),
+  hosted in the United States. Submitted files are stored only as extracted text.
+- **FERPA:** The portfolio holds educational records and should be covered by
+  NLU's data handling and FERPA policies. We can sign a BAA/DPA with NLU if
+  required.
+
+---
+
+## Environment Variables (Our Side)
+
+Once NLU IT completes registration, we set these on our hosting environment:
+
+```
+LTI_PLATFORM_ISSUER=https://nlu.brightspace.com
+LTI_PLATFORM_CLIENT_ID=<generated by Brightspace at registration>
+LTI_DEPLOYMENT_ID=<generated by Brightspace at registration>
+LTI_PLATFORM_AUTH_URL=https://auth.brightspace.com/oauth2/auth
+LTI_PLATFORM_TOKEN_URL=https://auth.brightspace.com/core/connect/token
+LTI_PLATFORM_JWKS_URL=https://nlu.brightspace.com/d2l/.well-known/jwks
+LTI_PRIVATE_KEY=<our tool's RSA private key, we generate this>
+LTI_PUBLIC_KEY=<matching public key, exposed via our JWKS URL>
+LTI_KEY_ID=<arbitrary key identifier>
+LTI_TOOL_URL=https://le3-growth-portfolio.vercel.app
+```
+
+No Brightspace-specific API tokens are needed. All authentication uses the
+LTI 1.3 JWT client assertion flow with the key pair above.
+
+---
+
+## Questions for NLU IT
+
+1. **Asset Processor confirmation:** You mentioned Brightspace supports an "asset
+   processor" for LTI 1.3 integrations. Can you confirm it's enabled for NLU's
+   instance and which Brightspace release version you're on? (Asset Processor
+   requires Brightspace 20.24.3 or later.)
+2. **Instance URL:** What's the public URL for NLU's Brightspace instance?
+3. **Registration path:** Who handles LTI 1.3 tool registration on your side,
+   and can we schedule a 30-minute call to walk through it together?
+4. **Pilot scope:** Do you want to register the tool at the org level (available
+   to all courses, instructors opt-in per assignment) or limited to a specific
+   LE3 pilot course?
+5. **Testing:** Is there a Brightspace sandbox we can register against before
+   going live in production?
+6. **Data governance:** Do you need us to sign a DPA or FERPA addendum? Are
+   there any data residency requirements beyond "US-based hosting"?
+
+---
+
+## Summary for IT
+
+| What you need to do | Effort | Who |
+|---|---|---|
+| Generate a Brightspace LTI 1.3 tool registration using our config URL | ~15 min | Brightspace admin |
+| Grant the five LTI Advantage scopes listed above | included above | same |
+| Send us the Client ID and Deployment ID | ~2 min | same |
+| Optionally, attach the portfolio to LE3 assignments in bulk | variable | instructors or admin |
+
+No API tokens to manage. No service users to create. No scheduled polling. No
+maintenance once registered — new courses and new cohorts work automatically.
