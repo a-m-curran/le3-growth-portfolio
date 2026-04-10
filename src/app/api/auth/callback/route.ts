@@ -6,10 +6,15 @@ import { NextResponse } from 'next/server'
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
+  const next = searchParams.get('next')
 
   if (!code) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
+
+  // If a `next` path is provided (e.g. from an LTI launch), honor it
+  // in the final redirect after record linking.
+  const nextPath = next && next.startsWith('/') ? next : null
 
   // Exchange code for session using the normal cookie-based client
   const cookieStore = cookies()
@@ -47,7 +52,7 @@ export async function GET(request: Request) {
     .single()
 
   if (linkedCoach) {
-    return NextResponse.redirect(new URL('/coach', request.url))
+    return NextResponse.redirect(new URL(nextPath || '/coach', request.url))
   }
 
   // Check if already linked as student
@@ -58,7 +63,7 @@ export async function GET(request: Request) {
     .single()
 
   if (linkedStudent) {
-    return NextResponse.redirect(new URL('/garden', request.url))
+    return NextResponse.redirect(new URL(nextPath || '/garden', request.url))
   }
 
   // Not linked yet — try to find by email and link
@@ -74,7 +79,7 @@ export async function GET(request: Request) {
       .from('coach')
       .update({ auth_user_id: user.id })
       .eq('id', unmatchedCoach.id)
-    return NextResponse.redirect(new URL('/coach', request.url))
+    return NextResponse.redirect(new URL(nextPath || '/coach', request.url))
   }
 
   const { data: unmatchedStudent } = await admin
@@ -89,7 +94,7 @@ export async function GET(request: Request) {
       .from('student')
       .update({ auth_user_id: user.id })
       .eq('id', unmatchedStudent.id)
-    return NextResponse.redirect(new URL('/garden', request.url))
+    return NextResponse.redirect(new URL(nextPath || '/garden', request.url))
   }
 
   // No existing record — send to onboarding

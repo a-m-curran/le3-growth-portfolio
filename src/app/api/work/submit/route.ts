@@ -45,6 +45,7 @@ export async function POST(request: Request) {
     const description = (formData.get('description') as string) || null
     const workType = (formData.get('workType') as string) || 'other'
     const courseName = (formData.get('courseName') as string) || null
+    const ltiResourceLinkId = (formData.get('ltiResourceLinkId') as string) || null
     const file = formData.get('file') as File | null
 
     if (!title) {
@@ -121,6 +122,14 @@ export async function POST(request: Request) {
     const quarterStart = new Date(year, quarterStartMonth, 1)
     const weekNumber = Math.ceil((now.getTime() - quarterStart.getTime()) / (7 * 24 * 60 * 60 * 1000))
 
+    // If this submission is tied to an LTI resource link (student uploading
+    // the file for an assignment launched from Brightspace), set external_id
+    // so we can dedupe against any auto-sync of the same resource link.
+    const externalId = ltiResourceLinkId
+      ? `lti:${process.env.LTI_PLATFORM_ISSUER || 'unknown'}:${ltiResourceLinkId}`
+      : null
+    const source = ltiResourceLinkId ? 'manual' : 'manual'
+
     const { data: work, error: insertError } = await admin
       .from('student_work')
       .insert({
@@ -133,6 +142,9 @@ export async function POST(request: Request) {
         quarter,
         week_number: weekNumber,
         content,
+        source,
+        external_id: externalId,
+        imported_at: ltiResourceLinkId ? now.toISOString() : null,
       })
       .select('id')
       .single()

@@ -13,7 +13,9 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/onboarding') ||
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/onboarding') ||
-    pathname.startsWith('/api/skills')
+    pathname.startsWith('/api/skills') ||
+    pathname.startsWith('/api/lti') ||
+    pathname.startsWith('/lti')
   ) {
     return res
   }

@@ -1,12 +1,17 @@
 import { getCurrentStudent, getAllStudentConversations, getSkillCoverage, getAvailableWorkWithTags } from '@/lib/queries'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { createAdminClient } from '@/lib/supabase-admin'
 import type { GrowthConversation, SkillCoverageData, StudentWork } from '@/lib/types'
 import { SkillCoverageBar } from '@/components/conversation/SkillCoverageBar'
 
 type WorkWithTags = StudentWork & { skillTags: { skillId: string; skillName: string }[] }
 
-export default async function ConversationPage() {
+interface Props {
+  searchParams: { lti_resource?: string }
+}
+
+export default async function ConversationPage({ searchParams }: Props) {
   const student = await getCurrentStudent()
   if (!student) redirect('/login')
 
@@ -15,6 +20,32 @@ export default async function ConversationPage() {
     getSkillCoverage(student.id),
     getAvailableWorkWithTags(student.id),
   ])
+
+  // If the student just launched from an LTI resource link, look up the
+  // assignment metadata (title + body) stored during deep linking.
+  let ltiFeatured: { title: string; body: string | null; resourceLinkId: string } | null = null
+  if (searchParams.lti_resource) {
+    const admin = createAdminClient()
+    const { data: resource } = await admin
+      .from('lti_resource')
+      .select('assignment_title, assignment_body')
+      .eq('resource_link_id', searchParams.lti_resource)
+      .single()
+
+    if (resource) {
+      ltiFeatured = {
+        title: resource.assignment_title || 'Assignment',
+        body: resource.assignment_body || null,
+        resourceLinkId: searchParams.lti_resource,
+      }
+    } else {
+      ltiFeatured = {
+        title: 'Assignment from your course',
+        body: null,
+        resourceLinkId: searchParams.lti_resource,
+      }
+    }
+  }
 
   const inProgress = allConversations.filter(c => c.status === 'in_progress')
   const completed = allConversations.filter(c => c.status === 'completed')
@@ -76,6 +107,35 @@ export default async function ConversationPage() {
           </Link>
         </div>
       </div>
+
+      {/* LTI-launched assignment feature card */}
+      {ltiFeatured && (
+        <section className="mb-8">
+          <h2 className="text-sm font-semibold text-blue-700 uppercase tracking-wide mb-3">
+            From Your Course
+          </h2>
+          <div className="p-5 rounded-xl bg-blue-50 border border-blue-200">
+            <h3 className="font-semibold text-blue-900 text-base mb-1">
+              {ltiFeatured.title}
+            </h3>
+            {ltiFeatured.body && (
+              <p className="text-sm text-blue-800 mb-3 line-clamp-3">
+                {ltiFeatured.body.substring(0, 240)}
+                {ltiFeatured.body.length > 240 ? '...' : ''}
+              </p>
+            )}
+            <p className="text-xs text-blue-700 mb-3">
+              Upload the work you submitted for this assignment to start a reflective conversation about it.
+            </p>
+            <Link
+              href={`/work/submit?lti_resource=${encodeURIComponent(ltiFeatured.resourceLinkId)}&title=${encodeURIComponent(ltiFeatured.title)}`}
+              className="inline-block text-sm px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-800 transition-colors"
+            >
+              Upload & reflect
+            </Link>
+          </div>
+        </section>
+      )}
 
       {/* In-progress conversations */}
       {inProgress.length > 0 && (

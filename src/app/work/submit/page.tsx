@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useRef, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 const WORK_TYPES = [
   { value: 'essay', label: 'Essay' },
@@ -17,7 +17,16 @@ const WORK_TYPES = [
 const ACCEPTED_TYPES = '.pdf,.docx,.txt,.md'
 
 export default function SubmitWorkPage() {
+  return (
+    <Suspense fallback={<div className="max-w-lg mx-auto px-4 py-8 text-sm text-gray-500">Loading...</div>}>
+      <SubmitWorkForm />
+    </Suspense>
+  )
+}
+
+function SubmitWorkForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -26,6 +35,13 @@ export default function SubmitWorkPage() {
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Prefill from query params (e.g. LTI launch)
+  const ltiResourceLinkId = searchParams.get('lti_resource')
+  useEffect(() => {
+    const qTitle = searchParams.get('title')
+    if (qTitle) setTitle(qTitle)
+  }, [searchParams])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0] || null
@@ -49,6 +65,9 @@ export default function SubmitWorkPage() {
       formData.append('description', description)
       formData.append('workType', workType)
       formData.append('courseName', courseName)
+      if (ltiResourceLinkId) {
+        formData.append('ltiResourceLinkId', ltiResourceLinkId)
+      }
       if (file) {
         formData.append('file', file)
       }
