@@ -69,13 +69,14 @@ export interface StudentWork {
   id: string
   studentId: string
   title: string
-  description?: string
+  description?: string // assignment prompt from LTI activity.description
   workType: WorkType
   courseName?: string
-  courseCode?: string
+  courseCode?: string // from LTI context.label, e.g., "SOC155-01"
   submittedAt: string // ISO datetime
   quarter: string
   weekNumber?: number
+  attemptNumber?: number // from LTI submission.attempt
   content?: string
   grade?: string
   source?: WorkSource

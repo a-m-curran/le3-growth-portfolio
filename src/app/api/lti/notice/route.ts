@@ -144,8 +144,11 @@ async function processSubmissionNotice(
         asset,
         studentId: student.id,
         activityTitle: activity?.title,
+        activityDescription: activity?.description,
         submissionId: submission?.id,
+        attemptNumber: submission?.attempt,
         contextTitle: context?.title,
+        contextLabel: context?.label,
         platformIssuer: payload.iss,
         reportUrl: assetReport?.report_url,
         quarter,
@@ -176,8 +179,11 @@ async function processAsset({
   asset,
   studentId,
   activityTitle,
+  activityDescription,
   submissionId,
+  attemptNumber,
   contextTitle,
+  contextLabel,
   platformIssuer,
   reportUrl,
   quarter,
@@ -185,8 +191,11 @@ async function processAsset({
   asset: LtiAsset
   studentId: string
   activityTitle?: string
+  activityDescription?: string
   submissionId?: string
+  attemptNumber?: number
   contextTitle?: string
+  contextLabel?: string
   platformIssuer: string
   reportUrl?: string
   quarter: string
@@ -237,11 +246,13 @@ async function processAsset({
     .insert({
       student_id: studentId,
       title,
-      description: null,
+      description: activityDescription || null,
       work_type: workType,
       course_name: contextTitle || null,
+      course_code: contextLabel || null,
       submitted_at: asset.timestamp || new Date().toISOString(),
       quarter,
+      attempt_number: attemptNumber || null,
       content,
       source: 'd2l_api',
       external_id: externalId,
@@ -254,12 +265,14 @@ async function processAsset({
     throw new Error(`DB insert failed: ${insertError?.message || 'unknown'}`)
   }
 
-  // Auto-tag with skills
+  // Auto-tag with skills — include assignment description so the LLM
+  // can use the instructor's prompt as context for skill inference
   try {
     const tags = await autoTagWork({
       id: work.id,
       studentId,
       title,
+      description: activityDescription || undefined,
       workType,
       courseName: contextTitle,
       submittedAt: asset.timestamp || new Date().toISOString(),
