@@ -14,6 +14,7 @@ import type {
   SessionPrepData,
   StudentWork,
   SdtLevel,
+  SyncRun,
 } from './types'
 
 const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
@@ -818,4 +819,52 @@ function buildSessionPrepFromStatic(coachId: string, studentId: string): Session
   }
 
   return { student, recentConversations, patterns, currentGoals, lastNote }
+}
+
+// ─── SYNC OBSERVABILITY ─────────────────────────────
+
+/**
+ * Get the most recent sync_run rows, newest first. Used by the coach
+ * dashboard's sync status panel to show "last sync was X minutes ago,
+ * synced Y submissions, Z errors."
+ *
+ * Safe to call in demo mode — returns an empty array.
+ */
+export async function getRecentSyncRuns(limit: number = 5): Promise<SyncRun[]> {
+  if (isDemoMode) return []
+
+  const supabase = await getSupabase()
+  const { data, error } = await supabase
+    .from('sync_run')
+    .select('*')
+    .order('started_at', { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    console.error('getRecentSyncRuns error:', error)
+    return []
+  }
+
+  return (data || []).map(row => snakeToCamel(row) as unknown as SyncRun)
+}
+
+/**
+ * Get the most recent successfully-completed sync_run row, or null if
+ * there has never been one. Used by the dashboard to show "last
+ * successful sync N minutes ago" regardless of how many failed attempts
+ * have happened since.
+ */
+export async function getLastSuccessfulSyncRun(): Promise<SyncRun | null> {
+  if (isDemoMode) return null
+
+  const supabase = await getSupabase()
+  const { data } = await supabase
+    .from('sync_run')
+    .select('*')
+    .eq('status', 'completed')
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  return data ? (snakeToCamel(data) as unknown as SyncRun) : null
 }

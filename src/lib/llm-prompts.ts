@@ -686,6 +686,15 @@ export interface NarrativeContext {
   conversations: {
     date: string
     workTitle: string
+    /**
+     * The instructor's assignment prompt / instructions (when available).
+     * Populated from student_work.description, which is sourced from
+     * either LTI activity.description or Valence dropbox CustomInstructions.
+     * Nullable for student-created work or legacy records.
+     */
+    workDescription?: string
+    /** The course this work belonged to, if known. */
+    courseName?: string
     synthesisText: string
     suggestedInsight: string
     keyMoments?: { phase: number; quote: string; significance: string }[]
@@ -740,7 +749,15 @@ export function buildNarrativeContext(ctx: NarrativeContext): string {
 
   parts.push('CONVERSATIONS (chronological):')
   ctx.conversations.forEach((c, i) => {
-    parts.push(`  ${i + 1}. ${c.date} — "${c.workTitle}"`)
+    const courseSuffix = c.courseName ? ` (${c.courseName})` : ''
+    parts.push(`  ${i + 1}. ${c.date} — "${c.workTitle}"${courseSuffix}`)
+    if (c.workDescription) {
+      // Truncate long prompts to keep the context budget manageable
+      const desc = c.workDescription.length > 300
+        ? c.workDescription.substring(0, 300) + '...'
+        : c.workDescription
+      parts.push(`     Assignment prompt: ${desc}`)
+    }
     parts.push(`     Synthesis: ${c.synthesisText}`)
     parts.push(`     Insight: ${c.suggestedInsight}`)
     if (c.keyMoments && c.keyMoments.length > 0) {

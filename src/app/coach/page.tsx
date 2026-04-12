@@ -1,13 +1,23 @@
-import { getCoachDashboard, getCurrentCoach } from '@/lib/queries'
+import {
+  getCoachDashboard,
+  getCurrentCoach,
+  getRecentSyncRuns,
+  getLastSuccessfulSyncRun,
+} from '@/lib/queries'
 import { redirect } from 'next/navigation'
 import { AttentionBanner } from '@/components/coach/AttentionBanner'
 import { CaseloadList } from '@/components/coach/CaseloadList'
+import { SyncStatusPanel } from '@/components/coach/SyncStatusPanel'
 
 export default async function CoachPage() {
   const coach = await getCurrentCoach()
   if (!coach) redirect('/login')
 
-  const data = await getCoachDashboard(coach.id)
+  const [data, recentSyncRuns, lastSuccessfulSync] = await Promise.all([
+    getCoachDashboard(coach.id),
+    getRecentSyncRuns(5),
+    getLastSuccessfulSyncRun(),
+  ])
 
   const totalConvos = data.students.reduce(
     (sum, s) => sum + s.conversationsThisQuarter,
@@ -24,6 +34,7 @@ export default async function CoachPage() {
       </p>
 
       <AttentionBanner items={data.attentionItems} />
+      <SyncStatusPanel recentRuns={recentSyncRuns} lastSuccessful={lastSuccessfulSync} />
       <CaseloadList students={data.students} coachId={coach.id} />
     </main>
   )

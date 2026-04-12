@@ -59,9 +59,11 @@ export async function POST(request: Request) {
 
     // Gather all data for this skill
     const [convoResult, defResult, assessResult, outputResult] = await Promise.all([
-      // Conversations tagged with this skill
+      // Conversations tagged with this skill — joined to student_work so
+      // the narrative context can reference the actual assignment title,
+      // the instructor's prompt, and the course name
       admin.from('growth_conversation')
-        .select('*, conversation_skill_tag!inner(skill_id)')
+        .select('*, conversation_skill_tag!inner(skill_id), student_work(title, description, course_name)')
         .eq('student_id', studentRow.id)
         .eq('status', 'completed')
         .eq('conversation_skill_tag.skill_id', skillId)
@@ -85,13 +87,27 @@ export async function POST(request: Request) {
         .eq('growth_conversation.conversation_skill_tag.skill_id', skillId),
     ])
 
-    const conversations = (convoResult.data || []).map((c: Record<string, unknown>) => ({
-      date: c.started_at as string,
-      workTitle: (c.work_context as string) || 'Reflection',
-      synthesisText: (c.synthesis_text as string) || '',
-      suggestedInsight: (c.suggested_insight as string) || '',
-      keyMoments: [] as { phase: number; quote: string; significance: string }[],
-    }))
+    const conversations = (convoResult.data || []).map((c: Record<string, unknown>) => {
+      const work = c.student_work as Record<string, unknown> | null
+      return {
+        date: c.started_at as string,
+        // Prefer the actual assignment title from student_work; fall back to
+        // the conversation's work_context framing or "Reflection" for
+        // open-reflection conversations with no linked work.
+        workTitle:
+          (work?.title as string) ||
+          (c.work_context as string) ||
+          'Reflection',
+        // Thread the instructor's assignment prompt through to the narrative
+        // context so the LLM can write "on the Ethics Paper, which asked you
+        // to..." rather than generic references.
+        workDescription: (work?.description as string) || undefined,
+        courseName: (work?.course_name as string) || undefined,
+        synthesisText: (c.synthesis_text as string) || '',
+        suggestedInsight: (c.suggested_insight as string) || '',
+        keyMoments: [] as { phase: number; quote: string; significance: string }[],
+      }
+    })
 
     // Attach key moments from outputs
     const outputs = outputResult.data || []
