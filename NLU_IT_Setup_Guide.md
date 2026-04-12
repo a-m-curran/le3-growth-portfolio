@@ -6,6 +6,23 @@
 
 ---
 
+## The easy path
+
+Open this URL in a browser for a step-by-step registration helper with
+copy-to-clipboard buttons for every value you need:
+
+```
+https://le3-growth-portfolio.vercel.app/lti/register
+```
+
+That page walks you through the same steps as this document, but with
+clickable copy buttons next to every URL, scope, and placement value so
+you can paste directly into Brightspace's admin form. If you can reach
+that URL from your workstation, **use it instead of this doc**. The rest
+of this document is a reference for offline / locked-down environments.
+
+---
+
 ## Before you start
 
 You'll need:
@@ -29,17 +46,23 @@ Fill in these fields:
 |---|---|
 | Name | `LE3 Growth Portfolio` |
 | Description | `AI-guided reflective conversations for LE3` |
+| Vendor / Provider Name | `LE3 Growth Portfolio` |
+| Contact Email | `contact@le3-growth-portfolio.vercel.app` |
 | Domain | `le3-growth-portfolio.vercel.app` |
-| Redirect URLs | `https://le3-growth-portfolio.vercel.app/api/lti/launch` |
-| OpenID Connect Login URL | `https://le3-growth-portfolio.vercel.app/api/lti/login` |
+| Icon URL | `https://le3-growth-portfolio.vercel.app/favicon.ico` |
+| Privacy Policy URL | `https://le3-growth-portfolio.vercel.app/privacy` |
+| Terms of Service URL | `https://le3-growth-portfolio.vercel.app/terms` |
+| Redirect URL | `https://le3-growth-portfolio.vercel.app/api/lti/launch` |
+| OpenID Connect Login URL *(a.k.a. Initiate Login URI)* | `https://le3-growth-portfolio.vercel.app/api/lti/login` |
 | Target Link URI | `https://le3-growth-portfolio.vercel.app/api/lti/launch` |
-| Keyset URL (JWKS) | `https://le3-growth-portfolio.vercel.app/api/lti/jwks` |
+| Keyset URL *(a.k.a. JWKS URI)* | `https://le3-growth-portfolio.vercel.app/api/lti/jwks` |
 
-If Brightspace offers to import from a configuration URL, you can point it at:
+Raw JSON of all these values (for reference) is at:
 ```
 https://le3-growth-portfolio.vercel.app/api/lti/config
 ```
-That URL returns all the above values plus scopes and placements in one shot.
+Brightspace does not auto-import from this URL — it's provided so you can
+confirm our expected values match what you're entering.
 
 ---
 
