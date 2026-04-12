@@ -24,6 +24,8 @@ export async function GET() {
   const toolUrl = process.env.LTI_TOOL_URL || 'https://le3-growth-portfolio.vercel.app'
   const vendorContact =
     process.env.LTI_VENDOR_CONTACT_EMAIL || 'contact@le3-growth-portfolio.vercel.app'
+  const developerName =
+    process.env.LTI_DEVELOPER_NAME || 'the LE3 Growth Portfolio developer'
 
   const loginUrl = `${toolUrl}/api/lti/login`
   const launchUrl = `${toolUrl}/api/lti/launch`
@@ -33,12 +35,16 @@ export async function GET() {
     // ─── Tool metadata ────────────────────────────────
     title: 'LE3 Growth Portfolio',
     description:
-      'Student growth portfolio with AI-guided reflective conversations. ' +
-      'Students click a link from a course and land in their portfolio to reflect ' +
-      'on submitted work. When attached as an Asset Processor to an assignment, ' +
-      'the tool automatically receives student submissions and preloads them for reflection.',
+      'Student growth portfolio with AI-guided reflective conversations built for ' +
+      'National Louis University\u2019s LE3 program. Students click a link from a ' +
+      'course and land in their portfolio to reflect on submitted work. When attached ' +
+      'as an Asset Processor to an assignment, the tool automatically receives student ' +
+      'submissions and preloads them for reflection.',
     vendor_name: 'LE3 Growth Portfolio',
     vendor_contact_email: vendorContact,
+    developer_name: developerName,
+    institution: 'National Louis University',
+    program: 'LE3',
     icon_url: `${toolUrl}/favicon.ico`,
     privacy_policy_url: `${toolUrl}/privacy`,
     terms_of_service_url: `${toolUrl}/terms`,

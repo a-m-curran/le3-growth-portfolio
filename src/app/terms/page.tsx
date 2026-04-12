@@ -2,11 +2,15 @@ export const metadata = {
   title: 'Terms of Service — LE3 Growth Portfolio',
 }
 
+export const dynamic = 'force-dynamic'
+
 /**
- * Terms of service linked from Brightspace's LTI tool registration.
+ * Terms of use linked from Brightspace's LTI tool registration.
  * Intentionally short and plain-language. Subject to revision with NLU counsel.
  */
 export default function TermsPage() {
+  const developerName = process.env.LTI_DEVELOPER_NAME || 'the LE3 Growth Portfolio developer'
+
   return (
     <main className="max-w-2xl mx-auto px-6 py-10 text-gray-800">
       <h1 className="text-2xl font-bold text-green-900 mb-2">Terms of Use</h1>
@@ -17,9 +21,10 @@ export default function TermsPage() {
       <h2 className="text-lg font-semibold text-green-900 mt-8 mb-2">Who this is for</h2>
       <p className="text-sm mb-4">
         The LE3 Growth Portfolio is a reflection and growth tool for students
-        enrolled in National Louis University&rsquo;s LE3 program. It is not a
-        general-purpose product and is not available for use outside that
-        program.
+        enrolled in National Louis University&rsquo;s LE3 program. It was
+        built for NLU by {developerName} and will eventually be administered
+        directly by NLU. It is not a general-purpose product and is not
+        available for use outside that program.
       </p>
 
       <h2 className="text-lg font-semibold text-green-900 mt-8 mb-2">How you use it</h2>

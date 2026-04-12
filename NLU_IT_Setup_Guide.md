@@ -3,6 +3,7 @@
 **Audience:** NLU Brightspace administrator
 **Time required:** ~30 minutes
 **What you're doing:** Registering an external LTI 1.3 tool so NLU students can SSO into the Growth Portfolio and so student submissions to selected assignments flow to it automatically.
+**Context:** The LE3 Growth Portfolio is being built for NLU's LE3 program and will eventually be administered directly by NLU. This guide is for the initial pilot registration.
 
 ---
 
@@ -30,7 +31,7 @@ You'll need:
 - Brightspace version **20.24.3 or later** (required for Asset Processor)
 - About 30 minutes
 
-You'll be sending us four values at the end. Nothing else is required from your side.
+You'll be sending four values back at the end. Nothing else is required from your side.
 
 ---
 
