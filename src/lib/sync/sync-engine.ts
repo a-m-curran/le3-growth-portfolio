@@ -440,13 +440,22 @@ async function upsertStudent(
 
   const { data: existing } = await admin
     .from('student')
-    .select('id, nlu_id, coach_id')
+    .select('id, nlu_id, coach_id, d2l_user_id')
     .eq('email', email)
     .maybeSingle()
 
   if (existing) {
-    // Keep the existing coach assignment — don't clobber a real coach-student
-    // relationship with whoever teaches this particular course.
+    // Student already exists (from a prior sync, an LTI launch, or CSV
+    // import). Claim their d2l_user_id if not yet set, so future
+    // submission processing can find them by Brightspace user ID.
+    // Preserve the existing coach assignment — don't clobber a real
+    // coach-student relationship with whoever teaches this course.
+    if (!existing.d2l_user_id) {
+      await admin
+        .from('student')
+        .update({ d2l_user_id: student.userId })
+        .eq('id', existing.id)
+    }
     return existing.id as string
   }
 
@@ -457,15 +466,18 @@ async function upsertStudent(
     )
   }
 
-  // Use the D2L OrgDefinedId as the nlu_id if available; otherwise fall back
-  // to a d2l-prefixed user ID. LTI launches will later claim the record by
-  // updating nlu_id to 'lti:{sub}'.
+  // Use the D2L OrgDefinedId as the nlu_id if available; otherwise fall
+  // back to a d2l-prefixed user ID. LTI launches will later claim the
+  // record by updating nlu_id to 'lti:{sub}'. Separately, we store the
+  // raw Brightspace user ID in d2l_user_id so that submission processing
+  // can reliably find this student regardless of nlu_id format.
   const nluId = student.orgDefinedId || `d2l:${student.userId}`
 
   const { data: inserted, error } = await admin
     .from('student')
     .insert({
       nlu_id: nluId,
+      d2l_user_id: student.userId,
       first_name: student.firstName || 'Student',
       last_name: student.lastName || '',
       email,
@@ -587,19 +599,28 @@ async function processSubmission(params: {
     return false
   }
 
-  // Look up the student in our DB by Brightspace user ID
-  // We match via the D2L OrgDefinedId nlu_id format we used at enrollment time,
-  // OR by the display name as a fallback. First-launch LTI claim will later
-  // update nlu_id to the lti: prefix.
+  // Look up the student by their raw Brightspace user ID. The sync
+  // engine populates d2l_user_id on every upsert, so any student who
+  // has been through at least one classlist-sync will match here.
+  //
+  // Fall back to nlu_id formats for legacy records (pre-migration 012
+  // students, CSV imports, or students whose upserts failed for some
+  // reason). This gives us three ways to find a student, all of which
+  // should converge on the same row if the upsert ran correctly.
   const { data: student } = await admin
     .from('student')
     .select('id')
-    .or(`nlu_id.eq.d2l:${submission.studentUserId},nlu_id.eq.${submission.studentUserId}`)
+    .or(
+      `d2l_user_id.eq.${submission.studentUserId},` +
+      `nlu_id.eq.d2l:${submission.studentUserId},` +
+      `nlu_id.eq.${submission.studentUserId}`
+    )
     .maybeSingle()
 
   if (!student) {
     // Student wasn't in our enrollment data — skip silently rather than
-    // error. This usually means they're in a course we haven't enrolled yet.
+    // error. This usually means they're in a course we haven't enrolled
+    // yet, or the classlist fetch missed them for this particular sync.
     return false
   }
 
