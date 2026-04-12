@@ -20,6 +20,13 @@
 .DS_Store
 *.pem
 
+# Word/Office lock files (temporary files created while docs are open)
+~$*.docx
+~$*.doc
+~$*.xlsx
+~$*.xls
+~$*.pptx
+
 # debug
 npm-debug.log*
 yarn-debug.log*
