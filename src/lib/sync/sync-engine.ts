@@ -93,18 +93,21 @@ export interface SyncError {
 }
 
 /**
- * Run a full LE3 sync. Creates a sync_run row, walks the Valence API,
- * upserts everything, and finalizes the sync_run row with counts and
- * timing. Throws only on catastrophic failure; per-item errors are
- * collected and returned in the result.
+ * Run a full LE3 sync. Creates a sync_run row FIRST so that every
+ * attempted sync is visible in the observability table — even failures
+ * due to missing env vars or upstream Brightspace outages. Then walks
+ * the Valence API, upserts everything, and finalizes the sync_run row
+ * with counts and timing.
+ *
+ * Throws only on catastrophic failure; per-item errors are collected
+ * and returned in the result.
  */
 export async function runLe3Sync(options: SyncOptions): Promise<SyncResult> {
   const startedAt = Date.now()
   const admin = createAdminClient()
-  const config = getValenceConfig()
-  const le3OrgUnitId = options.le3OrgUnitId || config.le3OrgUnitId
 
-  // Create sync_run row
+  // Create sync_run row FIRST so failed config validation still shows up
+  // as a recorded attempt in the database.
   const { data: syncRun, error: syncRunErr } = await admin
     .from('sync_run')
     .insert({
@@ -134,6 +137,13 @@ export async function runLe3Sync(options: SyncOptions): Promise<SyncResult> {
 
   try {
     await options.onProgress?.({ stage: 'starting', counts })
+
+    // Validate Valence config now that the sync_run row exists, so a
+    // config error is recorded as a failed run rather than an untracked
+    // throw. getValenceConfig() throws with a descriptive message listing
+    // every missing env var.
+    const config = getValenceConfig()
+    const le3OrgUnitId = options.le3OrgUnitId || config.le3OrgUnitId
 
     // 1. Discover courses
     await options.onProgress?.({ stage: 'courses', counts })
