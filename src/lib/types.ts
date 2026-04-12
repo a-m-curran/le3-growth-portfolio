@@ -63,24 +63,32 @@ export type WorkType =
   | 'portfolio_piece'
   | 'other'
 
-export type WorkSource = 'manual' | 'csv_import' | 'd2l_api' | 'reflection'
+export type WorkSource =
+  | 'manual'
+  | 'csv_import'
+  | 'd2l_api'           // legacy name, still accepted for historical records
+  | 'd2l_valence_sync'  // bulk Valence REST API sync
+  | 'd2l_lti_notice'    // LTI 1.3 Asset Processor notice push
+  | 'reflection'
 
 export interface StudentWork {
   id: string
   studentId: string
+  assignmentId?: string // FK to assignment row (Valence/LTI-sourced work)
   title: string
-  description?: string // assignment prompt from LTI activity.description
+  description?: string // assignment prompt from LTI activity.description or Valence folder description
   workType: WorkType
   courseName?: string
   courseCode?: string // from LTI context.label, e.g., "SOC155-01"
   submittedAt: string // ISO datetime
   quarter: string
   weekNumber?: number
-  attemptNumber?: number // from LTI submission.attempt
+  attemptNumber?: number // from LTI submission.attempt or Valence attempt
   content?: string
   grade?: string
   source?: WorkSource
   externalId?: string
+  brightspaceSubmissionId?: string // unified dedup key across Valence + LTI paths
   importedAt?: string
 }
 
@@ -372,4 +380,72 @@ export interface SkillCoverageData {
   taggedAssignments: number
   completedConversations: number
   coverageRatio: number
+}
+
+// ─── COURSES & ASSIGNMENTS (Valence-sourced) ───────
+
+export interface Course {
+  id: string
+  externalId: string // 'd2l:{orgUnitId}'
+  brightspaceOrgUnitId: string
+  name: string
+  code?: string
+  quarter?: string
+  instructorId?: string
+  active: boolean
+  createdAt: string
+  syncedAt: string
+}
+
+export interface Assignment {
+  id: string
+  externalId: string // 'd2l:{orgUnitId}:{folderId}'
+  brightspaceFolderId: string
+  courseId: string
+  title: string
+  description?: string // instructor's prompt
+  dueDate?: string
+  workType?: WorkType
+  quarter?: string
+  active: boolean
+  createdAt: string
+  syncedAt: string
+}
+
+export interface StudentCourse {
+  id: string
+  studentId: string
+  courseId: string
+  enrolledAt: string
+  status: 'enrolled' | 'dropped' | 'completed' | 'withdrawn'
+  syncedAt: string
+}
+
+// ─── SYNC RUN TRACKING ─────────────────────────────
+
+export type SyncRunSource =
+  | 'd2l_valence_scheduled'
+  | 'd2l_valence_manual'
+  | 'd2l_valence_backfill'
+
+export type SyncRunStatus = 'running' | 'completed' | 'failed' | 'cancelled'
+export type SyncRunMode = 'full' | 'incremental'
+
+export interface SyncRun {
+  id: string
+  source: SyncRunSource
+  mode: SyncRunMode
+  status: SyncRunStatus
+  triggeredBy?: string
+  startedAt: string
+  completedAt?: string
+  durationSeconds?: number
+  coursesSynced: number
+  studentsSynced: number
+  assignmentsSynced: number
+  submissionsSynced: number
+  submissionsSkipped: number
+  errorsCount: number
+  errorDetails?: Record<string, unknown> | Array<Record<string, unknown>>
+  triggerRunId?: string
 }

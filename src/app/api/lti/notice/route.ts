@@ -80,7 +80,9 @@ export async function POST(req: NextRequest) {
 
 /**
  * Process a single LtiAssetProcessorSubmissionNotice.
- * Downloads assets, creates student_work records, auto-tags, and reports back.
+ * Downloads assets, upserts course/assignment rows, creates student_work
+ * records (deduped via brightspace_submission_id which is shared with the
+ * Valence sync path), auto-tags, and reports back to the platform.
  */
 async function processSubmissionNotice(
   payload: LtiJwtPayload,
@@ -104,20 +106,21 @@ async function processSubmissionNotice(
 
   const admin = createAdminClient()
 
-  // Look up student by LTI sub (stored as nlu_id = 'lti:{sub}' on launch provisioning)
+  // Look up student by LTI sub (stored as nlu_id = 'lti:{sub}' on launch provisioning).
+  // Valence sync may have pre-created this student with nlu_id = 'd2l:{userId}' or
+  // their OrgDefinedId — first LTI launch is responsible for claiming the record
+  // and updating nlu_id. Here we only look up by the lti: form.
   const ltiNluId = `lti:${forUser.user_id.substring(0, 32)}`
   const { data: student } = await admin
     .from('student')
     .select('id')
     .eq('nlu_id', ltiNluId)
-    .single()
+    .maybeSingle()
 
   if (!student) {
-    // Student hasn't launched yet. Store a pending submission record so we
-    // can hydrate it when they do. For MVP we log and skip.
     console.warn(
       `Asset processor notice for unknown LTI user ${forUser.user_id} — ` +
-      `student must launch Growth Portfolio first.`
+      `student must launch Growth Portfolio first (or run Valence sync).`
     )
     results.push({
       assetId: assetService.assets[0]?.asset_id || 'unknown',
@@ -126,6 +129,20 @@ async function processSubmissionNotice(
     })
     return
   }
+
+  // Try to link to the course and assignment rows if Valence sync has
+  // already created them. If not, we'll skip the linkage and let a later
+  // Valence sync backfill the assignment_id via brightspace_submission_id.
+  const courseRowId = await lookupCourseByLtiContext(context?.id)
+  const assignmentRowId = courseRowId
+    ? await lookupOrCreateAssignment({
+        courseRowId,
+        folderId: activity?.id,
+        title: activity?.title,
+        description: activity?.description,
+        orgUnitId: context?.id,
+      })
+    : null
 
   // Determine quarter
   const now = new Date()
@@ -143,6 +160,7 @@ async function processSubmissionNotice(
       await processAsset({
         asset,
         studentId: student.id,
+        assignmentRowId,
         activityTitle: activity?.title,
         activityDescription: activity?.description,
         submissionId: submission?.id,
@@ -172,12 +190,79 @@ async function processSubmissionNotice(
 }
 
 /**
+ * Look up an existing course row by Brightspace org unit ID, returning
+ * null if Valence sync hasn't discovered this course yet.
+ */
+async function lookupCourseByLtiContext(
+  orgUnitId?: string
+): Promise<string | null> {
+  if (!orgUnitId) return null
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('course')
+    .select('id')
+    .eq('brightspace_org_unit_id', orgUnitId)
+    .maybeSingle()
+  return data?.id || null
+}
+
+/**
+ * Look up or create an assignment row for an LTI activity. If the
+ * assignment already exists (from Valence sync), returns its ID and
+ * optionally updates description if the notice carries a richer prompt.
+ */
+async function lookupOrCreateAssignment(params: {
+  courseRowId: string
+  folderId?: string
+  title?: string
+  description?: string
+  orgUnitId?: string
+}): Promise<string | null> {
+  if (!params.folderId || !params.title) return null
+  const admin = createAdminClient()
+  const externalId = `d2l:${params.orgUnitId}:${params.folderId}`
+
+  const { data: existing } = await admin
+    .from('assignment')
+    .select('id, description')
+    .eq('external_id', externalId)
+    .maybeSingle()
+
+  if (existing) {
+    // If our existing row has no description but the notice carries one, fill it in.
+    if (!existing.description && params.description) {
+      await admin
+        .from('assignment')
+        .update({ description: params.description, synced_at: new Date().toISOString() })
+        .eq('id', existing.id)
+    }
+    return existing.id as string
+  }
+
+  const { data: inserted } = await admin
+    .from('assignment')
+    .insert({
+      external_id: externalId,
+      brightspace_folder_id: params.folderId,
+      course_id: params.courseRowId,
+      title: params.title,
+      description: params.description,
+      active: true,
+    })
+    .select('id')
+    .single()
+
+  return inserted?.id || null
+}
+
+/**
  * Download a single asset, extract text, create student_work, auto-tag,
  * and send a ready report back to the platform.
  */
 async function processAsset({
   asset,
   studentId,
+  assignmentRowId,
   activityTitle,
   activityDescription,
   submissionId,
@@ -190,6 +275,7 @@ async function processAsset({
 }: {
   asset: LtiAsset
   studentId: string
+  assignmentRowId: string | null
   activityTitle?: string
   activityDescription?: string
   submissionId?: string
@@ -202,17 +288,35 @@ async function processAsset({
 }): Promise<void> {
   const admin = createAdminClient()
 
-  // Check for existing record (dedup via external_id)
+  // Dedup by the unified brightspace_submission_id key, so Valence sync and
+  // Asset Processor notices converge on the same row when they see the same
+  // D2L submission. Falls back to legacy external_id for older records.
   const externalId = `lti:${platformIssuer}:${submissionId || ''}:${asset.asset_id}`
-  const { data: existing } = await admin
+
+  if (submissionId) {
+    const { data: existingByBsId } = await admin
+      .from('student_work')
+      .select('id')
+      .eq('brightspace_submission_id', submissionId)
+      .maybeSingle()
+
+    if (existingByBsId) {
+      // Already processed by either path — just re-send the ready report
+      if (reportUrl) {
+        await sendReadyReport(reportUrl, asset.asset_id, activityTitle)
+      }
+      return
+    }
+  }
+
+  // Legacy fallback: check by old-format external_id
+  const { data: existingByExternalId } = await admin
     .from('student_work')
     .select('id')
     .eq('external_id', externalId)
-    .limit(1)
-    .single()
+    .maybeSingle()
 
-  if (existing) {
-    // Already processed — just re-send the ready report
+  if (existingByExternalId) {
     if (reportUrl) {
       await sendReadyReport(reportUrl, asset.asset_id, activityTitle)
     }
@@ -245,6 +349,7 @@ async function processAsset({
     .from('student_work')
     .insert({
       student_id: studentId,
+      assignment_id: assignmentRowId,
       title,
       description: activityDescription || null,
       work_type: workType,
@@ -254,14 +359,24 @@ async function processAsset({
       quarter,
       attempt_number: attemptNumber || null,
       content,
-      source: 'd2l_api',
+      source: 'd2l_lti_notice',
       external_id: externalId,
+      brightspace_submission_id: submissionId || null,
       imported_at: new Date().toISOString(),
     })
     .select('id')
     .single()
 
   if (insertError || !work) {
+    // 23505 = unique_violation. Race condition: Valence sync or another
+    // concurrent notice beat us to the same brightspace_submission_id. Treat
+    // as idempotent success.
+    if (insertError?.code === '23505') {
+      if (reportUrl) {
+        await sendReadyReport(reportUrl, asset.asset_id, activityTitle)
+      }
+      return
+    }
     throw new Error(`DB insert failed: ${insertError?.message || 'unknown'}`)
   }
 
@@ -271,12 +386,15 @@ async function processAsset({
     const tags = await autoTagWork({
       id: work.id,
       studentId,
+      assignmentId: assignmentRowId || undefined,
       title,
       description: activityDescription || undefined,
       workType,
       courseName: contextTitle,
+      courseCode: contextLabel,
       submittedAt: asset.timestamp || new Date().toISOString(),
       quarter,
+      attemptNumber: attemptNumber,
       content: content || undefined,
     })
 

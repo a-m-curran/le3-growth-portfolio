@@ -153,12 +153,51 @@ export async function POST(req: NextRequest) {
     // Find or provision the student record
     const { data: existing } = await admin
       .from('student')
-      .select('id, auth_user_id')
+      .select('id, auth_user_id, nlu_id')
       .eq('email', email)
-      .single()
+      .maybeSingle()
 
-    if (!existing) {
-      // Create Supabase auth user
+    const ltiNluId = `lti:${payload.sub.substring(0, 32)}`
+
+    if (existing) {
+      // Student was pre-imported (Valence sync, CSV, or previous LTI launch).
+      // Claim the record if needed: ensure auth_user_id is set and nlu_id
+      // is in the lti: form so future Asset Processor notices can find them.
+      const updates: Record<string, unknown> = {}
+
+      if (!existing.auth_user_id) {
+        // Pre-imported record without a Supabase auth account yet. Create one
+        // and link it so the student can actually be logged in.
+        const created = await admin.auth.admin.createUser({
+          email,
+          email_confirm: true,
+        })
+        if (!created.data.user) {
+          return NextResponse.json(
+            { error: 'Failed to create Supabase auth user for pre-imported student' },
+            { status: 500 }
+          )
+        }
+        updates.auth_user_id = created.data.user.id
+      }
+
+      if (existing.nlu_id !== ltiNluId && !existing.nlu_id?.startsWith('lti:')) {
+        // Claim the nlu_id on first LTI launch. Any submissions that arrive
+        // via Asset Processor notices from this point forward will be able
+        // to look up the student by lti:{sub}.
+        updates.nlu_id = ltiNluId
+      }
+
+      // Always refresh the name from LTI since Brightspace has the canonical
+      // spelling and pre-imported records might have placeholder values.
+      updates.first_name = firstName
+      updates.last_name = lastName || existing.nlu_id || 'Student'
+
+      if (Object.keys(updates).length > 0) {
+        await admin.from('student').update(updates).eq('id', existing.id)
+      }
+    } else {
+      // No pre-imported record — provision fresh
       const created = await admin.auth.admin.createUser({
         email,
         email_confirm: true,
@@ -177,7 +216,7 @@ export async function POST(req: NextRequest) {
         .select('id')
         .eq('status', 'active')
         .limit(1)
-        .single()
+        .maybeSingle()
 
       if (!defaultCoach) {
         return NextResponse.json(
@@ -189,12 +228,9 @@ export async function POST(req: NextRequest) {
         )
       }
 
-      // Generate a stable NLU ID from the LTI sub claim (unique per platform user)
-      const nluId = `lti:${payload.sub.substring(0, 32)}`
-
       await admin.from('student').insert({
         auth_user_id: created.data.user.id,
-        nlu_id: nluId,
+        nlu_id: ltiNluId,
         first_name: firstName,
         last_name: lastName || 'Student',
         email,
