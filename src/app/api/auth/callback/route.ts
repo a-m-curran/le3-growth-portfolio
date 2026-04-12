@@ -3,6 +3,24 @@ import { createAdminClient } from '@/lib/supabase-admin'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
+/**
+ * Magic-link auth callback.
+ *
+ * Gates access strictly to:
+ *   1. Users who are already linked to a coach or student row
+ *   2. Users whose email matches an unlinked coach or student row (created
+ *      either by Valence sync or a prior LTI launch)
+ *   3. Users whose email is in the ADMIN_EMAILS env var (dev/admin access)
+ *
+ * Anyone else is rejected: their orphan auth.users row is deleted so they
+ * don't accumulate, and they're redirected to /login?error=not_enrolled.
+ *
+ * The previous self-serve /onboarding path has been removed — there are
+ * no legitimate flows where an unenrolled user should be creating their
+ * own student record. Real students arrive via Valence bulk sync (done
+ * by a coach or scheduled task) or via a signed LTI launch JWT from
+ * NLU's Brightspace instance.
+ */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
@@ -36,43 +54,47 @@ export async function GET(request: Request) {
   )
   await supabase.auth.exchangeCodeForSession(code)
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user || !user.email) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
+
+  const email = user.email.toLowerCase()
 
   // Use admin client to bypass RLS for record linking
   const admin = createAdminClient()
 
-  // Check if already linked as coach
+  // 1. Already linked as coach?
   const { data: linkedCoach } = await admin
     .from('coach')
     .select('id')
     .eq('auth_user_id', user.id)
-    .single()
+    .maybeSingle()
 
   if (linkedCoach) {
     return NextResponse.redirect(new URL(nextPath || '/coach', request.url))
   }
 
-  // Check if already linked as student
+  // 2. Already linked as student?
   const { data: linkedStudent } = await admin
     .from('student')
     .select('id')
     .eq('auth_user_id', user.id)
-    .single()
+    .maybeSingle()
 
   if (linkedStudent) {
     return NextResponse.redirect(new URL(nextPath || '/garden', request.url))
   }
 
-  // Not linked yet — try to find by email and link
+  // 3. Unlinked coach matching this email?
   const { data: unmatchedCoach } = await admin
     .from('coach')
     .select('id')
-    .eq('email', user.email)
+    .eq('email', email)
     .is('auth_user_id', null)
-    .single()
+    .maybeSingle()
 
   if (unmatchedCoach) {
     await admin
@@ -82,12 +104,13 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL(nextPath || '/coach', request.url))
   }
 
+  // 4. Unlinked student matching this email?
   const { data: unmatchedStudent } = await admin
     .from('student')
     .select('id')
-    .eq('email', user.email)
+    .eq('email', email)
     .is('auth_user_id', null)
-    .single()
+    .maybeSingle()
 
   if (unmatchedStudent) {
     await admin
@@ -97,6 +120,60 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL(nextPath || '/garden', request.url))
   }
 
-  // No existing record — send to onboarding
-  return NextResponse.redirect(new URL('/onboarding', request.url))
+  // 5. Admin allowlist fallback (dev/admin access)
+  if (isAdminEmail(email)) {
+    // Auto-provision the admin as an active coach so they can access the
+    // coach dashboard. Only creates the row if it doesn't already exist.
+    const { data: newCoach, error: coachInsertError } = await admin
+      .from('coach')
+      .insert({
+        auth_user_id: user.id,
+        name: deriveNameFromEmail(email),
+        email,
+        status: 'active',
+      })
+      .select('id')
+      .single()
+
+    if (!coachInsertError && newCoach) {
+      console.log(`Admin coach provisioned via ADMIN_EMAILS: ${email}`)
+      return NextResponse.redirect(new URL(nextPath || '/coach', request.url))
+    }
+    // If the coach insert failed for some reason, fall through to rejection
+    console.error('Failed to provision admin coach:', coachInsertError)
+  }
+
+  // 6. Reject — no enrollment match, not on admin list
+  // Sign out the current session and delete the orphaned auth user so the
+  // rejected user doesn't accumulate Supabase auth rows on repeated attempts.
+  await supabase.auth.signOut()
+  try {
+    await admin.auth.admin.deleteUser(user.id)
+  } catch (err) {
+    // Log but don't fail the redirect — the rejection itself is the important
+    // part. The orphan will age out or can be cleaned up manually later.
+    console.error(`Failed to delete orphan auth user ${user.id}:`, err)
+  }
+
+  return NextResponse.redirect(new URL('/login?error=not_enrolled', request.url))
+}
+
+// ─── helpers ─────────────────────────────────────────
+
+function isAdminEmail(email: string): boolean {
+  const raw = process.env.ADMIN_EMAILS || ''
+  if (!raw.trim()) return false
+  const list = raw.split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
+  return list.includes(email)
+}
+
+function deriveNameFromEmail(email: string): string {
+  const local = email.split('@')[0] || 'Admin'
+  return (
+    local
+      .split(/[._-]+/)
+      .filter(Boolean)
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ') || 'Admin'
+  )
 }

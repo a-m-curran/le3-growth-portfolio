@@ -6,13 +6,21 @@ export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
   const { pathname } = req.nextUrl
 
-  // Public routes — no auth required
+  // Public routes — no auth required.
+  //
+  // Note: /onboarding and /api/onboarding have been removed. Self-service
+  // account creation is no longer supported. Students arrive either via
+  // Valence bulk sync (pre-populated before they first log in) or via a
+  // signed LTI 1.3 launch from NLU's Brightspace instance. Admin access
+  // for development is granted by the ADMIN_EMAILS env var, which
+  // /api/auth/callback honors when a user's email is not otherwise
+  // enrolled.
   if (
     pathname.startsWith('/demo') ||
     pathname.startsWith('/login') ||
-    pathname.startsWith('/onboarding') ||
+    pathname.startsWith('/privacy') ||
+    pathname.startsWith('/terms') ||
     pathname.startsWith('/api/auth') ||
-    pathname.startsWith('/api/onboarding') ||
     pathname.startsWith('/api/skills') ||
     pathname.startsWith('/api/lti') ||
     pathname.startsWith('/lti')

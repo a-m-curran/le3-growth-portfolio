@@ -213,9 +213,26 @@ D2L_VALENCE_API_VERSION=1.82
 D2L_VALENCE_LE3_ORG_UNIT_ID=<the LE3 parent org unit>
 ```
 
+### Access control / development
+
+```
+ADMIN_EMAILS=your.email@example.com,other.admin@example.com
+```
+
+Comma-separated list of emails that are allowed to sign in via magic
+link even if they are not enrolled students or sync-discovered coaches.
+Used by `/api/auth/callback` as a fallback after checking the
+`student` and `coach` tables. Leave unset in strict production
+environments where only enrolled users should ever be able to log in.
+
 No D2L Brightspace-provided credentials end up in our code — they all
 flow through environment variables and are stored only in Vercel's
-encrypted env var storage.
+encrypted env var storage. Similarly, email-based access is gated
+strictly to users who either exist in the student/coach tables
+(populated by Valence sync or LTI launches from NLU's Brightspace)
+or whose email is listed in `ADMIN_EMAILS`. The previous self-serve
+onboarding page that let any email provision a student record has
+been removed.
 
 ---
 

@@ -29,20 +29,27 @@ test.describe('Login Page', () => {
   })
 })
 
-test.describe('Onboarding Page', () => {
-  test('shows onboarding form', async ({ page }) => {
-    await page.goto('/onboarding')
-    await expect(page.getByText('Welcome to LE3')).toBeVisible()
-    await expect(page.getByLabel('First Name')).toBeVisible()
-    await expect(page.getByLabel('Last Name')).toBeVisible()
-    await expect(page.getByLabel('NLU Student ID')).toBeVisible()
-    await expect(page.getByLabel('Your Coach')).toBeVisible()
+test.describe('Login rejection notice', () => {
+  test('shows not_enrolled rejection message when error param is present', async ({ page }) => {
+    await page.goto('/login?error=not_enrolled')
+    await expect(
+      page.getByText(/enrolled in the LE3 program/i)
+    ).toBeVisible()
   })
 
-  test('submit button is disabled until required fields are filled', async ({ page }) => {
+  test('does not show rejection message without error param', async ({ page }) => {
+    await page.goto('/login')
+    await expect(
+      page.getByText(/enrolled in the LE3 program/i)
+    ).not.toBeVisible()
+  })
+})
+
+test.describe('Onboarding removal', () => {
+  test('/onboarding redirects to /login (route removed)', async ({ page }) => {
     await page.goto('/onboarding')
-    const submitBtn = page.getByRole('button', { name: /Create My Portfolio/ })
-    await expect(submitBtn).toBeDisabled()
+    // Middleware should redirect any unknown authenticated-gated route to /login
+    await expect(page).toHaveURL(/\/login/)
   })
 })
 

@@ -1,16 +1,51 @@
 'use client'
 
 import { createBrowserClient } from '@supabase/auth-helpers-nextjs'
-import { useState, useRef } from 'react'
+import { useState, useRef, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 export default function LoginPage() {
+  // useSearchParams needs to be in a Suspense boundary for Next.js static
+  // prerendering to work. The actual form is in LoginForm below.
+  return (
+    <Suspense fallback={<LoginFallback />}>
+      <LoginForm />
+    </Suspense>
+  )
+}
+
+function LoginFallback() {
+  return (
+    <main className="min-h-screen flex items-center justify-center bg-green-50 px-4">
+      <div className="max-w-sm w-full space-y-6">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-green-900">LE3 Growth Portfolio</h1>
+          <p className="text-sm text-gray-600 mt-2">Loading&hellip;</p>
+        </div>
+      </div>
+    </main>
+  )
+}
+
+function LoginForm() {
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const supabaseRef = useRef<SupabaseClient | null>(null)
+
+  // Handle rejection redirects from /api/auth/callback. The callback
+  // redirects to /login?error=not_enrolled when someone who isn't in
+  // the student/coach tables (and isn't on the ADMIN_EMAILS list)
+  // tries to sign in. Derived inline rather than via useEffect so the
+  // notice renders on the first paint.
+  const rejectionNotice =
+    searchParams?.get('error') === 'not_enrolled'
+      ? "That email isn't enrolled in the LE3 program. If you believe this is a mistake, contact your LE3 coach or program staff."
+      : null
 
   function getSupabase() {
     if (!supabaseRef.current) {
@@ -71,6 +106,12 @@ export default function LoginPage() {
           <h1 className="text-2xl font-bold text-green-900">LE3 Growth Portfolio</h1>
           <p className="text-sm text-gray-600 mt-2">Enter your NLU email to sign in</p>
         </div>
+
+        {rejectionNotice && (
+          <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-900">
+            {rejectionNotice}
+          </div>
+        )}
 
         <form onSubmit={handleLogin} className="space-y-4">
           <input

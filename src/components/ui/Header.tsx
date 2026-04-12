@@ -6,8 +6,14 @@ import { usePathname } from 'next/navigation'
 export function Header() {
   const pathname = usePathname()
 
-  // Hide on demo, login, and onboarding routes (they have their own headers/layouts)
-  if (pathname.startsWith('/demo') || pathname === '/login' || pathname === '/onboarding') {
+  // Hide on demo, login, privacy, and terms pages (they have their own layouts
+  // or no authenticated user to scope the header to)
+  if (
+    pathname.startsWith('/demo') ||
+    pathname === '/login' ||
+    pathname === '/privacy' ||
+    pathname === '/terms'
+  ) {
     return null
   }
 
