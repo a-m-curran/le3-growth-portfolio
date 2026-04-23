@@ -43,7 +43,12 @@ export function getValenceConfig(): D2LValenceConfig {
   const tokenUrl =
     process.env.D2L_VALENCE_TOKEN_URL ||
     'https://auth.brightspace.com/core/connect/token'
-  const apiVersion = process.env.D2L_VALENCE_API_VERSION || '1.82'
+  // Default to 1.50, the max version supported on NLU's d2ltest
+  // instance as of April 2026. Override with D2L_VALENCE_API_VERSION
+  // if the platform upgrades or the sync needs features from a higher
+  // API version. Confirmed via /api/admin/valence-diag probes:
+  // v1.50 returns 200 on /users/whoami; v1.60+ returns 404.
+  const apiVersion = process.env.D2L_VALENCE_API_VERSION || '1.50'
   const le3OrgUnitId = process.env.D2L_VALENCE_LE3_ORG_UNIT_ID
 
   const missing: string[] = []
