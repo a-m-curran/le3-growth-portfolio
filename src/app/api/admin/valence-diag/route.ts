@@ -119,6 +119,41 @@ export async function GET() {
     `${config.instanceUrl}/d2l/api/versions`
   )
 
+  // Probe 1.6: decode the access token JWT payload so we can see which
+  // scopes were actually granted and which tenant it's scoped to. The
+  // JWT is just base64url-encoded JSON, no signature check needed.
+  try {
+    const parts = token.split('.')
+    if (parts.length >= 2) {
+      const payloadJson = Buffer.from(parts[1], 'base64url').toString('utf-8')
+      const payload = JSON.parse(payloadJson) as Record<string, unknown>
+      const excerpt = {
+        iss: payload.iss,
+        aud: payload.aud,
+        sub: payload.sub,
+        scope: payload.scope,
+        exp: payload.exp,
+        tenantid: payload.tenantid,
+      }
+      results.push({
+        probe: 'jwt_decoded',
+        url: '(access token payload)',
+        status: 'ok',
+        message: 'decoded',
+        bodyExcerpt: JSON.stringify(excerpt),
+        ms: 0,
+      })
+    }
+  } catch (err) {
+    results.push({
+      probe: 'jwt_decoded',
+      url: '(access token payload)',
+      status: 'error',
+      message: String(err),
+      ms: 0,
+    })
+  }
+
   // Probe 2: /whoami — simplest sanity check that the token works at all
   await probe(results, token, config, 'whoami', `/d2l/api/lp/${config.apiVersion}/users/whoami`)
 
