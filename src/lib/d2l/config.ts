@@ -5,18 +5,20 @@
  * environment variables. Used by the auth module to obtain access tokens
  * and by the individual API endpoint modules.
  *
- * For the Asset Processor (push) path, see src/lib/lti/ — that uses a
- * separate LTI 1.3 OAuth2 flow with JWT client assertion and different
- * env vars entirely.
+ * Auth flow: JWT client assertion (not shared secret).
+ * Brightspace verifies our identity by fetching our public key from the
+ * JWKS URL we registered — which is the same LTI JWKS URL at
+ * /api/lti/jwks, re-used here so one RSA key pair covers both LTI and
+ * Valence auth. That means LTI_PRIVATE_KEY and LTI_PUBLIC_KEY (plus
+ * LTI_KEY_ID) must be set for Valence auth to work, even if LTI is
+ * otherwise not in use.
  */
 
 export interface D2LValenceConfig {
-  /** Brightspace instance URL, e.g. https://nlu.brightspace.com */
+  /** Brightspace instance URL, e.g. https://d2ltest.nl.edu */
   instanceUrl: string
-  /** OAuth2 client ID from Brightspace's Manage Extensibility → OAuth2 Clients */
+  /** OAuth2 client ID from Brightspace's Manage Extensibility → OAuth 2.0 */
   clientId: string
-  /** OAuth2 client secret paired with the client ID */
-  clientSecret: string
   /** OAuth2 token endpoint — typically https://auth.brightspace.com/core/connect/token */
   tokenUrl: string
   /** Valence API version, e.g. '1.82' */
@@ -30,20 +32,23 @@ export interface D2LValenceConfig {
  * required value is missing. Intended to be called inside sync jobs and
  * API routes, not at module load time, so the rest of the app can start
  * without Valence being configured.
+ *
+ * Defaults D2L_VALENCE_TOKEN_URL to the standard global D2L auth endpoint
+ * (https://auth.brightspace.com/core/connect/token), which works for
+ * most Brightspace deployments. Override per-instance if needed.
  */
 export function getValenceConfig(): D2LValenceConfig {
   const instanceUrl = process.env.D2L_VALENCE_INSTANCE_URL
   const clientId = process.env.D2L_VALENCE_CLIENT_ID
-  const clientSecret = process.env.D2L_VALENCE_CLIENT_SECRET
-  const tokenUrl = process.env.D2L_VALENCE_TOKEN_URL
+  const tokenUrl =
+    process.env.D2L_VALENCE_TOKEN_URL ||
+    'https://auth.brightspace.com/core/connect/token'
   const apiVersion = process.env.D2L_VALENCE_API_VERSION || '1.82'
   const le3OrgUnitId = process.env.D2L_VALENCE_LE3_ORG_UNIT_ID
 
   const missing: string[] = []
   if (!instanceUrl) missing.push('D2L_VALENCE_INSTANCE_URL')
   if (!clientId) missing.push('D2L_VALENCE_CLIENT_ID')
-  if (!clientSecret) missing.push('D2L_VALENCE_CLIENT_SECRET')
-  if (!tokenUrl) missing.push('D2L_VALENCE_TOKEN_URL')
   if (!le3OrgUnitId) missing.push('D2L_VALENCE_LE3_ORG_UNIT_ID')
 
   if (missing.length > 0) {
@@ -55,8 +60,7 @@ export function getValenceConfig(): D2LValenceConfig {
   return {
     instanceUrl: instanceUrl!,
     clientId: clientId!,
-    clientSecret: clientSecret!,
-    tokenUrl: tokenUrl!,
+    tokenUrl,
     apiVersion,
     le3OrgUnitId: le3OrgUnitId!,
   }
@@ -71,8 +75,6 @@ export function isValenceConfigured(): boolean {
   return !!(
     process.env.D2L_VALENCE_INSTANCE_URL &&
     process.env.D2L_VALENCE_CLIENT_ID &&
-    process.env.D2L_VALENCE_CLIENT_SECRET &&
-    process.env.D2L_VALENCE_TOKEN_URL &&
     process.env.D2L_VALENCE_LE3_ORG_UNIT_ID
   )
 }

@@ -1,18 +1,23 @@
 /**
- * D2L Valence OAuth2 client credentials flow.
+ * D2L Valence OAuth2 token exchange via JWT client assertion.
  *
- * Brightspace's Valence API uses OAuth2 client credentials grant for
- * server-to-server integrations. We POST client_id + client_secret to
- * the token endpoint and receive a bearer token valid for ~1 hour (up
- * to 20h if configured). Tokens are cached in-process until expiry.
+ * Brightspace's modern OAuth 2.0 setup (the one registered via
+ * Admin Tools → Manage Extensibility → OAuth 2.0 with a JWK URL)
+ * does NOT issue a shared Client Secret. Instead, clients authenticate
+ * by signing a JWT with their private key, which Brightspace verifies
+ * against the public key fetched from the JWK URL we registered.
  *
- * The token endpoint varies by deployment:
- *   - Global: https://auth.brightspace.com/core/connect/token
- *   - Per-instance: https://{instance}.brightspace.com/d2l/auth/api/token
+ * We re-use our LTI key pair (LTI_PRIVATE_KEY + LTI_PUBLIC_KEY) for
+ * Valence too, so one JWKS endpoint at /api/lti/jwks serves both
+ * protocols. Brightspace will have fetched our public key once during
+ * OAuth registration.
  *
- * NLU IT tells us which one to use during registration.
+ * Tokens are cached in-process until ~60 seconds before expiration.
  */
 
+import { SignJWT } from 'jose'
+import { getPrivateKey } from '@/lib/lti/keys'
+import { getToolConfig } from '@/lib/lti/config'
 import { getValenceConfig } from './config'
 
 interface CachedToken {
@@ -21,6 +26,19 @@ interface CachedToken {
 }
 
 let cache: CachedToken | null = null
+
+/**
+ * Scopes requested on every Valence token. These are the union of every
+ * Valence scope we actually use across the sync engine.
+ */
+const VALENCE_SCOPES = [
+  'dropbox:folders:read',
+  'dropbox:submissions:read',
+  'dropbox:folder-attachments:read',
+  'enrollment:orgunit:read',
+  'users:userdata:read',
+  'orgunit:children:read',
+] as const
 
 /**
  * Get a valid Valence OAuth2 access token, refreshing if needed.
@@ -36,28 +54,25 @@ export async function getValenceToken(): Promise<string> {
 
   const config = getValenceConfig()
 
-  const params = new URLSearchParams({
+  // Sign a client assertion JWT with our private key. Brightspace will
+  // verify it against the public key at our JWK URL (which Brightspace
+  // fetched once during OAuth registration).
+  const clientAssertion = await signClientAssertion(config.clientId, config.tokenUrl)
+
+  const body = new URLSearchParams({
     grant_type: 'client_credentials',
-    client_id: config.clientId,
-    client_secret: config.clientSecret,
-    // Scope is optional per client config; some Brightspace deployments
-    // require it, others infer from the client's registered scopes.
-    scope: [
-      'core:*:*',
-      'dropbox:folders:read',
-      'dropbox:submissions:read',
-      'enrollment:orgunit:read',
-      'users:userdata:read',
-    ].join(' '),
+    client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+    client_assertion: clientAssertion,
+    scope: VALENCE_SCOPES.join(' '),
   })
 
   const res = await fetch(config.tokenUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'Accept': 'application/json',
+      Accept: 'application/json',
     },
-    body: params.toString(),
+    body: body.toString(),
   })
 
   if (!res.ok) {
@@ -67,22 +82,22 @@ export async function getValenceToken(): Promise<string> {
     )
   }
 
-  const body = (await res.json()) as {
+  const data = (await res.json()) as {
     access_token: string
     token_type: string
     expires_in: number
   }
 
-  if (!body.access_token) {
+  if (!data.access_token) {
     throw new Error('Valence token response missing access_token')
   }
 
   cache = {
-    token: body.access_token,
-    expiresAt: Date.now() + body.expires_in * 1000,
+    token: data.access_token,
+    expiresAt: Date.now() + data.expires_in * 1000,
   }
 
-  return body.access_token
+  return data.access_token
 }
 
 /**
@@ -91,4 +106,31 @@ export async function getValenceToken(): Promise<string> {
  */
 export function clearValenceTokenCache(): void {
   cache = null
+}
+
+// ─── JWT client assertion ──────────────────────────────
+
+/**
+ * Sign a client assertion JWT for the Valence OAuth2 token endpoint.
+ *
+ * Uses the same RSA private key + key ID we have for LTI — one key pair
+ * serves both protocols. The JWT's iss and sub claims are the Valence
+ * Client ID (not the LTI Client ID), and the aud is the Valence token URL.
+ */
+async function signClientAssertion(clientId: string, tokenUrl: string): Promise<string> {
+  const privateKey = await getPrivateKey()
+  const { keyId } = getToolConfig()
+
+  const now = Math.floor(Date.now() / 1000)
+
+  return await new SignJWT({
+    iss: clientId,
+    sub: clientId,
+    aud: tokenUrl,
+    iat: now,
+    exp: now + 300, // 5 minutes — assertion JWT, tokens come back with their own expiry
+    jti: crypto.randomUUID(),
+  })
+    .setProtectedHeader({ alg: 'RS256', kid: keyId, typ: 'JWT' })
+    .sign(privateKey)
 }
