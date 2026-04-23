@@ -171,6 +171,31 @@ export async function GET() {
     `/d2l/api/lp/${config.apiVersion}/orgstructure/${config.le3OrgUnitId}/descendants/paged/`
   )
 
+  // ─── Tenancy probes ──────────────────────────
+  // If whoami/orgunit_root failed, try the same token against known
+  // production hostnames to see if the token was scoped to a different
+  // tenant than we're hitting. A success here = instance URL mismatch.
+  if (byProbeHelper(results, 'whoami')?.status !== 'ok') {
+    await probeAbsolute(
+      results,
+      token,
+      'whoami_on_nlu_prod',
+      `https://nlu.brightspace.com/d2l/api/lp/${config.apiVersion}/users/whoami`
+    )
+    await probeAbsolute(
+      results,
+      token,
+      'whoami_on_nlu_edu',
+      `https://nlu.brightspace.com/d2l/api/lp/1.0/users/whoami`
+    )
+    await probeAbsolute(
+      results,
+      token,
+      'whoami_api_version_1_0',
+      `${config.instanceUrl}/d2l/api/lp/1.0/users/whoami`
+    )
+  }
+
   // ─── Summary ──────────────────────────────────
   const succeeded = results.filter(r => r.status === 'ok').length
   const failed = results.filter(r => r.status === 'error').length
@@ -200,6 +225,45 @@ interface ProbeResult {
   message: string
   bodyExcerpt?: string
   ms: number
+}
+
+function byProbeHelper(results: ProbeResult[], name: string): ProbeResult | undefined {
+  return results.find(r => r.probe === name)
+}
+
+async function probeAbsolute(
+  results: ProbeResult[],
+  token: string,
+  label: string,
+  url: string
+): Promise<void> {
+  const t0 = Date.now()
+  try {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+      },
+    })
+    const bodyText = await res.text().catch(() => '')
+    results.push({
+      probe: label,
+      url,
+      status: res.ok ? 'ok' : 'error',
+      httpStatus: res.status,
+      message: `${res.status} ${res.statusText}`,
+      bodyExcerpt: bodyText.substring(0, 200),
+      ms: Date.now() - t0,
+    })
+  } catch (err) {
+    results.push({
+      probe: label,
+      url,
+      status: 'error',
+      message: String(err),
+      ms: Date.now() - t0,
+    })
+  }
 }
 
 async function probe(
@@ -269,7 +333,19 @@ function diagnose(results: ProbeResult[]): string {
   }
 
   if (whoami?.status !== 'ok') {
-    return `Token was issued but /whoami returns ${whoami?.httpStatus}. The token may be scoped-out of LP endpoints entirely, or the service user has been disabled.`
+    // Look at the tenancy probes if present
+    const whoamiProd = byProbe('whoami_on_nlu_prod')
+    const whoamiV10 = byProbe('whoami_api_version_1_0')
+
+    if (whoamiProd?.status === 'ok') {
+      return `CONFIRMED: the OAuth token works against nlu.brightspace.com but NOT against ${
+        results[0] ? new URL(results[0].url).host : 'the configured instance'
+      }. The OAuth 2.0 app is registered on production, not on the test instance. Either (a) re-register the app on the test instance and get a new Client ID, or (b) change D2L_VALENCE_INSTANCE_URL to https://nlu.brightspace.com and test against production.`
+    }
+    if (whoamiV10?.status === 'ok') {
+      return 'API v1.82 returns 404 on this instance but v1.0 works. Change D2L_VALENCE_API_VERSION to 1.0 (or the highest version the instance supports).'
+    }
+    return `Token was issued but every API call returns ${whoami?.httpStatus}. Check: (1) is the instance URL correct? Try opening it in a browser. (2) is this actually a Brightspace instance with the Valence API enabled? (3) was the OAuth app registered on a different instance than the one we're calling?`
   }
 
   if (orgRoot?.status !== 'ok') {
