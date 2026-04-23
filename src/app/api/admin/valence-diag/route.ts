@@ -110,6 +110,15 @@ export async function GET() {
     })
   }
 
+  // Probe 1.5: /d2l/api/versions — UNAUTHENTICATED discovery endpoint
+  // Tells us which API versions the instance supports. Runs without a
+  // token so it doesn't care about scopes.
+  await probeAbsoluteNoAuth(
+    results,
+    'versions_list',
+    `${config.instanceUrl}/d2l/api/versions`
+  )
+
   // Probe 2: /whoami — simplest sanity check that the token works at all
   await probe(results, token, config, 'whoami', `/d2l/api/lp/${config.apiVersion}/users/whoami`)
 
@@ -176,24 +185,19 @@ export async function GET() {
   // production hostnames to see if the token was scoped to a different
   // tenant than we're hitting. A success here = instance URL mismatch.
   if (byProbeHelper(results, 'whoami')?.status !== 'ok') {
-    await probeAbsolute(
-      results,
-      token,
-      'whoami_on_nlu_prod',
-      `https://nlu.brightspace.com/d2l/api/lp/${config.apiVersion}/users/whoami`
-    )
-    await probeAbsolute(
-      results,
-      token,
-      'whoami_on_nlu_edu',
-      `https://nlu.brightspace.com/d2l/api/lp/1.0/users/whoami`
-    )
-    await probeAbsolute(
-      results,
-      token,
-      'whoami_api_version_1_0',
-      `${config.instanceUrl}/d2l/api/lp/1.0/users/whoami`
-    )
+    // Try whoami at a spread of API versions to find any that work.
+    // If any return 200, we've found a supported version.
+    // If they return 403, that's a permissions issue (path exists).
+    // If they return 404, version doesn't exist on this instance.
+    const versionsToTry = ['1.0', '1.9', '1.20', '1.30', '1.40', '1.50', '1.60', '1.70', '1.80']
+    for (const v of versionsToTry) {
+      await probeAbsolute(
+        results,
+        token,
+        `whoami_v${v}`,
+        `${config.instanceUrl}/d2l/api/lp/${v}/users/whoami`
+      )
+    }
   }
 
   // ─── Summary ──────────────────────────────────
@@ -253,6 +257,37 @@ async function probeAbsolute(
       httpStatus: res.status,
       message: `${res.status} ${res.statusText}`,
       bodyExcerpt: bodyText.substring(0, 200),
+      ms: Date.now() - t0,
+    })
+  } catch (err) {
+    results.push({
+      probe: label,
+      url,
+      status: 'error',
+      message: String(err),
+      ms: Date.now() - t0,
+    })
+  }
+}
+
+async function probeAbsoluteNoAuth(
+  results: ProbeResult[],
+  label: string,
+  url: string
+): Promise<void> {
+  const t0 = Date.now()
+  try {
+    const res = await fetch(url, {
+      headers: { Accept: 'application/json' },
+    })
+    const bodyText = await res.text().catch(() => '')
+    results.push({
+      probe: label,
+      url,
+      status: res.ok ? 'ok' : 'error',
+      httpStatus: res.status,
+      message: `${res.status} ${res.statusText}`,
+      bodyExcerpt: bodyText.substring(0, 400),
       ms: Date.now() - t0,
     })
   } catch (err) {
