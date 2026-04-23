@@ -28,14 +28,22 @@ interface CachedToken {
 let cache: CachedToken | null = null
 
 /**
- * Scopes requested on every Valence token. These are the union of every
- * Valence scope we actually use across the sync engine.
+ * Scopes requested on every Valence token. Must match what the OAuth
+ * app has been granted on the Brightspace side; the token endpoint
+ * returns the intersection of requested and granted scopes.
+ *
+ * users:own_profile:read is required for /users/whoami (the service
+ * user reading its own profile). users:profile:read lets us read
+ * other users' profiles for enrichment. users:userdata:read covers
+ * user data like grades and enrollments.
  */
 const VALENCE_SCOPES = [
   'dropbox:folders:read',
   'dropbox:submissions:read',
   'dropbox:folder-attachments:read',
   'enrollment:orgunit:read',
+  'users:own_profile:read',
+  'users:profile:read',
   'users:userdata:read',
   'orgunit:children:read',
 ] as const
