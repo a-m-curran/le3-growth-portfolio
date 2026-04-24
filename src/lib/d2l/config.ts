@@ -21,8 +21,19 @@ export interface D2LValenceConfig {
   clientId: string
   /** OAuth2 token endpoint — typically https://auth.brightspace.com/core/connect/token */
   tokenUrl: string
-  /** Valence API version, e.g. '1.82' */
-  apiVersion: string
+  /**
+   * Valence LP (Learning Platform) API version.
+   * Used for /orgstructure/*, /users/*, /enrollments/*, /courses/* etc.
+   * D2L's LP API historically plateaued around v1.50 on many instances.
+   */
+  lpVersion: string
+  /**
+   * Valence LE (Learning Engine) API version.
+   * Used for /classlist/, /dropbox/*, /discussions/*, /quizzes/* etc.
+   * The dropbox submissions endpoint requires v1.82 minimum; NLU's
+   * d2ltest.nl.edu supports up to v1.93.
+   */
+  leVersion: string
   /** Org unit ID containing LE3 courses — sync is scoped to children of this unit */
   le3OrgUnitId: string
 }
@@ -43,16 +54,22 @@ export function getValenceConfig(): D2LValenceConfig {
   const tokenUrl =
     process.env.D2L_VALENCE_TOKEN_URL ||
     'https://auth.brightspace.com/core/connect/token'
-  // Default to 1.93, the max version supported on NLU's d2ltest
-  // instance as of April 2026 (per Matt in NLU IT). D2L versions each
-  // endpoint independently — /dropbox/.../submissions/ requires v1.82
-  // minimum, which is why earlier tests against v1.50 were returning
-  // empty submissions. v1.93 covers every endpoint our sync uses.
+
+  // Per-namespace API versions. D2L versions LP and LE independently,
+  // and different instances expose different max versions per namespace.
+  // On NLU's d2ltest.nl.edu (April 2026): LP plateaus at v1.50, LE
+  // supports up to v1.93 (per Matt in NLU IT). The dropbox submissions
+  // endpoint in LE requires v1.82+, which is why LE needs the higher
+  // version number.
   //
-  // Note: /users/whoami appears to have been retired somewhere above
-  // v1.50, so our diagnostic probe at higher versions returns 404.
-  // That's cosmetic — sync engine doesn't call /whoami.
-  const apiVersion = process.env.D2L_VALENCE_API_VERSION || '1.93'
+  // Legacy single-var override (D2L_VALENCE_API_VERSION) is respected
+  // for both namespaces if set, to avoid breaking existing deployments.
+  const legacyApiVersion = process.env.D2L_VALENCE_API_VERSION
+  const lpVersion =
+    process.env.D2L_VALENCE_LP_VERSION || legacyApiVersion || '1.50'
+  const leVersion =
+    process.env.D2L_VALENCE_LE_VERSION || legacyApiVersion || '1.93'
+
   const le3OrgUnitId = process.env.D2L_VALENCE_LE3_ORG_UNIT_ID
 
   const missing: string[] = []
@@ -70,7 +87,8 @@ export function getValenceConfig(): D2LValenceConfig {
     instanceUrl: instanceUrl!,
     clientId: clientId!,
     tokenUrl,
-    apiVersion,
+    lpVersion,
+    leVersion,
     le3OrgUnitId: le3OrgUnitId!,
   }
 }

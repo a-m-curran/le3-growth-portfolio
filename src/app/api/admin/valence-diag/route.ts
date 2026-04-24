@@ -103,7 +103,8 @@ export async function GET() {
         instanceUrl: config.instanceUrl,
         clientId: config.clientId,
         tokenUrl: config.tokenUrl,
-        apiVersion: config.apiVersion,
+        lpVersion: config.lpVersion,
+        leVersion: config.leVersion,
         le3OrgUnitId: config.le3OrgUnitId,
       },
       probes: results,
@@ -154,8 +155,13 @@ export async function GET() {
     })
   }
 
+  // ─── LP namespace probes (use lpVersion) ────
+  //
+  // These all use /d2l/api/lp/{lpVersion}/...
+  // On NLU's d2ltest, LP plateaus at v1.50.
+
   // Probe 2: /whoami — simplest sanity check that the token works at all
-  await probe(results, token, config, 'whoami', `/d2l/api/lp/${config.apiVersion}/users/whoami`)
+  await probe(results, token, config, 'whoami', `/d2l/api/lp/${config.lpVersion}/users/whoami`)
 
   // Probe 3: get the configured LE3 org unit itself
   //   404 here = org unit ID wrong OR service user can't see it
@@ -165,17 +171,16 @@ export async function GET() {
     token,
     config,
     'orgunit_root',
-    `/d2l/api/lp/${config.apiVersion}/orgstructure/${config.le3OrgUnitId}`
+    `/d2l/api/lp/${config.lpVersion}/orgstructure/${config.le3OrgUnitId}`
   )
 
   // Probe 4: children of the LE3 org unit (one level deep)
-  //   More commonly supported than descendants
   await probe(
     results,
     token,
     config,
     'orgunit_children',
-    `/d2l/api/lp/${config.apiVersion}/orgstructure/${config.le3OrgUnitId}/children/`
+    `/d2l/api/lp/${config.lpVersion}/orgstructure/${config.le3OrgUnitId}/children/`
   )
 
   // Probe 5: children filtered to CourseOffering type (3)
@@ -184,36 +189,88 @@ export async function GET() {
     token,
     config,
     'orgunit_children_courses',
-    `/d2l/api/lp/${config.apiVersion}/orgstructure/${config.le3OrgUnitId}/children/?ouTypeId=3`
+    `/d2l/api/lp/${config.lpVersion}/orgstructure/${config.le3OrgUnitId}/children/?ouTypeId=3`
   )
 
-  // Probe 6: descendants (this is what the sync engine currently uses)
-  //   Reproduces the failure we saw
+  // Probe 6: descendants (what sync engine uses for course discovery)
   await probe(
     results,
     token,
     config,
     'orgunit_descendants',
-    `/d2l/api/lp/${config.apiVersion}/orgstructure/${config.le3OrgUnitId}/descendants/`
+    `/d2l/api/lp/${config.lpVersion}/orgstructure/${config.le3OrgUnitId}/descendants/`
   )
 
-  // Probe 7: descendants with course type filter (exact failing call)
+  // Probe 7: descendants with course type filter
   await probe(
     results,
     token,
     config,
     'orgunit_descendants_courses',
-    `/d2l/api/lp/${config.apiVersion}/orgstructure/${config.le3OrgUnitId}/descendants/?ouTypeId=3`
+    `/d2l/api/lp/${config.lpVersion}/orgstructure/${config.le3OrgUnitId}/descendants/?ouTypeId=3`
   )
 
-  // Probe 8: paged-descendants variant (some instances use this path)
+  // Probe 8: paged-descendants variant
   await probe(
     results,
     token,
     config,
     'orgunit_paged_descendants',
-    `/d2l/api/lp/${config.apiVersion}/orgstructure/${config.le3OrgUnitId}/descendants/paged/`
+    `/d2l/api/lp/${config.lpVersion}/orgstructure/${config.le3OrgUnitId}/descendants/paged/`
   )
+
+  // ─── LE namespace probes (use leVersion) ────
+  //
+  // These use /d2l/api/le/{leVersion}/... — dropbox, classlist, discussions.
+  // LE supports up to v1.93 on NLU's d2ltest. The dropbox submissions
+  // endpoint specifically requires v1.82+.
+
+  // Pick the first course offering as a probe target.
+  // Probe 6 already hit descendants, so look for that probe's body excerpt
+  // and extract the first course org unit ID. If that probe failed, fall
+  // back to probing one known test course ID hardcoded for context.
+  const firstCourseOuId = extractFirstCourseOuId(results) ?? '242430'
+
+  // Probe 9: classlist for the first course — shows us the full roster
+  // including whether emails are populated. This is the critical probe
+  // for debugging "why no students synced." Returns full JSON body (up
+  // to 2000 chars) so we can inspect email fields on each user.
+  await probeWithLongBody(
+    results,
+    token,
+    'classlist_for_first_course',
+    `${config.instanceUrl}/d2l/api/le/${config.leVersion}/${firstCourseOuId}/classlist/`,
+    2000
+  )
+
+  // Probe 10: dropbox folders for the first course
+  await probeWithLongBody(
+    results,
+    token,
+    'dropbox_folders_for_first_course',
+    `${config.instanceUrl}/d2l/api/le/${config.leVersion}/${firstCourseOuId}/dropbox/folders/`,
+    2000
+  )
+
+  // Probe 11: if we can find a folder ID, probe submissions for it
+  const firstFolderId = extractFirstFolderId(results)
+  if (firstFolderId) {
+    await probeWithLongBody(
+      results,
+      token,
+      'submissions_for_first_folder',
+      `${config.instanceUrl}/d2l/api/le/${config.leVersion}/${firstCourseOuId}/dropbox/folders/${firstFolderId}/submissions/`,
+      3000
+    )
+  } else {
+    results.push({
+      probe: 'submissions_for_first_folder',
+      url: '(skipped)',
+      status: 'error',
+      message: 'No folder ID extractable from dropbox_folders probe body',
+      ms: 0,
+    })
+  }
 
   // ─── Tenancy probes ──────────────────────────
   // If whoami/orgunit_root failed, try the same token against known
@@ -247,7 +304,8 @@ export async function GET() {
       instanceUrl: config.instanceUrl,
       clientId: config.clientId,
       tokenUrl: config.tokenUrl,
-      apiVersion: config.apiVersion,
+      lpVersion: config.lpVersion,
+      leVersion: config.leVersion,
       le3OrgUnitId: config.le3OrgUnitId,
     },
     probes: results,
@@ -268,6 +326,73 @@ interface ProbeResult {
 
 function byProbeHelper(results: ProbeResult[], name: string): ProbeResult | undefined {
   return results.find(r => r.probe === name)
+}
+
+/**
+ * Make an authenticated GET and capture a large chunk of the response
+ * body for inspection. Used for classlist + submissions probes where
+ * the shape of the response is critical to debugging.
+ */
+async function probeWithLongBody(
+  results: ProbeResult[],
+  token: string,
+  label: string,
+  url: string,
+  excerptLength: number
+): Promise<void> {
+  const t0 = Date.now()
+  try {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+      },
+    })
+    const bodyText = await res.text().catch(() => '')
+    results.push({
+      probe: label,
+      url,
+      status: res.ok ? 'ok' : 'error',
+      httpStatus: res.status,
+      message: `${res.status} ${res.statusText}`,
+      bodyExcerpt: bodyText.substring(0, excerptLength),
+      ms: Date.now() - t0,
+    })
+  } catch (err) {
+    results.push({
+      probe: label,
+      url,
+      status: 'error',
+      message: String(err),
+      ms: Date.now() - t0,
+    })
+  }
+}
+
+/**
+ * Try to extract the first course org unit ID from the descendants
+ * probe body. Returns null if we can't find one — caller falls back to
+ * a hardcoded default.
+ */
+function extractFirstCourseOuId(results: ProbeResult[]): string | null {
+  const descProbe =
+    results.find(r => r.probe === 'orgunit_descendants_courses') ||
+    results.find(r => r.probe === 'orgunit_children_courses') ||
+    results.find(r => r.probe === 'orgunit_descendants')
+  if (!descProbe?.bodyExcerpt) return null
+  const match = descProbe.bodyExcerpt.match(/"Identifier":"(\d+)"/)
+  return match ? match[1] : null
+}
+
+/**
+ * Try to extract the first folder ID from the dropbox folders probe body.
+ * Returns null if no folder was found in the response.
+ */
+function extractFirstFolderId(results: ProbeResult[]): string | null {
+  const foldersProbe = results.find(r => r.probe === 'dropbox_folders_for_first_course')
+  if (!foldersProbe?.bodyExcerpt || foldersProbe.status !== 'ok') return null
+  const match = foldersProbe.bodyExcerpt.match(/"Id":\s*(\d+)/)
+  return match ? match[1] : null
 }
 
 async function probeAbsolute(

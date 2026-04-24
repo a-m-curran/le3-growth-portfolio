@@ -43,7 +43,7 @@ export async function leGetBuffer(path: string): Promise<{
 }> {
   const config = getValenceConfig()
   const token = await getValenceToken()
-  const url = `${config.instanceUrl}/d2l/api/le/${config.apiVersion}${path}`
+  const url = `${config.instanceUrl}/d2l/api/le/${config.leVersion}${path}`
 
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
@@ -94,7 +94,8 @@ export async function leGetAllPaged<T>(path: string): Promise<T[]> {
 async function valenceGet<T>(namespace: 'le' | 'lp', path: string): Promise<T> {
   const config = getValenceConfig()
   const token = await getValenceToken()
-  const url = `${config.instanceUrl}/d2l/api/${namespace}/${config.apiVersion}${path}`
+  const version = namespace === 'lp' ? config.lpVersion : config.leVersion
+  const url = `${config.instanceUrl}/d2l/api/${namespace}/${version}${path}`
 
   const res = await fetch(url, {
     headers: {
