@@ -43,12 +43,16 @@ export function getValenceConfig(): D2LValenceConfig {
   const tokenUrl =
     process.env.D2L_VALENCE_TOKEN_URL ||
     'https://auth.brightspace.com/core/connect/token'
-  // Default to 1.50, the max version supported on NLU's d2ltest
-  // instance as of April 2026. Override with D2L_VALENCE_API_VERSION
-  // if the platform upgrades or the sync needs features from a higher
-  // API version. Confirmed via /api/admin/valence-diag probes:
-  // v1.50 returns 200 on /users/whoami; v1.60+ returns 404.
-  const apiVersion = process.env.D2L_VALENCE_API_VERSION || '1.50'
+  // Default to 1.93, the max version supported on NLU's d2ltest
+  // instance as of April 2026 (per Matt in NLU IT). D2L versions each
+  // endpoint independently — /dropbox/.../submissions/ requires v1.82
+  // minimum, which is why earlier tests against v1.50 were returning
+  // empty submissions. v1.93 covers every endpoint our sync uses.
+  //
+  // Note: /users/whoami appears to have been retired somewhere above
+  // v1.50, so our diagnostic probe at higher versions returns 404.
+  // That's cosmetic — sync engine doesn't call /whoami.
+  const apiVersion = process.env.D2L_VALENCE_API_VERSION || '1.93'
   const le3OrgUnitId = process.env.D2L_VALENCE_LE3_ORG_UNIT_ID
 
   const missing: string[] = []
