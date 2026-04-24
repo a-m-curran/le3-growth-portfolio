@@ -48,12 +48,17 @@ export interface D2LClasslistUser {
   Identifier: string
   ProfileIdentifier: string
   DisplayName: string
-  Username: string
+  Username: string | null
   OrgDefinedId: string | null
   Email: string | null
-  FirstName: string
-  LastName: string
-  RoleId: number
+  FirstName: string | null
+  LastName: string | null
+  // RoleId is NOT reliable across instances — NLU's d2ltest returns null
+  // for instructors and 103 for students, which doesn't match the
+  // documented 117/118/110 defaults. ClasslistRoleDisplayName is the
+  // authoritative field for classification.
+  RoleId: number | null
+  ClasslistRoleDisplayName: string | null
 }
 
 // ─── USERS ──────────────────────────────────────────

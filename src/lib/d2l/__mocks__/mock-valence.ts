@@ -472,6 +472,10 @@ function buildClasslist(orgUnitId: string): unknown[] {
     FirstName: u.firstName,
     LastName: u.lastName,
     RoleId: u.roleId,
+    // Mimic D2L's ClasslistRoleDisplayName — the authoritative field
+    // our enrollment normalizer keys off. Derive from the mock's role
+    // ID so existing fixtures work without updates.
+    ClasslistRoleDisplayName: u.roleId === 117 ? 'Instructor' : 'Student',
   }))
 }
 

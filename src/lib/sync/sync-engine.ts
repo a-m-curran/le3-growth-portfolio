@@ -177,6 +177,20 @@ export async function runLe3Sync(options: SyncOptions): Promise<SyncResult> {
           try {
             const coachId = await upsertCoach(instructor)
             if (coachId) coachIdsByEmail.set(instructor.email.toLowerCase(), coachId)
+
+            // If this instructor was misclassified as a student on a
+            // prior sync (e.g. before the ClasslistRoleDisplayName-based
+            // fix landed), flag it so we can clean up the stale record.
+            // We don't auto-delete — the coach can confirm and remove
+            // via an admin action — but we surface the mismatch via
+            // sync_run error_details so it isn't invisible.
+            await flagStaleStudentFromInstructor(
+              instructor.email,
+              instructor.userId,
+              course.name,
+              errors,
+              counts
+            )
           } catch (err) {
             recordError(errors, 'coach_upsert', `course=${course.name} email=${instructor.email}`, err)
             counts.errorsCount++
@@ -741,4 +755,41 @@ function recordError(errors: SyncError[], stage: string, context: string, err: u
     context,
     message: String(err),
   })
+}
+
+/**
+ * If an email that now appears as an instructor also has a stale
+ * `student` row (from an earlier sync that misclassified them), flag
+ * the mismatch via sync_run error_details. Doesn't delete — that's a
+ * coach decision — but makes the stale data visible instead of silent.
+ *
+ * Specifically handles the pre-fix scenario where NLU's RoleId=null
+ * instructors were defaulted to students.
+ */
+async function flagStaleStudentFromInstructor(
+  email: string,
+  d2lUserId: string,
+  courseName: string,
+  errors: SyncError[],
+  counts: SyncCounts
+): Promise<void> {
+  const admin = createAdminClient()
+  const { data: staleStudent } = await admin
+    .from('student')
+    .select('id, first_name, last_name')
+    .eq('email', email.toLowerCase())
+    .maybeSingle()
+
+  if (!staleStudent) return
+
+  errors.push({
+    stage: 'role_mismatch',
+    context: `course=${courseName} email=${email} d2l_user_id=${d2lUserId}`,
+    message:
+      `Stale student row detected for ${staleStudent.first_name} ${staleStudent.last_name} ` +
+      `(student.id=${staleStudent.id}) — this user is now correctly classified as an ` +
+      `instructor/coach. Delete the student row manually once you've confirmed no real ` +
+      `student data is tied to it.`,
+  })
+  counts.errorsCount++
 }
