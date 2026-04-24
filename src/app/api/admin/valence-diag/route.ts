@@ -243,6 +243,30 @@ export async function GET() {
     2000
   )
 
+  // Probe 9.5: get a single user's profile directly via the LP users
+  // endpoint. If classlist returns anonymized data but this endpoint
+  // returns real data, we know classlist-specific anonymization is
+  // enabled. If both return null PII, the scrubbing is user-level or
+  // instance-wide. Crucial for writing the precise fix request to NLU.
+  const firstStudentId = extractFirstStudentIdentifier(results)
+  if (firstStudentId) {
+    await probeWithLongBody(
+      results,
+      token,
+      'user_profile_direct',
+      `${config.instanceUrl}/d2l/api/lp/${config.lpVersion}/users/${firstStudentId}`,
+      1000
+    )
+  } else {
+    results.push({
+      probe: 'user_profile_direct',
+      url: '(skipped)',
+      status: 'error',
+      message: 'No student Identifier extractable from classlist probe',
+      ms: 0,
+    })
+  }
+
   // Probe 10: dropbox folders for the first course
   await probeWithLongBody(
     results,
@@ -392,6 +416,18 @@ function extractFirstFolderId(results: ProbeResult[]): string | null {
   const foldersProbe = results.find(r => r.probe === 'dropbox_folders_for_first_course')
   if (!foldersProbe?.bodyExcerpt || foldersProbe.status !== 'ok') return null
   const match = foldersProbe.bodyExcerpt.match(/"Id":\s*(\d+)/)
+  return match ? match[1] : null
+}
+
+/**
+ * Pull out the first user Identifier from the classlist probe body,
+ * so we can probe that specific user's profile via the LP endpoint and
+ * compare to what the classlist endpoint returned.
+ */
+function extractFirstStudentIdentifier(results: ProbeResult[]): string | null {
+  const classlistProbe = results.find(r => r.probe === 'classlist_for_first_course')
+  if (!classlistProbe?.bodyExcerpt || classlistProbe.status !== 'ok') return null
+  const match = classlistProbe.bodyExcerpt.match(/"Identifier":"(\d+)"/)
   return match ? match[1] : null
 }
 
