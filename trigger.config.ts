@@ -36,6 +36,22 @@ export default defineConfig({
   // bump to "debug" during pilot troubleshooting.
   logLevel: 'info',
 
+  build: {
+    // Externalize packages the bundler struggles with — they'll be
+    // installed at runtime from package.json instead of being inlined
+    // into the task bundle.
+    //
+    //   mammoth    — .docx text extraction. Dynamic-imported in
+    //                extract-text.ts; without this external declaration,
+    //                Trigger.dev's bundler was silently dropping it,
+    //                causing extractText to throw at runtime and every
+    //                student_work row to land with content_len=0.
+    //   pdf-parse  — .pdf text extraction. Same shape: dynamic require,
+    //                awkward dep tree (it reads a test PDF at module
+    //                load in non-production), safer at runtime.
+    external: ['mammoth', 'pdf-parse'],
+  },
+
   // Default retry policy for tasks that don't override it.
   // The sync task has its own retry config in src/trigger/sync-le3.ts
   // and will use that instead.

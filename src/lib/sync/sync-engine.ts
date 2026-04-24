@@ -261,7 +261,7 @@ export async function runLe3Sync(options: SyncOptions): Promise<SyncResult> {
 
             for (const submission of submissions) {
               try {
-                const inserted = await processSubmission({
+                const result = await processSubmission({
                   submission,
                   assignment,
                   assignmentRowId,
@@ -270,10 +270,24 @@ export async function runLe3Sync(options: SyncOptions): Promise<SyncResult> {
                   courseCode: course.code,
                   mode: options.mode,
                 })
-                if (inserted) {
+                if (result.inserted) {
                   counts.submissionsSynced++
                 } else {
                   counts.submissionsSkipped++
+                }
+                // Surface extraction failures (download/mammoth/pdf-parse)
+                // into sync_run.error_details. Previously these were
+                // swallowed as console.warn, which is why content_len=0
+                // rows landed invisibly. The work row still gets created
+                // (with empty content), so the sync continues — but now
+                // the failure is visible in the Inspector.
+                if (result.extractionError) {
+                  errors.push({
+                    stage: 'submission_extract',
+                    context: `course=${course.name} assignment=${assignment.name} submissionId=${submission.submissionId}`,
+                    message: result.extractionError,
+                  })
+                  counts.errorsCount++
                 }
               } catch (err) {
                 recordError(
@@ -585,10 +599,17 @@ async function upsertAssignment(
   return inserted.id as string
 }
 
+interface ProcessSubmissionResult {
+  inserted: boolean
+  extractionError: string | null
+}
+
 /**
  * Process a single submission: dedup check, file download, text extraction,
- * student_work insert, auto-tag. Returns true if a new work record was
- * inserted, false if it was a duplicate.
+ * student_work insert, auto-tag. Returns inserted=true if a new work record
+ * was created, inserted=false if it was a duplicate. Also surfaces any
+ * download/extract error so the caller can log it into sync_run.error_details
+ * instead of swallowing it as a console.warn.
  */
 async function processSubmission(params: {
   submission: NormalizedSubmission
@@ -598,7 +619,7 @@ async function processSubmission(params: {
   courseName: string
   courseCode: string | null
   mode: SyncRunMode
-}): Promise<boolean> {
+}): Promise<ProcessSubmissionResult> {
   const { submission, assignment, assignmentRowId, courseName, courseCode } = params
   const admin = createAdminClient()
 
@@ -610,7 +631,7 @@ async function processSubmission(params: {
     .maybeSingle()
 
   if (existingByBrightspaceId) {
-    return false
+    return { inserted: false, extractionError: null }
   }
 
   // Look up the student by their raw Brightspace user ID. The sync
@@ -635,13 +656,14 @@ async function processSubmission(params: {
     // Student wasn't in our enrollment data — skip silently rather than
     // error. This usually means they're in a course we haven't enrolled
     // yet, or the classlist fetch missed them for this particular sync.
-    return false
+    return { inserted: false, extractionError: null }
   }
 
   // Download the first file in the submission if present, otherwise fall
   // back to the submission comment text
   let content: string | null = submission.comment
   let fileTitle: string | null = null
+  let extractionError: string | null = null
 
   if (submission.files.length > 0) {
     const file = submission.files[0]
@@ -658,13 +680,14 @@ async function processSubmission(params: {
         content = await extractText(downloaded.buffer, downloaded.filename)
       } else if (downloaded.contentType.startsWith('text/')) {
         content = downloaded.buffer.toString('utf-8').substring(0, 8000)
+      } else {
+        extractionError = `Unsupported file type: ${downloaded.filename} (${downloaded.contentType})`
       }
     } catch (err) {
-      // File download or text extraction failed — continue without content
-      console.warn(
-        `Failed to download/extract submission ${submission.submissionId}:`,
-        err
-      )
+      // File download or text extraction failed — record so it shows up in
+      // sync_run.error_details (not just a console.warn that disappears).
+      // Sync continues so other submissions aren't blocked.
+      extractionError = `download/extract failed for ${file.fileName}: ${String(err)}`
     }
   }
 
@@ -698,7 +721,7 @@ async function processSubmission(params: {
   if (insertError || !work) {
     // If it's a uniqueness violation, treat as duplicate (race with another
     // sync or Asset Processor notice)
-    if (insertError?.code === '23505') return false
+    if (insertError?.code === '23505') return { inserted: false, extractionError }
     throw new Error(`student_work insert failed: ${insertError?.message}`)
   }
 
@@ -734,7 +757,7 @@ async function processSubmission(params: {
     console.warn(`Auto-tagging failed for submission ${submission.submissionId}:`, err)
   }
 
-  return true
+  return { inserted: true, extractionError }
 }
 
 // ─── UTILITIES ─────────────────────────────────────
