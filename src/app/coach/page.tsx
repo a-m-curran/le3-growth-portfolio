@@ -9,6 +9,7 @@ import { AttentionBanner } from '@/components/coach/AttentionBanner'
 import { CaseloadList } from '@/components/coach/CaseloadList'
 import { SyncStatusPanel } from '@/components/coach/SyncStatusPanel'
 import { SyncInspectorPanel } from '@/components/coach/SyncInspectorPanel'
+import { LTIInspectorPanel } from '@/components/coach/LTIInspectorPanel'
 
 export default async function CoachPage() {
   const coach = await getCurrentCoach()
@@ -37,6 +38,7 @@ export default async function CoachPage() {
       <AttentionBanner items={data.attentionItems} />
       <SyncStatusPanel recentRuns={recentSyncRuns} lastSuccessful={lastSuccessfulSync} />
       <SyncInspectorPanel />
+      <LTIInspectorPanel />
       <CaseloadList students={data.students} coachId={coach.id} />
     </main>
   )
