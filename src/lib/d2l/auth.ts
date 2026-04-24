@@ -35,12 +35,11 @@ let cache: CachedToken | null = null
  * Scope to endpoint coverage:
  *   organizations:organization:read - orgstructure endpoints (course discovery)
  *   orgunit:children:read           - orgstructure children listing
- *   classlist:classlist:read        - classlist (enrollments per course)
- *   enrollment:orgunit:read         - older enrollments scope (legacy)
+ *   enrollment:orgunit:read         - /classlist/ (enrollments per course)
  *   dropbox:folders:read            - dropbox folders listing
  *   dropbox:submissions:read        - dropbox submissions listing
  *   dropbox:folder-attachments:read - submission file download
- *   grades:grades:read              - populate submission.grade values
+ *   grades:gradevalues:read         - populate submission.grade values
  *   users:own_profile:read          - /users/whoami
  *   users:profile:read              - read any user's profile
  *   users:userdata:read             - user data like grades, enrollments
@@ -48,12 +47,11 @@ let cache: CachedToken | null = null
 const VALENCE_SCOPES = [
   'organizations:organization:read',
   'orgunit:children:read',
-  'classlist:classlist:read',
   'enrollment:orgunit:read',
   'dropbox:folders:read',
   'dropbox:submissions:read',
   'dropbox:folder-attachments:read',
-  'grades:grades:read',
+  'grades:gradevalues:read',
   'users:own_profile:read',
   'users:profile:read',
   'users:userdata:read',
