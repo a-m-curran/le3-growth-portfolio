@@ -4,6 +4,7 @@ import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { getValenceConfig, isValenceConfigured } from '@/lib/d2l/config'
 import { getValenceToken, clearValenceTokenCache } from '@/lib/d2l/auth'
+import { extractText, isSupported } from '@/lib/extract-text'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -334,11 +335,25 @@ export async function GET() {
     // content-type mismatches.
     const firstSubIds = extractFirstSubmissionAndFileIds(results)
     if (firstSubIds) {
+      const downloadUrl = `${config.instanceUrl}/d2l/api/le/${config.leVersion}/${firstCourseOuId}/dropbox/folders/${firstFolderId}/submissions/${firstSubIds.submissionId}/files/${firstSubIds.fileId}`
       await probeFileDownload(
         results,
         token,
         'file_download_first_submission',
-        `${config.instanceUrl}/d2l/api/le/${config.leVersion}/${firstCourseOuId}/dropbox/folders/${firstFolderId}/submissions/${firstSubIds.submissionId}/files/${firstSubIds.fileId}`
+        downloadUrl
+      )
+
+      // Probe 11.6: run the actual extractText() path against the same
+      // bytes Brightspace just returned. student_work.content is
+      // landing empty even though the download itself is clean — so
+      // the failure must be in extraction. This probe runs mammoth
+      // directly (bypassing the sync engine's try/catch) and returns
+      // whatever it gives us, or the thrown error.
+      await probeExtractText(
+        results,
+        token,
+        'extract_text_first_submission',
+        downloadUrl
       )
     } else {
       results.push({
@@ -510,6 +525,93 @@ function extractFirstSubmissionAndFileIds(
   const fileMatch = subsProbe.bodyExcerpt.match(/"FileId"\s*:\s*(\d+)/)
   if (!submissionMatch || !fileMatch) return null
   return { submissionId: submissionMatch[1], fileId: fileMatch[1] }
+}
+
+/**
+ * Download the same file the download probe hits and pipe it through
+ * our extractText() — the same function the sync engine uses. Lets us
+ * see whether mammoth/pdf-parse throws on this specific file, or
+ * returns empty string, or succeeds in isolation but fails inside the
+ * Trigger.dev bundle. Reports: filename parsed from Content-Disposition,
+ * isSupported() verdict, and (if extraction ran) the length + preview
+ * of the resulting text, or the thrown error.
+ */
+async function probeExtractText(
+  results: ProbeResult[],
+  token: string,
+  label: string,
+  url: string
+): Promise<void> {
+  const t0 = Date.now()
+  try {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: '*/*',
+      },
+      redirect: 'follow',
+    })
+    if (!res.ok) {
+      results.push({
+        probe: label,
+        url,
+        status: 'error',
+        httpStatus: res.status,
+        message: `Download failed ${res.status} ${res.statusText}; cannot run extractText`,
+        ms: Date.now() - t0,
+      })
+      return
+    }
+
+    // Parse filename same way leGetBuffer does, so extractText dispatches
+    // on the right extension (.docx → mammoth, .pdf → pdf-parse, etc.)
+    const disposition = res.headers.get('content-disposition') || ''
+    const filenameMatch = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i)
+    const filename = filenameMatch
+      ? decodeURIComponent(filenameMatch[1].replace(/"/g, ''))
+      : 'download'
+    const arrayBuf = await res.arrayBuffer()
+    const buffer = Buffer.from(arrayBuf)
+
+    if (!isSupported(filename)) {
+      results.push({
+        probe: label,
+        url,
+        status: 'error',
+        message: `isSupported returned false for filename="${filename}" (size=${buffer.byteLength})`,
+        ms: Date.now() - t0,
+      })
+      return
+    }
+
+    try {
+      const text = await extractText(buffer, filename)
+      results.push({
+        probe: label,
+        url,
+        status: text.length > 0 ? 'ok' : 'error',
+        message: `extractText returned ${text.length} chars from ${filename} (${buffer.byteLength} bytes)`,
+        bodyExcerpt: text.substring(0, 400),
+        ms: Date.now() - t0,
+      })
+    } catch (err) {
+      results.push({
+        probe: label,
+        url,
+        status: 'error',
+        message: `extractText THREW on ${filename} (${buffer.byteLength} bytes): ${String(err)}`,
+        ms: Date.now() - t0,
+      })
+    }
+  } catch (err) {
+    results.push({
+      probe: label,
+      url,
+      status: 'error',
+      message: String(err),
+      ms: Date.now() - t0,
+    })
+  }
 }
 
 /**
