@@ -41,15 +41,26 @@ export default defineConfig({
     // installed at runtime from package.json instead of being inlined
     // into the task bundle.
     //
-    //   mammoth    — .docx text extraction. Dynamic-imported in
-    //                extract-text.ts; without this external declaration,
-    //                Trigger.dev's bundler was silently dropping it,
-    //                causing extractText to throw at runtime and every
-    //                student_work row to land with content_len=0.
-    //   pdf-parse  — .pdf text extraction. Same shape: dynamic require,
-    //                awkward dep tree (it reads a test PDF at module
-    //                load in non-production), safer at runtime.
-    external: ['mammoth', 'pdf-parse'],
+    //   mammoth — .docx text extraction. Dynamic-imported in
+    //             extract-text.ts; without this external declaration,
+    //             Trigger.dev's bundler was silently dropping it,
+    //             causing extractText to throw at runtime and every
+    //             student_work row to land with content_len=0.
+    //
+    // NOT externalized:
+    //   pdf-parse — version 2.4.5 explicitly requires Node
+    //               ">=20.16.0 <21 || >=22.3.0", but Trigger.dev's
+    //               managed container runs Node 21.7.3. Externalizing
+    //               forces a runtime install in an unsupported Node,
+    //               which breaks the managed-index-controller step
+    //               with "Error creating background worker files".
+    //               Letting pdf-parse bundle (so its code is captured
+    //               at build time on a compatible Node) avoids that.
+    //               If we ever need PDF support at runtime from the
+    //               Trigger.dev worker, either wait for pdf-parse to
+    //               support Node 21, swap to a different PDF library,
+    //               or pin Trigger.dev to Node 20.
+    external: ['mammoth'],
   },
 
   // Default retry policy for tasks that don't override it.
