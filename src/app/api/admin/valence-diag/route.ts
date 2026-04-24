@@ -117,7 +117,11 @@ export async function GET() {
   await probeAbsoluteNoAuth(
     results,
     'versions_list',
-    `${config.instanceUrl}/d2l/api/versions`
+    `${config.instanceUrl}/d2l/api/versions`,
+    // Bumped from 400 → 4000 so we can parse the full LP SupportedVersions
+    // array. D2L's versions response lists every namespace and its full
+    // history; 400 chars barely gets through LP's first few entries.
+    4000
   )
 
   // Probe 1.6: decode the access token JWT payload so we can see which
@@ -257,6 +261,22 @@ export async function GET() {
       `${config.instanceUrl}/d2l/api/lp/${config.lpVersion}/users/${firstStudentId}`,
       1000
     )
+
+    // Probe 9.6: sweep user profile across every LP version the instance
+    // supports ≥ 1.50. If we're pinned to an outdated LP version and a
+    // newer one returns real data, the 403 is our fault (wrong version).
+    // If every supported version returns 403, it's definitively a
+    // permissions issue on NLU's side, not a version issue on ours.
+    const lpVersions = extractLpSupportedVersions(results)
+    for (const v of lpVersions) {
+      if (v === config.lpVersion) continue // already probed above
+      await probeAbsolute(
+        results,
+        token,
+        `user_profile_lp_v${v}`,
+        `${config.instanceUrl}/d2l/api/lp/${v}/users/${firstStudentId}`
+      )
+    }
   } else {
     results.push({
       probe: 'user_profile_direct',
@@ -431,6 +451,62 @@ function extractFirstStudentIdentifier(results: ProbeResult[]): string | null {
   return match ? match[1] : null
 }
 
+/**
+ * Extract the LP namespace's supported versions ≥ 1.50 from the
+ * /d2l/api/versions discovery probe. Used to sweep the user profile
+ * endpoint across every LP version the instance actually exposes.
+ *
+ * D2L's versions endpoint returns an array like:
+ *   [{ ProductCode: "lp", LatestVersion: "1.50",
+ *      SupportedVersions: ["1.0", "1.1", ..., "1.50"] }, ...]
+ *
+ * We filter to versions ≥ 1.50 because earlier versions are unlikely
+ * to have different auth behavior, and we cap at 10 versions to keep
+ * the diag response bounded.
+ */
+function extractLpSupportedVersions(results: ProbeResult[]): string[] {
+  const versionsProbe = results.find(r => r.probe === 'versions_list')
+  if (!versionsProbe?.bodyExcerpt || versionsProbe.status !== 'ok') return []
+
+  try {
+    // Body may be truncated at 400 chars — parse what we can, falling
+    // back to regex if JSON.parse fails on the truncated tail.
+    let lp: { SupportedVersions?: string[] } | undefined
+    try {
+      const parsed = JSON.parse(versionsProbe.bodyExcerpt) as Array<{
+        ProductCode: string
+        SupportedVersions?: string[]
+      }>
+      lp = parsed.find(p => p.ProductCode === 'lp')
+    } catch {
+      // truncated JSON — extract LP's SupportedVersions array via regex
+      const lpBlock = versionsProbe.bodyExcerpt.match(
+        /"ProductCode"\s*:\s*"lp"[^}]*"SupportedVersions"\s*:\s*\[([^\]]+)\]/
+      )
+      if (lpBlock) {
+        const versions = Array.from(lpBlock[1].matchAll(/"([\d.]+)"/g)).map(m => m[1])
+        lp = { SupportedVersions: versions }
+      }
+    }
+
+    if (!lp?.SupportedVersions) return []
+
+    // Filter to ≥ 1.50, sort ascending, cap at 10
+    const atLeast150 = lp.SupportedVersions.filter(v => {
+      const [maj, min] = v.split('.').map(Number)
+      return maj > 1 || (maj === 1 && min >= 50)
+    })
+    atLeast150.sort((a, b) => {
+      const [am, an] = a.split('.').map(Number)
+      const [bm, bn] = b.split('.').map(Number)
+      return am !== bm ? am - bm : an - bn
+    })
+    return atLeast150.slice(0, 10)
+  } catch {
+    return []
+  }
+}
+
 async function probeAbsolute(
   results: ProbeResult[],
   token: string,
@@ -469,7 +545,8 @@ async function probeAbsolute(
 async function probeAbsoluteNoAuth(
   results: ProbeResult[],
   label: string,
-  url: string
+  url: string,
+  excerptLength: number = 400
 ): Promise<void> {
   const t0 = Date.now()
   try {
@@ -483,7 +560,7 @@ async function probeAbsoluteNoAuth(
       status: res.ok ? 'ok' : 'error',
       httpStatus: res.status,
       message: `${res.status} ${res.statusText}`,
-      bodyExcerpt: bodyText.substring(0, 400),
+      bodyExcerpt: bodyText.substring(0, excerptLength),
       ms: Date.now() - t0,
     })
   } catch (err) {
