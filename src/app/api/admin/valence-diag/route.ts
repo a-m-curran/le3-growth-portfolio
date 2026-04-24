@@ -268,8 +268,26 @@ export async function GET() {
     // If every supported version returns 403, it's definitively a
     // permissions issue on NLU's side, not a version issue on ours.
     const lpVersions = extractLpSupportedVersions(results)
-    for (const v of lpVersions) {
-      if (v === config.lpVersion) continue // already probed above
+    const versionsToTry = lpVersions.filter(v => v !== config.lpVersion)
+
+    // Emit a synthetic probe row summarizing what we discovered, so the
+    // result is visible even when zero sweep probes fire (which is the
+    // case when the only supported LP version is the one we're already
+    // pinned to — a meaningful signal, not a bug).
+    results.push({
+      probe: 'user_profile_lp_sweep_plan',
+      url: `${config.instanceUrl}/d2l/api/versions`,
+      status: 'ok',
+      message:
+        lpVersions.length === 0
+          ? 'No LP versions extracted from /d2l/api/versions body — check versions_list bodyExcerpt above. Sweep skipped.'
+          : versionsToTry.length === 0
+          ? `LP supported versions found: [${lpVersions.join(', ')}]. Only the already-pinned lpVersion (${config.lpVersion}) is supported on this instance — no higher LP version to try, so the 403 cannot be a version issue on our side.`
+          : `LP supported versions found: [${lpVersions.join(', ')}]. Sweeping user_profile at: [${versionsToTry.join(', ')}].`,
+      ms: 0,
+    })
+
+    for (const v of versionsToTry) {
       await probeAbsolute(
         results,
         token,
