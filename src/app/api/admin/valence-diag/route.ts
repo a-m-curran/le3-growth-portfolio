@@ -324,6 +324,31 @@ export async function GET() {
       `${config.instanceUrl}/d2l/api/le/${config.leVersion}/${firstCourseOuId}/dropbox/folders/${firstFolderId}/submissions/`,
       3000
     )
+
+    // Probe 11.5: attempt a file download for the first submission's
+    // first file. student_work rows are being created with content_len=0,
+    // which means downloadSubmissionFile or extractText is silently
+    // failing inside the sync's per-submission try/catch. This probe
+    // bypasses both and surfaces exactly what D2L returns when we ask
+    // for the file — including redirect chains, auth challenges, or
+    // content-type mismatches.
+    const firstSubIds = extractFirstSubmissionAndFileIds(results)
+    if (firstSubIds) {
+      await probeFileDownload(
+        results,
+        token,
+        'file_download_first_submission',
+        `${config.instanceUrl}/d2l/api/le/${config.leVersion}/${firstCourseOuId}/dropbox/folders/${firstFolderId}/submissions/${firstSubIds.submissionId}/files/${firstSubIds.fileId}`
+      )
+    } else {
+      results.push({
+        probe: 'file_download_first_submission',
+        url: '(skipped)',
+        status: 'error',
+        message: 'Could not extract submission/file IDs from submissions probe body',
+        ms: 0,
+      })
+    }
   } else {
     results.push({
       probe: 'submissions_for_first_folder',
@@ -467,6 +492,74 @@ function extractFirstStudentIdentifier(results: ProbeResult[]): string | null {
   if (!classlistProbe?.bodyExcerpt || classlistProbe.status !== 'ok') return null
   const match = classlistProbe.bodyExcerpt.match(/"Identifier":"(\d+)"/)
   return match ? match[1] : null
+}
+
+/**
+ * Pull out the first submissionId + fileId from the submissions probe
+ * body. Used to drive the file-download probe, which isolates whether
+ * downloadSubmissionFile is where content goes missing.
+ */
+function extractFirstSubmissionAndFileIds(
+  results: ProbeResult[]
+): { submissionId: string; fileId: string } | null {
+  const subsProbe = results.find(r => r.probe === 'submissions_for_first_folder')
+  if (!subsProbe?.bodyExcerpt || subsProbe.status !== 'ok') return null
+  // The shape is [{Entity: {...}, Submissions: [{Id: 4721796, Files: [{FileId: 23958830, ...}]}]}]
+  // Match the first "Id" that's followed later by a Files/FileId pair.
+  const submissionMatch = subsProbe.bodyExcerpt.match(/"Id"\s*:\s*(\d+)/)
+  const fileMatch = subsProbe.bodyExcerpt.match(/"FileId"\s*:\s*(\d+)/)
+  if (!submissionMatch || !fileMatch) return null
+  return { submissionId: submissionMatch[1], fileId: fileMatch[1] }
+}
+
+/**
+ * Probe a file download endpoint. Unlike probeAbsolute, this avoids
+ * loading the (potentially large, definitely binary) body into memory —
+ * we only want to know: does it succeed, what content-type did we get,
+ * was the filename in Content-Disposition parsed correctly, and how
+ * many redirects happened.
+ */
+async function probeFileDownload(
+  results: ProbeResult[],
+  token: string,
+  label: string,
+  url: string
+): Promise<void> {
+  const t0 = Date.now()
+  try {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: '*/*',
+      },
+      redirect: 'follow',
+    })
+    const contentType = res.headers.get('content-type') || '(missing)'
+    const contentLength = res.headers.get('content-length') || '(missing)'
+    const disposition = res.headers.get('content-disposition') || '(missing)'
+    // Peek first 200 bytes as UTF-8; for binary this will be gibberish
+    // but the first bytes of a .docx (PK zip signature) are still
+    // recognizable and confirm we got the real file.
+    const buf = await res.arrayBuffer()
+    const firstBytes = Buffer.from(buf.slice(0, 8)).toString('hex')
+    results.push({
+      probe: label,
+      url,
+      status: res.ok ? 'ok' : 'error',
+      httpStatus: res.status,
+      message: `${res.status} ${res.statusText}`,
+      bodyExcerpt: `content-type=${contentType} | content-length=${contentLength} | disposition=${disposition} | size_actual=${buf.byteLength} | first8bytes=${firstBytes} | redirected=${res.redirected} | final_url=${res.url}`,
+      ms: Date.now() - t0,
+    })
+  } catch (err) {
+    results.push({
+      probe: label,
+      url,
+      status: 'error',
+      message: String(err),
+      ms: Date.now() - t0,
+    })
+  }
 }
 
 /**
