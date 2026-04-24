@@ -90,6 +90,8 @@ export function SyncInspectorPanel() {
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('overview')
   const [expanded, setExpanded] = useState(false)
+  const [clearing, setClearing] = useState(false)
+  const [clearMessage, setClearMessage] = useState<string | null>(null)
 
   const load = async () => {
     setLoading(true)
@@ -107,6 +109,40 @@ export function SyncInspectorPanel() {
       setError(String(e))
     } finally {
       setLoading(false)
+    }
+  }
+
+  const clearEmpty = async () => {
+    if (
+      !confirm(
+        'Delete all D2L-synced student_work rows with empty content? ' +
+          'Use this to unblock re-sync after a failed text extraction. ' +
+          'Rows with real content will NOT be touched.'
+      )
+    ) {
+      return
+    }
+    setClearing(true)
+    setClearMessage(null)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/sync-inspect/clear-empty', {
+        method: 'POST',
+      })
+      const j = (await res.json()) as { deleted?: number; error?: string }
+      if (!res.ok) {
+        throw new Error(j.error || `HTTP ${res.status}`)
+      }
+      setClearMessage(
+        `Deleted ${j.deleted ?? 0} empty work rows. ` +
+          `Trigger a sync to re-import them with fresh text extraction.`
+      )
+      // Refresh inspector data so the table reflects the delete.
+      await load()
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setClearing(false)
     }
   }
 
@@ -135,6 +171,12 @@ export function SyncInspectorPanel() {
       {error && (
         <div className="mt-2 p-2 rounded-md bg-red-50 border border-red-200 text-xs text-red-800">
           {error}
+        </div>
+      )}
+
+      {clearMessage && (
+        <div className="mt-2 p-2 rounded-md bg-green-50 border border-green-200 text-xs text-green-800">
+          {clearMessage}
         </div>
       )}
 
@@ -171,7 +213,9 @@ export function SyncInspectorPanel() {
             {tab === 'overview' && <OverviewTab data={data} />}
             {tab === 'students' && <StudentsTab data={data} />}
             {tab === 'assignments' && <AssignmentsTab data={data} />}
-            {tab === 'work' && <WorkTab data={data} />}
+            {tab === 'work' && (
+              <WorkTab data={data} onClearEmpty={clearEmpty} clearing={clearing} />
+            )}
             {tab === 'runs' && <RunsTab data={data} />}
           </div>
         </>
@@ -277,10 +321,36 @@ function AssignmentsTab({ data }: { data: InspectResponse }) {
   )
 }
 
-function WorkTab({ data }: { data: InspectResponse }) {
+function WorkTab({
+  data,
+  onClearEmpty,
+  clearing,
+}: {
+  data: InspectResponse
+  onClearEmpty: () => void
+  clearing: boolean
+}) {
   if (data.work.length === 0) return <Empty>No D2L-synced student work yet.</Empty>
+  const emptyCount = data.counts.work_empty
   return (
-    <div className="overflow-x-auto">
+    <div>
+      {emptyCount > 0 && (
+        <div className="mb-2 p-2 rounded border border-amber-200 bg-amber-50 flex items-center justify-between gap-2">
+          <span className="text-amber-900">
+            {emptyCount} work row{emptyCount === 1 ? '' : 's'} with empty content. Delete
+            them so the next sync can re-import with text extraction.
+          </span>
+          <button
+            type="button"
+            onClick={onClearEmpty}
+            disabled={clearing}
+            className="shrink-0 px-2.5 py-1 text-[11px] font-medium rounded bg-red-700 text-white hover:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {clearing ? 'Clearing…' : `Delete ${emptyCount} empty row${emptyCount === 1 ? '' : 's'}`}
+          </button>
+        </div>
+      )}
+      <div className="overflow-x-auto">
       <table className="w-full border-collapse">
         <thead>
           <tr className="text-left text-gray-600">
@@ -319,6 +389,7 @@ function WorkTab({ data }: { data: InspectResponse }) {
           })}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }
