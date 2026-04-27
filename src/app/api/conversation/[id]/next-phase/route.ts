@@ -10,6 +10,7 @@ import {
 } from '@/lib/conversation-engine-live'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { determineTargetSkill, buildSkillLevelMap } from '@/lib/llm-prompts'
+import { log } from '@/lib/observability/logger'
 import type { ConversationContext } from '@/lib/llm-prompts'
 import type { Student, StudentWork, GrowthConversation, SkillAssessment, SdtLevel } from '@/lib/types'
 
@@ -35,11 +36,18 @@ export async function POST(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  const reqLog = log.withRequest()
+  let studentId: string | undefined
+
   try {
     const supabase = getSupabase()
     const { studentResponse, currentPhase } = await request.json()
 
     if (!studentResponse || !currentPhase) {
+      await reqLog.warn('conversation.advance_failed', {
+        message: 'studentResponse or currentPhase missing',
+        context: { conversation_id: params.id, current_phase: currentPhase },
+      })
       return NextResponse.json(
         { error: 'studentResponse and currentPhase are required' },
         { status: 400 }
@@ -54,10 +62,24 @@ export async function POST(
       .single()
 
     if (convError || !rawConversation) {
+      await reqLog.warn('conversation.advance_failed', {
+        message: 'Conversation not found',
+        context: { conversation_id: params.id, db_error: convError?.message },
+      })
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
     }
 
+    studentId = rawConversation.student_id as string
+
     if (rawConversation.status !== 'in_progress') {
+      await reqLog.warn('conversation.advance_failed', {
+        studentId,
+        message: 'Attempt to advance non-in-progress conversation',
+        context: {
+          conversation_id: params.id,
+          status: rawConversation.status,
+        },
+      })
       return NextResponse.json({ error: 'Conversation is not in progress' }, { status: 400 })
     }
 
@@ -124,13 +146,37 @@ export async function POST(
     if (currentPhase === 1) {
       const phase2Question = await generatePhase2Question(context, studentResponse)
 
-      await supabase
+      const { error: updateErr } = await supabase
         .from('growth_conversation')
         .update({
           response_phase_1: studentResponse,
           prompt_phase_2: phase2Question,
         })
         .eq('id', params.id)
+
+      if (updateErr) {
+        await reqLog.error('conversation.advance_failed', {
+          studentId,
+          message: 'DB update failed advancing 1→2',
+          context: { conversation_id: params.id, db_error: updateErr.message },
+        })
+        return NextResponse.json(
+          { error: 'Failed to advance conversation' },
+          { status: 500 }
+        )
+      }
+
+      await reqLog.info('conversation.phase_advanced', {
+        studentId,
+        actorType: 'student',
+        message: 'Phase 1 → 2',
+        context: {
+          conversation_id: params.id,
+          from_phase: 1,
+          to_phase: 2,
+          response_length: studentResponse.length,
+        },
+      })
 
       return NextResponse.json({ nextPrompt: phase2Question, nextPhase: 2 })
     }
@@ -142,13 +188,37 @@ export async function POST(
         studentResponse
       )
 
-      await supabase
+      const { error: updateErr } = await supabase
         .from('growth_conversation')
         .update({
           response_phase_2: studentResponse,
           prompt_phase_3: phase3Question,
         })
         .eq('id', params.id)
+
+      if (updateErr) {
+        await reqLog.error('conversation.advance_failed', {
+          studentId,
+          message: 'DB update failed advancing 2→3',
+          context: { conversation_id: params.id, db_error: updateErr.message },
+        })
+        return NextResponse.json(
+          { error: 'Failed to advance conversation' },
+          { status: 500 }
+        )
+      }
+
+      await reqLog.info('conversation.phase_advanced', {
+        studentId,
+        actorType: 'student',
+        message: 'Phase 2 → 3',
+        context: {
+          conversation_id: params.id,
+          from_phase: 2,
+          to_phase: 3,
+          response_length: studentResponse.length,
+        },
+      })
 
       return NextResponse.json({ nextPrompt: phase3Question, nextPhase: 3 })
     }
@@ -169,7 +239,7 @@ export async function POST(
       const startedAt = new Date(rawConversation.started_at).getTime()
       const durationSeconds = Math.round((Date.now() - startedAt) / 1000)
 
-      await supabase
+      const { error: completeErr } = await supabase
         .from('growth_conversation')
         .update({
           response_phase_3: studentResponse,
@@ -181,9 +251,21 @@ export async function POST(
         })
         .eq('id', params.id)
 
+      if (completeErr) {
+        await reqLog.error('conversation.advance_failed', {
+          studentId,
+          message: 'DB update failed completing conversation',
+          context: { conversation_id: params.id, db_error: completeErr.message },
+        })
+        return NextResponse.json(
+          { error: 'Failed to complete conversation' },
+          { status: 500 }
+        )
+      }
+
       // Insert skill tags
       if (skillTags.length > 0) {
-        await supabase
+        const { error: tagErr } = await supabase
           .from('conversation_skill_tag')
           .insert(
             skillTags.map(tag => ({
@@ -194,9 +276,30 @@ export async function POST(
               student_confirmed: false,
             }))
           )
+        if (tagErr) {
+          await reqLog.warn('conversation.tag_insert_failed', {
+            studentId,
+            message: 'Skill tags failed to insert (conversation still completed)',
+            context: { conversation_id: params.id, db_error: tagErr.message },
+          })
+        }
       }
 
-      // Generate structured output for C2A (fire-and-forget, don't block response)
+      await reqLog.info('conversation.completed', {
+        studentId,
+        actorType: 'student',
+        message: `Conversation completed in ${durationSeconds}s`,
+        durationMs: durationSeconds * 1000,
+        context: {
+          conversation_id: params.id,
+          duration_seconds: durationSeconds,
+          skill_tag_count: skillTags.length,
+          synthesis_length: synthesis.synthesisText.length,
+        },
+      })
+
+      // Generate structured output for C2A (fire-and-forget, don't block response).
+      // Logs success/failure into event_log so silent failures don't go invisible.
       const admin = createAdminClient()
       generateConversationOutput(
         {
@@ -215,7 +318,7 @@ export async function POST(
           suggestedInsight: c.suggested_insight as string,
         }))
       ).then(async (output) => {
-        await admin.from('conversation_output').insert({
+        const { error: outputErr } = await admin.from('conversation_output').insert({
           conversation_id: params.id,
           evidence_strength: output.evidenceStrength,
           evidence_rationale: output.evidenceRationale,
@@ -226,8 +329,33 @@ export async function POST(
           key_moments: output.keyMoments,
           voice_markers: output.voiceMarkers,
         })
+        if (outputErr) {
+          await log.error('conversation.output_insert_failed', {
+            studentId,
+            message: 'conversation_output insert failed',
+            context: { conversation_id: params.id, db_error: outputErr.message },
+          })
+        } else {
+          await log.info('conversation.output_generated', {
+            studentId,
+            message: 'C2A structured output stored',
+            context: {
+              conversation_id: params.id,
+              evidence_strength: output.evidenceStrength,
+              growth_trajectory: output.growthTrajectory,
+            },
+          })
+        }
       }).catch(err => {
-        console.error('Failed to generate conversation output:', err)
+        log.error('conversation.output_generation_failed', {
+          studentId,
+          message: `generateConversationOutput threw: ${String(err).slice(0, 200)}`,
+          context: {
+            conversation_id: params.id,
+            error_message: String(err),
+            error_stack: err instanceof Error ? err.stack?.slice(0, 2000) : undefined,
+          },
+        })
       })
 
       return NextResponse.json({
@@ -243,9 +371,22 @@ export async function POST(
       })
     }
 
+    await reqLog.warn('conversation.advance_failed', {
+      studentId,
+      message: 'Invalid phase number',
+      context: { conversation_id: params.id, current_phase: currentPhase },
+    })
     return NextResponse.json({ error: 'Invalid phase' }, { status: 400 })
   } catch (error) {
-    console.error('Error advancing conversation:', error)
+    await reqLog.error('conversation.advance_failed', {
+      studentId,
+      message: 'Unexpected exception advancing conversation',
+      context: {
+        conversation_id: params.id,
+        error_message: String(error),
+        error_stack: error instanceof Error ? error.stack?.slice(0, 2000) : undefined,
+      },
+    })
     return NextResponse.json(
       { error: 'Failed to generate next question. Please try again.' },
       { status: 500 }

@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { generatePhase1Question } from '@/lib/conversation-engine-live'
 import { determineTargetSkill, buildSkillLevelMap, type ConversationContext } from '@/lib/llm-prompts'
+import { log } from '@/lib/observability/logger'
 import type { StudentWork, SkillAssessment, GrowthConversation, Student } from '@/lib/types'
 
 function getSupabase() {
@@ -24,17 +25,30 @@ function getSupabase() {
 }
 
 export async function POST(request: Request) {
+  // Generate one request_id at the edge so every event from this
+  // request — student lookup, LLM call, DB writes — correlates.
+  const reqLog = log.withRequest()
+  let studentId: string | undefined
+
   try {
     const supabase = getSupabase()
     const { workId } = await request.json()
 
     if (!workId) {
+      await reqLog.warn('conversation.start_failed', {
+        message: 'workId missing from request body',
+      })
       return NextResponse.json({ error: 'workId is required' }, { status: 400 })
     }
 
     // Get current user's student record
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
+      await reqLog.warn('conversation.start_failed', {
+        actorType: 'anonymous',
+        message: 'Unauthenticated attempt to start conversation',
+        context: { workId },
+      })
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
@@ -45,8 +59,16 @@ export async function POST(request: Request) {
       .single()
 
     if (studentError || !student) {
+      await reqLog.error('conversation.start_failed', {
+        actorType: 'student',
+        actorId: user.id,
+        message: 'Authenticated user has no student record',
+        context: { workId, error: studentError?.message },
+      })
       return NextResponse.json({ error: 'Student record not found' }, { status: 404 })
     }
+
+    studentId = student.id as string
 
     // Check for existing in-progress conversation — resume it
     const { data: existing } = await supabase
@@ -62,6 +84,18 @@ export async function POST(request: Request) {
       let currentPhase = 1
       if (conv.response_phase_1 && conv.prompt_phase_2) currentPhase = 2
       if (conv.response_phase_2 && conv.prompt_phase_3) currentPhase = 3
+
+      await reqLog.info('conversation.resumed', {
+        studentId,
+        actorType: 'student',
+        actorId: user.id,
+        message: `Resumed in-progress conversation at phase ${currentPhase}`,
+        context: {
+          conversation_id: conv.id,
+          work_id: conv.work_id,
+          current_phase: currentPhase,
+        },
+      })
 
       return NextResponse.json({
         conversationId: conv.id,
@@ -163,8 +197,32 @@ export async function POST(request: Request) {
       .single()
 
     if (createError || !conversation) {
+      await reqLog.error('conversation.start_failed', {
+        studentId,
+        actorType: 'student',
+        actorId: user.id,
+        message: 'growth_conversation insert failed',
+        context: {
+          work_id: workId,
+          db_error: createError?.message,
+        },
+      })
       return NextResponse.json({ error: 'Failed to create conversation' }, { status: 500 })
     }
+
+    await reqLog.info('conversation.started', {
+      studentId,
+      actorType: 'student',
+      actorId: user.id,
+      message: `New conversation started for work ${work.title}`,
+      context: {
+        conversation_id: conversation.id,
+        work_id: workId,
+        work_title: work.title,
+        target_skill_id: targetSkillId,
+        target_skill_level: skillLevels.get(targetSkillId) || 'external',
+      },
+    })
 
     return NextResponse.json({
       conversationId: conversation.id,
@@ -172,7 +230,14 @@ export async function POST(request: Request) {
       workContext: conversation.work_context,
     })
   } catch (error) {
-    console.error('Error starting conversation:', error)
+    await reqLog.error('conversation.start_failed', {
+      studentId,
+      message: 'Unexpected exception in conversation start',
+      context: {
+        error_message: String(error),
+        error_stack: error instanceof Error ? error.stack?.slice(0, 2000) : undefined,
+      },
+    })
     return NextResponse.json(
       { error: 'Failed to start conversation. Please try again.' },
       { status: 500 }

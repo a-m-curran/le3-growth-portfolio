@@ -10,6 +10,7 @@ import { CaseloadList } from '@/components/coach/CaseloadList'
 import { SyncStatusPanel } from '@/components/coach/SyncStatusPanel'
 import { SyncInspectorPanel } from '@/components/coach/SyncInspectorPanel'
 import { LTIInspectorPanel } from '@/components/coach/LTIInspectorPanel'
+import { LiveActivityPanel } from '@/components/coach/LiveActivityPanel'
 
 export default async function CoachPage() {
   const coach = await getCurrentCoach()
@@ -36,6 +37,7 @@ export default async function CoachPage() {
       </p>
 
       <AttentionBanner items={data.attentionItems} />
+      <LiveActivityPanel />
       <SyncStatusPanel recentRuns={recentSyncRuns} lastSuccessful={lastSuccessfulSync} />
       <SyncInspectorPanel />
       <LTIInspectorPanel />

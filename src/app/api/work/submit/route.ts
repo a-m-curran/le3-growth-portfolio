@@ -1,10 +1,14 @@
 import { createServerClient } from '@supabase/auth-helpers-nextjs'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { extractText, isSupported } from '@/lib/extract-text'
+import { log } from '@/lib/observability/logger'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
+  const reqLog = log.withRequest()
+  let studentId: string | undefined
+
   try {
     const cookieStore = cookies()
     const supabase = createServerClient(
@@ -24,6 +28,10 @@ export async function POST(request: Request) {
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
+      await reqLog.warn('work.submit_failed', {
+        actorType: 'anonymous',
+        message: 'Unauthenticated work submission attempt',
+      })
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
@@ -36,8 +44,15 @@ export async function POST(request: Request) {
       .single()
 
     if (!student) {
+      await reqLog.error('work.submit_failed', {
+        actorType: 'student',
+        actorId: user.id,
+        message: 'Authenticated user has no student record',
+      })
       return NextResponse.json({ error: 'Student not found' }, { status: 404 })
     }
+
+    studentId = student.id as string
 
     // Parse form data (supports file upload)
     const formData = await request.formData()
@@ -64,6 +79,11 @@ export async function POST(request: Request) {
     if (file && file.size > 0) {
       // Validate file
       if (!isSupported(file.name)) {
+        await reqLog.warn('work.submit_failed', {
+          studentId,
+          message: 'Unsupported file type rejected',
+          context: { filename: file.name, size_bytes: file.size },
+        })
         return NextResponse.json(
           { error: 'Unsupported file type. Use PDF, DOCX, TXT, or MD.' },
           { status: 400 }
@@ -71,6 +91,11 @@ export async function POST(request: Request) {
       }
 
       if (file.size > 4 * 1024 * 1024) {
+        await reqLog.warn('work.submit_failed', {
+          studentId,
+          message: 'File exceeded 4MB limit',
+          context: { filename: file.name, size_bytes: file.size },
+        })
         return NextResponse.json(
           { error: 'File too large. Maximum size is 4MB.' },
           { status: 400 }
@@ -81,8 +106,25 @@ export async function POST(request: Request) {
       const buffer = Buffer.from(await file.arrayBuffer())
       try {
         content = await extractText(buffer, file.name)
+        await reqLog.info('work.text_extracted', {
+          studentId,
+          message: `Extracted ${content?.length ?? 0} chars from ${file.name}`,
+          context: {
+            filename: file.name,
+            size_bytes: file.size,
+            content_length: content?.length ?? 0,
+          },
+        })
       } catch (err) {
-        console.error('Text extraction error:', err)
+        await reqLog.error('work.text_extraction_failed', {
+          studentId,
+          message: `Text extraction threw on ${file.name}`,
+          context: {
+            filename: file.name,
+            size_bytes: file.size,
+            error_message: String(err),
+          },
+        })
         // Continue without extracted content — the file will still be stored
       }
 
@@ -98,7 +140,15 @@ export async function POST(request: Request) {
         })
 
       if (uploadError) {
-        console.error('Storage upload error:', uploadError)
+        await reqLog.error('work.storage_upload_failed', {
+          studentId,
+          message: `Storage upload failed: ${uploadError.message}`,
+          context: {
+            filename: file.name,
+            storage_path: storagePath,
+            error_message: uploadError.message,
+          },
+        })
         // Continue without stored file — we still have extracted text
       } else {
         const { data: urlData } = admin.storage
@@ -150,13 +200,45 @@ export async function POST(request: Request) {
       .single()
 
     if (insertError) {
-      console.error('Work submit error:', insertError)
+      await reqLog.error('work.submit_failed', {
+        studentId,
+        message: `student_work insert failed: ${insertError.message}`,
+        context: {
+          title,
+          work_type: workType,
+          db_error: insertError.message,
+        },
+      })
       return NextResponse.json({ error: 'Failed to submit work' }, { status: 500 })
     }
 
+    await reqLog.info('work.uploaded', {
+      studentId,
+      actorType: 'student',
+      actorId: user.id,
+      message: `Submitted "${title}" (${workType})`,
+      context: {
+        work_id: work.id,
+        title,
+        work_type: workType,
+        course_name: courseName,
+        has_file: !!file && file.size > 0,
+        has_content: !!content,
+        content_length: content?.length ?? 0,
+        lti_resource_link_id: ltiResourceLinkId,
+      },
+    })
+
     return NextResponse.json({ workId: work.id, fileUrl, hasContent: !!content })
   } catch (error) {
-    console.error('Work submit error:', error)
+    await reqLog.error('work.submit_failed', {
+      studentId,
+      message: 'Unexpected exception in work submit',
+      context: {
+        error_message: String(error),
+        error_stack: error instanceof Error ? error.stack?.slice(0, 2000) : undefined,
+      },
+    })
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
   }
 }
