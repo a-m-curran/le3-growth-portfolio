@@ -170,13 +170,16 @@ export async function runLe3Sync(options: SyncOptions): Promise<SyncResult> {
         const instructors = enrollments.filter(e => e.isInstructor)
         const students = enrollments.filter(e => e.isStudent && !e.isInstructor)
 
-        // Upsert instructors as coaches
-        const coachIdsByEmail = new Map<string, string>()
+        // Upsert Brightspace instructors into the `instructor` table.
+        // These are NOT LE3 program coaches — coaches are a separate
+        // group of humans, manually managed. See migration 014.
+        const instructorIdsByEmail = new Map<string, string>()
         for (const instructor of instructors) {
           if (!instructor.email) continue
           try {
-            const coachId = await upsertCoach(instructor)
-            if (coachId) coachIdsByEmail.set(instructor.email.toLowerCase(), coachId)
+            const instructorId = await upsertInstructor(instructor)
+            if (instructorId)
+              instructorIdsByEmail.set(instructor.email.toLowerCase(), instructorId)
 
             // If this instructor was misclassified as a student on a
             // prior sync (e.g. before the ClasslistRoleDisplayName-based
@@ -192,21 +195,31 @@ export async function runLe3Sync(options: SyncOptions): Promise<SyncResult> {
               counts
             )
           } catch (err) {
-            recordError(errors, 'coach_upsert', `course=${course.name} email=${instructor.email}`, err)
+            recordError(
+              errors,
+              'instructor_upsert',
+              `course=${course.name} email=${instructor.email}`,
+              err
+            )
             counts.errorsCount++
           }
         }
 
-        // Pick a default coach for new student records (first instructor we found)
-        const defaultCoachId = await pickDefaultCoachId(coachIdsByEmail)
-
-        // Link course to primary instructor if we found one
-        if (defaultCoachId) {
+        // Link course → instructor (first instructor we found, if any).
+        // Course can have null instructor_id; that's fine.
+        const primaryInstructorId =
+          instructorIdsByEmail.values().next().value ?? null
+        if (primaryInstructorId) {
           await admin
             .from('course')
-            .update({ instructor_id: defaultCoachId })
+            .update({ instructor_id: primaryInstructorId })
             .eq('id', courseRowId)
         }
+
+        // Pick a default coach for *new student* records — must be a
+        // real LE3 coach with a login. Instructors are NOT eligible.
+        // Without a real coach, we can't provision new students.
+        const defaultCoachId = await pickDefaultCoachId()
 
         // Upsert students + enrollments
         for (const student of students) {
@@ -406,55 +419,96 @@ async function upsertCourse(course: NormalizedCourse): Promise<string> {
   return inserted.id as string
 }
 
-async function upsertCoach(instructor: NormalizedEnrollment): Promise<string | null> {
+/**
+ * Upsert a Brightspace instructor into the `instructor` table. Distinct
+ * from LE3 coaches — instructors come from classlist data and are
+ * per-course; coaches are program-level humans manually managed.
+ */
+async function upsertInstructor(
+  instructor: NormalizedEnrollment
+): Promise<string | null> {
   if (!instructor.email) return null
 
   const admin = createAdminClient()
   const email = instructor.email.toLowerCase()
 
   const { data: existing } = await admin
-    .from('coach')
-    .select('id')
+    .from('instructor')
+    .select('id, d2l_user_id')
     .eq('email', email)
     .maybeSingle()
 
-  if (existing) return existing.id as string
+  if (existing) {
+    // Claim d2l_user_id if not yet set so future lookups can match by ID.
+    if (!existing.d2l_user_id && instructor.userId) {
+      await admin
+        .from('instructor')
+        .update({
+          d2l_user_id: instructor.userId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id)
+    }
+    return existing.id as string
+  }
 
-  const name = `${instructor.firstName} ${instructor.lastName}`.trim() || instructor.displayName
+  const name =
+    `${instructor.firstName} ${instructor.lastName}`.trim() ||
+    instructor.displayName
 
   const { data: inserted, error } = await admin
-    .from('coach')
+    .from('instructor')
     .insert({
       name,
       email,
+      d2l_user_id: instructor.userId || null,
+      org_defined_id: instructor.orgDefinedId || null,
       status: 'active',
     })
     .select('id')
     .single()
 
   if (error || !inserted) {
-    throw new Error(`Failed to insert coach ${email}: ${error?.message}`)
+    throw new Error(`Failed to insert instructor ${email}: ${error?.message}`)
   }
   return inserted.id as string
 }
 
-async function pickDefaultCoachId(
-  coachIdsByEmail: Map<string, string>
-): Promise<string | null> {
-  // Prefer a course-specific coach if we found one
-  const first = coachIdsByEmail.values().next().value
-  if (first) return first
-
-  // Otherwise fall back to the first active coach in the system
+/**
+ * Pick a default LE3 coach for new student records. Only real coaches
+ * (entries in the `coach` table) are eligible — never a Brightspace
+ * instructor. We prefer coaches with auth_user_id set (i.e. someone
+ * who has actually logged in) since assigning students to a coach who
+ * can't log in just hides the relationship from the dashboard.
+ *
+ * Returns null if no eligible coach exists. The caller MUST treat null
+ * as a hard error and surface it via sync_run.error_details rather
+ * than silently falling back, so the admin sees they need to seed a
+ * coach before sync can provision new students.
+ */
+async function pickDefaultCoachId(): Promise<string | null> {
   const admin = createAdminClient()
-  const { data: defaultCoach } = await admin
+
+  // Prefer a coach who has actually logged in (auth_user_id present).
+  const { data: loggedIn } = await admin
+    .from('coach')
+    .select('id')
+    .eq('status', 'active')
+    .not('auth_user_id', 'is', null)
+    .limit(1)
+    .maybeSingle()
+
+  if (loggedIn) return loggedIn.id as string
+
+  // Fall back to any active coach (a seeded record without auth yet).
+  const { data: anyActive } = await admin
     .from('coach')
     .select('id')
     .eq('status', 'active')
     .limit(1)
     .maybeSingle()
 
-  return defaultCoach?.id || null
+  return anyActive?.id ?? null
 }
 
 async function upsertStudent(
@@ -785,9 +839,6 @@ function recordError(errors: SyncError[], stage: string, context: string, err: u
  * `student` row (from an earlier sync that misclassified them), flag
  * the mismatch via sync_run error_details. Doesn't delete — that's a
  * coach decision — but makes the stale data visible instead of silent.
- *
- * Specifically handles the pre-fix scenario where NLU's RoleId=null
- * instructors were defaulted to students.
  */
 async function flagStaleStudentFromInstructor(
   email: string,
@@ -811,7 +862,7 @@ async function flagStaleStudentFromInstructor(
     message:
       `Stale student row detected for ${staleStudent.first_name} ${staleStudent.last_name} ` +
       `(student.id=${staleStudent.id}) — this user is now correctly classified as an ` +
-      `instructor/coach. Delete the student row manually once you've confirmed no real ` +
+      `instructor. Delete the student row manually once you've confirmed no real ` +
       `student data is tied to it.`,
   })
   counts.errorsCount++

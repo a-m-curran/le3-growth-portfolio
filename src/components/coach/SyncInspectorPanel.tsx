@@ -17,6 +17,8 @@ interface InspectResponse {
   counts: {
     courses: number
     students: number
+    coaches: number
+    instructors: number
     assignments: number
     work: number
     work_with_content: number
@@ -40,6 +42,22 @@ interface InspectResponse {
     d2l_user_id: string | null
     coach_id: string | null
     cohort: string | null
+    status: string
+    created_at: string
+  }>
+  coaches: Array<{
+    id: string
+    name: string
+    email: string
+    status: string
+    auth_user_id: string | null
+    created_at: string
+  }>
+  instructors: Array<{
+    id: string
+    name: string
+    email: string
+    d2l_user_id: string | null
     status: string
     created_at: string
   }>
@@ -82,7 +100,7 @@ interface InspectResponse {
   }>
 }
 
-type Tab = 'overview' | 'students' | 'assignments' | 'work' | 'runs'
+type Tab = 'overview' | 'people' | 'students' | 'assignments' | 'work' | 'runs'
 
 export function SyncInspectorPanel() {
   const [data, setData] = useState<InspectResponse | null>(null)
@@ -183,9 +201,11 @@ export function SyncInspectorPanel() {
       {data && expanded && (
         <>
           {/* Counts strip */}
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-3">
+          <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 mb-3">
             <Count label="Courses" value={data.counts.courses} />
             <Count label="Students" value={data.counts.students} />
+            <Count label="Coaches" value={data.counts.coaches} />
+            <Count label="Instructors" value={data.counts.instructors} />
             <Count label="Assignments" value={data.counts.assignments} />
             <Count label="Work Rows" value={data.counts.work} />
             <Count
@@ -201,8 +221,9 @@ export function SyncInspectorPanel() {
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-1 border-b border-gray-200 mb-3 text-xs">
+          <div className="flex gap-1 border-b border-gray-200 mb-3 text-xs flex-wrap">
             <TabBtn label="Overview" active={tab === 'overview'} onClick={() => setTab('overview')} />
+            <TabBtn label="People" active={tab === 'people'} onClick={() => setTab('people')} />
             <TabBtn label="Students" active={tab === 'students'} onClick={() => setTab('students')} />
             <TabBtn label="Assignments" active={tab === 'assignments'} onClick={() => setTab('assignments')} />
             <TabBtn label="Student Work" active={tab === 'work'} onClick={() => setTab('work')} />
@@ -211,6 +232,7 @@ export function SyncInspectorPanel() {
 
           <div className="text-xs">
             {tab === 'overview' && <OverviewTab data={data} />}
+            {tab === 'people' && <PeopleTab data={data} />}
             {tab === 'students' && <StudentsTab data={data} />}
             {tab === 'assignments' && <AssignmentsTab data={data} />}
             {tab === 'work' && (
@@ -253,6 +275,85 @@ function OverviewTab({ data }: { data: InspectResponse }) {
           </p>
         )}
       </div>
+    </div>
+  )
+}
+
+function PeopleTab({ data }: { data: InspectResponse }) {
+  return (
+    <div className="space-y-4">
+      <section>
+        <h4 className="font-semibold text-gray-900 mb-1">
+          Coaches ({data.coaches.length})
+          <span className="text-gray-500 font-normal text-[11px] ml-2">
+            LE3 program-level humans. Manually managed. Real coaches need
+            auth_user_id set so they can log in.
+          </span>
+        </h4>
+        {data.coaches.length === 0 ? (
+          <Empty>No coaches yet — seed at least one before sync can provision new students.</Empty>
+        ) : (
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="text-left text-gray-600">
+                <Th>Name</Th>
+                <Th>Email</Th>
+                <Th>Has Login</Th>
+                <Th>Status</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.coaches.map(c => (
+                <tr key={c.id} className="border-t border-gray-100">
+                  <Td>{c.name}</Td>
+                  <Td className="font-mono">{c.email}</Td>
+                  <Td>
+                    {c.auth_user_id ? (
+                      <span className="text-green-700">✓</span>
+                    ) : (
+                      <span className="text-amber-700">no</span>
+                    )}
+                  </Td>
+                  <Td>{c.status}</Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <section>
+        <h4 className="font-semibold text-gray-900 mb-1">
+          Instructors ({data.instructors.length})
+          <span className="text-gray-500 font-normal text-[11px] ml-2">
+            Brightspace course teachers. Auto-pulled from classlist on every sync.
+          </span>
+        </h4>
+        {data.instructors.length === 0 ? (
+          <Empty>No instructors synced yet.</Empty>
+        ) : (
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="text-left text-gray-600">
+                <Th>Name</Th>
+                <Th>Email</Th>
+                <Th>D2L User ID</Th>
+                <Th>Status</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.instructors.map(i => (
+                <tr key={i.id} className="border-t border-gray-100">
+                  <Td>{i.name}</Td>
+                  <Td className="font-mono">{i.email}</Td>
+                  <Td className="font-mono">{i.d2l_user_id ?? '—'}</Td>
+                  <Td>{i.status}</Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
     </div>
   )
 }

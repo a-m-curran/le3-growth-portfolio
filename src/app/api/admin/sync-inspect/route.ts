@@ -69,6 +69,24 @@ export async function GET() {
     .order('created_at', { ascending: false })
     .limit(50)
 
+  // ─── Instructors (Brightspace course teachers) ──
+  // Distinct from coaches — instructors come from classlist sync,
+  // coaches are LE3 program-level humans. See migration 014.
+  const { data: instructors } = await admin
+    .from('instructor')
+    .select('id, name, email, d2l_user_id, status, created_at')
+    .order('created_at', { ascending: false })
+    .limit(30)
+
+  // ─── Coaches (LE3 program mentors) ───────────
+  // Surfaced here so the dashboard distinction between coach and
+  // instructor is visible.
+  const { data: coaches } = await admin
+    .from('coach')
+    .select('id, name, email, status, auth_user_id, created_at')
+    .order('created_at', { ascending: false })
+    .limit(30)
+
   // ─── Assignments (most recent) ────────────────
   const { data: assignments } = await admin
     .from('assignment')
@@ -140,6 +158,8 @@ export async function GET() {
     counts: {
       courses: courses?.length ?? 0,
       students: students?.length ?? 0,
+      coaches: coaches?.length ?? 0,
+      instructors: instructors?.length ?? 0,
       assignments: assignments?.length ?? 0,
       work: work.length,
       work_with_content: work.filter(w => w.content_len > 0).length,
@@ -147,6 +167,8 @@ export async function GET() {
     },
     courses: courses ?? [],
     students: students ?? [],
+    coaches: coaches ?? [],
+    instructors: instructors ?? [],
     assignments: assignments ?? [],
     work,
     syncRuns: syncRuns ?? [],
