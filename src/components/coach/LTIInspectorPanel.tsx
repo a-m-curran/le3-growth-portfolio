@@ -35,7 +35,9 @@ interface LtiInspectResponse {
   }
   env: {
     allRequiredPresent: boolean
-    presence: Record<string, boolean>
+    // Each var is true | false | 'default' — 'default' means the var
+    // is unset but our code has a working fallback (e.g. LTI_KEY_ID).
+    presence: Record<string, boolean | 'default'>
     values: Record<string, string | null>
   }
   launches: Array<{
@@ -226,8 +228,15 @@ function SetupTab({ data }: { data: LtiInspectResponse }) {
               <tr key={name} className="border-t border-gray-100">
                 <Td className="font-mono">{name}</Td>
                 <Td>
-                  {present ? (
+                  {present === true ? (
                     <span className="text-green-700 font-semibold">✓ set</span>
+                  ) : present === 'default' ? (
+                    <span
+                      className="text-amber-700 font-semibold"
+                      title="Unset, but the code falls back to a working default. Setting it explicitly is recommended."
+                    >
+                      ◆ default
+                    </span>
                   ) : (
                     <span className="text-red-700 font-semibold">✗ missing</span>
                   )}

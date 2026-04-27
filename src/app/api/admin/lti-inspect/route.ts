@@ -67,10 +67,20 @@ export async function GET() {
     register_guide: `${toolUrl}/lti/register`,
   }
 
+  // Three states per env var:
+  //   true  = explicitly set, ready
+  //   'default' = unset but our code has a working default (effectively "set")
+  //   false = unset and required, broken
+  //
+  // LTI_KEY_ID falls back to 'lti-2026' inside getToolConfig(), so an
+  // unset value is functionally fine. Surfacing it as 'default' rather
+  // than missing prevents false-alarm reds in the dashboard.
   const envPresence = {
     LTI_PRIVATE_KEY: !!process.env.LTI_PRIVATE_KEY,
     LTI_PUBLIC_KEY: !!process.env.LTI_PUBLIC_KEY,
-    LTI_KEY_ID: !!process.env.LTI_KEY_ID,
+    LTI_KEY_ID: process.env.LTI_KEY_ID
+      ? true
+      : ('default' as const),
     LTI_PLATFORM_ISSUER: !!process.env.LTI_PLATFORM_ISSUER,
     LTI_PLATFORM_CLIENT_ID: !!process.env.LTI_PLATFORM_CLIENT_ID,
     LTI_PLATFORM_AUTH_URL: !!process.env.LTI_PLATFORM_AUTH_URL,
@@ -99,16 +109,18 @@ export async function GET() {
       : null,
   }
 
+  // LTI_KEY_ID with 'default' counts as present (working fallback);
+  // every other var must be explicitly true.
   const allRequiredEnvsPresent =
-    envPresence.LTI_PRIVATE_KEY &&
-    envPresence.LTI_PUBLIC_KEY &&
-    envPresence.LTI_KEY_ID &&
-    envPresence.LTI_PLATFORM_ISSUER &&
-    envPresence.LTI_PLATFORM_CLIENT_ID &&
-    envPresence.LTI_PLATFORM_AUTH_URL &&
-    envPresence.LTI_PLATFORM_TOKEN_URL &&
-    envPresence.LTI_PLATFORM_JWKS_URL &&
-    envPresence.LTI_DEPLOYMENT_ID
+    envPresence.LTI_PRIVATE_KEY === true &&
+    envPresence.LTI_PUBLIC_KEY === true &&
+    !!envPresence.LTI_KEY_ID &&
+    envPresence.LTI_PLATFORM_ISSUER === true &&
+    envPresence.LTI_PLATFORM_CLIENT_ID === true &&
+    envPresence.LTI_PLATFORM_AUTH_URL === true &&
+    envPresence.LTI_PLATFORM_TOKEN_URL === true &&
+    envPresence.LTI_PLATFORM_JWKS_URL === true &&
+    envPresence.LTI_DEPLOYMENT_ID === true
 
   // ─── Recent launch attempts ────────────────────
   interface LaunchRow {
