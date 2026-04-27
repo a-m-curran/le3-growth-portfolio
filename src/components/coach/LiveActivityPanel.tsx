@@ -196,7 +196,7 @@ export function LiveActivityPanel() {
                       <span className="text-gray-700">
                         — last: {s.latest_event_type}{' '}
                         {s.latest_message && (
-                          <span className="italic">"{s.latest_message.slice(0, 60)}"</span>
+                          <span className="italic">&ldquo;{s.latest_message.slice(0, 60)}&rdquo;</span>
                         )}
                       </span>
                     </span>
