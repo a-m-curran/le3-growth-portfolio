@@ -1,12 +1,24 @@
 import { createServerClient } from '@supabase/auth-helpers-nextjs'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { log } from '@/lib/observability/logger'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import type { EmailOtpType } from '@supabase/supabase-js'
 
 /**
  * Magic-link auth callback.
  *
- * Gates access strictly to:
+ * Handles two distinct entry shapes:
+ *
+ *   A. token_hash + type — produced by `admin.auth.admin.generateLink`
+ *      (the LTI launch flow, plus any other server-initiated sign-in).
+ *      Verified via `supabase.auth.verifyOtp({ token_hash, type })`.
+ *
+ *   B. code — produced by an OAuth-style sign-in (PKCE flow). Verified
+ *      via `supabase.auth.exchangeCodeForSession(code)`. Used by any
+ *      future OAuth providers; not currently the LTI path.
+ *
+ * After verification, gates access strictly to:
  *   1. Users who are already linked to a coach or student row
  *   2. Users whose email matches an unlinked coach or student row (created
  *      either by Valence sync or a prior LTI launch)
@@ -14,19 +26,34 @@ import { NextResponse } from 'next/server'
  *
  * Anyone else is rejected: their orphan auth.users row is deleted so they
  * don't accumulate, and they're redirected to /login?error=not_enrolled.
- *
- * The previous self-serve /onboarding path has been removed — there are
- * no legitimate flows where an unenrolled user should be creating their
- * own student record. Real students arrive via Valence bulk sync (done
- * by a coach or scheduled task) or via a signed LTI launch JWT from
- * NLU's Brightspace instance.
  */
 export async function GET(request: Request) {
+  const reqLog = log.withRequest()
   const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
+  const tokenHash = searchParams.get('token_hash')
+  const tokenType = searchParams.get('type')
   const next = searchParams.get('next')
 
-  if (!code) {
+  await reqLog.info('auth.callback_received', {
+    message: code
+      ? 'OAuth code flow'
+      : tokenHash
+      ? `OTP token_hash flow (type=${tokenType})`
+      : 'No auth params present',
+    context: {
+      has_code: !!code,
+      has_token_hash: !!tokenHash,
+      type: tokenType,
+      has_next: !!next,
+      next,
+    },
+  })
+
+  if (!code && !tokenHash) {
+    await reqLog.warn('auth.callback_failed', {
+      message: 'Callback hit with no code and no token_hash — bouncing to /login',
+    })
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
@@ -34,7 +61,7 @@ export async function GET(request: Request) {
   // in the final redirect after record linking.
   const nextPath = next && next.startsWith('/') ? next : null
 
-  // Exchange code for session using the normal cookie-based client
+  // Cookie-based Supabase client for setting session cookies.
   const cookieStore = cookies()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -52,12 +79,43 @@ export async function GET(request: Request) {
       },
     }
   )
-  await supabase.auth.exchangeCodeForSession(code)
+
+  if (tokenHash && tokenType) {
+    // Token-hash flow (LTI launch path). Verify the hash and let
+    // Supabase set the session cookie on our domain.
+    const { error: otpError } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: tokenType as EmailOtpType,
+    })
+    if (otpError) {
+      await reqLog.error('auth.callback_failed', {
+        message: `verifyOtp failed: ${otpError.message}`,
+        context: { type: tokenType, error: otpError.message },
+      })
+      return NextResponse.redirect(
+        new URL('/login?error=auth_token_invalid', request.url)
+      )
+    }
+  } else if (code) {
+    const { error: codeError } = await supabase.auth.exchangeCodeForSession(code)
+    if (codeError) {
+      await reqLog.error('auth.callback_failed', {
+        message: `exchangeCodeForSession failed: ${codeError.message}`,
+        context: { error: codeError.message },
+      })
+      return NextResponse.redirect(
+        new URL('/login?error=auth_code_invalid', request.url)
+      )
+    }
+  }
 
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user || !user.email) {
+    await reqLog.warn('auth.callback_failed', {
+      message: 'Session established but user/email missing afterwards',
+    })
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
@@ -74,6 +132,12 @@ export async function GET(request: Request) {
     .maybeSingle()
 
   if (linkedCoach) {
+    await reqLog.info('auth.signed_in', {
+      actorType: 'coach',
+      actorId: linkedCoach.id as string,
+      message: `Coach signed in (already linked): ${email}`,
+      context: { email, redirect_to: nextPath || '/coach' },
+    })
     return NextResponse.redirect(new URL(nextPath || '/coach', request.url))
   }
 
@@ -85,6 +149,13 @@ export async function GET(request: Request) {
     .maybeSingle()
 
   if (linkedStudent) {
+    await reqLog.info('auth.signed_in', {
+      actorType: 'student',
+      actorId: user.id,
+      studentId: linkedStudent.id as string,
+      message: `Student signed in (already linked): ${email}`,
+      context: { email, redirect_to: nextPath || '/garden' },
+    })
     return NextResponse.redirect(new URL(nextPath || '/garden', request.url))
   }
 
@@ -101,6 +172,12 @@ export async function GET(request: Request) {
       .from('coach')
       .update({ auth_user_id: user.id })
       .eq('id', unmatchedCoach.id)
+    await reqLog.info('auth.signed_in', {
+      actorType: 'coach',
+      actorId: unmatchedCoach.id as string,
+      message: `Coach signed in (claimed unlinked record): ${email}`,
+      context: { email, redirect_to: nextPath || '/coach' },
+    })
     return NextResponse.redirect(new URL(nextPath || '/coach', request.url))
   }
 
@@ -117,6 +194,13 @@ export async function GET(request: Request) {
       .from('student')
       .update({ auth_user_id: user.id })
       .eq('id', unmatchedStudent.id)
+    await reqLog.info('auth.signed_in', {
+      actorType: 'student',
+      actorId: user.id,
+      studentId: unmatchedStudent.id as string,
+      message: `Student signed in (claimed unlinked record): ${email}`,
+      context: { email, redirect_to: nextPath || '/garden' },
+    })
     return NextResponse.redirect(new URL(nextPath || '/garden', request.url))
   }
 
@@ -146,12 +230,15 @@ export async function GET(request: Request) {
   // 6. Reject — no enrollment match, not on admin list
   // Sign out the current session and delete the orphaned auth user so the
   // rejected user doesn't accumulate Supabase auth rows on repeated attempts.
+  await reqLog.warn('auth.callback_rejected', {
+    actorType: 'anonymous',
+    message: `Authenticated email not enrolled as coach or student: ${email}`,
+    context: { email },
+  })
   await supabase.auth.signOut()
   try {
     await admin.auth.admin.deleteUser(user.id)
   } catch (err) {
-    // Log but don't fail the redirect — the rejection itself is the important
-    // part. The orphan will age out or can be cleaned up manually later.
     console.error(`Failed to delete orphan auth user ${user.id}:`, err)
   }
 
