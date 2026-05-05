@@ -1,8 +1,7 @@
 'use client'
 
-import type { GardenData } from '@/lib/types'
-import { PILLAR_COLORS } from '@/lib/constants'
-import { pillars } from '@/data'
+import type { GardenData, GardenPlant } from '@/lib/types'
+import { getPillarColors } from '@/lib/constants'
 import { Plant } from './Plant'
 import { GardenLegend } from './GardenLegend'
 import Link from 'next/link'
@@ -12,35 +11,42 @@ interface GardenProps {
   onPlantClick?: (skillId: string) => void
 }
 
+/**
+ * Renders the student's garden grouped by pillar.
+ *
+ * Previously imported a static `pillars` seed and tried to filter it
+ * by `plant.pillarId === p.id`. That worked in demo mode (string
+ * pillarIds match string seed IDs) but failed in DB mode where
+ * pillarId is a UUID — every comparison missed and the page rendered
+ * empty. Fixed by deriving pillar groups directly from the plant data
+ * (which already carries pillarId + pillarName) and looking up colors
+ * by the canonical pillar name (works for both demo and DB-sourced data).
+ */
 export function Garden({ data, onPlantClick }: GardenProps) {
-  const activePillars = pillars.filter(p =>
-    data.plants.some(plant => plant.pillarId === p.id)
-  )
+  const pillarGroups = groupPlantsByPillar(data.plants)
 
   return (
     <div className="space-y-6">
       {/* Pillar groups */}
-      {activePillars.map(pillar => {
-        const pillarColors = PILLAR_COLORS[pillar.id as keyof typeof PILLAR_COLORS]
-        const pillarPlants = data.plants.filter(p => p.pillarId === pillar.id)
-
+      {pillarGroups.map(group => {
+        const pillarColors = getPillarColors(group.pillarName)
         return (
           <div
-            key={pillar.id}
+            key={group.pillarId}
             className="rounded-2xl border p-5"
             style={{
-              backgroundColor: pillarColors?.bg || '#f8fafc',
-              borderColor: pillarColors?.border || '#e2e8f0',
+              backgroundColor: pillarColors.bg,
+              borderColor: pillarColors.border,
             }}
           >
             <h3
               className="text-sm font-semibold mb-4"
-              style={{ color: pillarColors?.text || '#334155' }}
+              style={{ color: pillarColors.text }}
             >
-              {pillar.name}
+              {group.pillarName}
             </h3>
             <div className="flex flex-wrap gap-4 justify-start">
-              {pillarPlants.map(plant => (
+              {group.plants.map(plant => (
                 <Plant
                   key={plant.skillId}
                   plant={plant}
@@ -66,4 +72,27 @@ export function Garden({ data, onPlantClick }: GardenProps) {
       </div>
     </div>
   )
+}
+
+interface PillarGroup {
+  pillarId: string
+  pillarName: string
+  plants: GardenPlant[]
+}
+
+function groupPlantsByPillar(plants: GardenPlant[]): PillarGroup[] {
+  const groups = new Map<string, PillarGroup>()
+  for (const plant of plants) {
+    const existing = groups.get(plant.pillarId)
+    if (existing) {
+      existing.plants.push(plant)
+    } else {
+      groups.set(plant.pillarId, {
+        pillarId: plant.pillarId,
+        pillarName: plant.pillarName,
+        plants: [plant],
+      })
+    }
+  }
+  return Array.from(groups.values())
 }

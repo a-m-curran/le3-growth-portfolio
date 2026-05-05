@@ -1,7 +1,24 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import type { ConversationSkillTag } from '@/lib/types'
-import { skills } from '@/data'
+
+/**
+ * Synthesis view shown at the end of a standalone reflection
+ * (not work-tied). Renders one card per skill the LLM tagged.
+ *
+ * Previously imported a static `skills` seed and looked up each tag's
+ * skill by id; in DB mode the lookup always missed (UUID vs slug
+ * mismatch) and `if (!skill) return null` made the entire skill
+ * insight block disappear silently. Now fetches /api/skills which
+ * returns live durable_skill rows.
+ */
+
+interface AvailableSkill {
+  id: string
+  name: string
+  pillarName: string
+}
 
 interface Props {
   synthesisText: string
@@ -10,7 +27,26 @@ interface Props {
 }
 
 export function ReflectionSynthesis({ synthesisText, skillTags, onDone }: Props) {
-  const activeSkills = skills.filter(s => s.isActive)
+  const [skillNameById, setSkillNameById] = useState<Map<string, string>>(new Map())
+  const [skillsLoaded, setSkillsLoaded] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/skills', { cache: 'force-cache' })
+      .then(r => r.json())
+      .then((j: { skills?: AvailableSkill[] }) => {
+        if (cancelled) return
+        setSkillNameById(new Map((j.skills ?? []).map(s => [s.id, s.name])))
+        setSkillsLoaded(true)
+      })
+      .catch(err => {
+        console.warn('Failed to load /api/skills:', err)
+        setSkillsLoaded(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -28,8 +64,26 @@ export function ReflectionSynthesis({ synthesisText, skillTags, onDone }: Props)
           <p className="text-sm text-gray-500 mb-3">I noticed something in what you shared:</p>
           <div className="space-y-3">
             {skillTags.map(tag => {
-              const skill = activeSkills.find(s => s.id === tag.skillId)
-              if (!skill) return null
+              // Resolve name from live data; while still loading, show a
+              // gentle placeholder rather than the raw UUID. After load,
+              // if a tag references an unknown skill, fall back to the
+              // raw id so the block still appears (debuggable, not silent).
+              const skillName =
+                skillNameById.get(tag.skillId) ??
+                (skillsLoaded ? tag.skillId : null)
+
+              if (!skillName) {
+                // Skills still loading — render a skeleton card.
+                return (
+                  <div
+                    key={tag.skillId}
+                    className="p-4 rounded-xl bg-gray-50 border border-gray-200 animate-pulse"
+                  >
+                    <div className="h-4 w-24 bg-gray-200 rounded mb-2" />
+                    <div className="h-3 w-3/4 bg-gray-200 rounded" />
+                  </div>
+                )
+              }
 
               return (
                 <div
@@ -38,7 +92,7 @@ export function ReflectionSynthesis({ synthesisText, skillTags, onDone }: Props)
                 >
                   <div className="flex items-center gap-2 mb-1.5">
                     <span className="text-xs px-2 py-0.5 bg-green-700 text-white rounded-full font-medium">
-                      {skill.name}
+                      {skillName}
                     </span>
                   </div>
                   {tag.rationale && (

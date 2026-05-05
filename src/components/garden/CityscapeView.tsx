@@ -1,8 +1,7 @@
 'use client'
 
-import type { GardenData } from '@/lib/types'
-import { PILLAR_COLORS } from '@/lib/constants'
-import { pillars } from '@/data'
+import type { GardenData, GardenPlant } from '@/lib/types'
+import { getPillarColors } from '@/lib/constants'
 import { Building } from './Building'
 import { CityscapeLegend } from './CityscapeLegend'
 
@@ -11,34 +10,35 @@ interface Props {
   onPlantClick?: (skillId: string) => void
 }
 
+/**
+ * Cityscape view variant of the garden. Shares the same data shape +
+ * pillar grouping logic as Garden.tsx — see that file for why we
+ * derive groups from plant data rather than the static pillars seed.
+ */
 export function CityscapeView({ data, onPlantClick }: Props) {
-  const activePillars = pillars.filter(p =>
-    data.plants.some(plant => plant.pillarId === p.id)
-  )
+  const pillarGroups = groupPlantsByPillar(data.plants)
 
   return (
     <div className="space-y-6">
-      {activePillars.map(pillar => {
-        const pillarColors = PILLAR_COLORS[pillar.id as keyof typeof PILLAR_COLORS]
-        const pillarPlants = data.plants.filter(p => p.pillarId === pillar.id)
-
+      {pillarGroups.map(group => {
+        const pillarColors = getPillarColors(group.pillarName)
         return (
           <div
-            key={pillar.id}
+            key={group.pillarId}
             className="rounded-2xl border p-5"
             style={{
-              backgroundColor: pillarColors?.bg || '#f8fafc',
-              borderColor: pillarColors?.border || '#e2e8f0',
+              backgroundColor: pillarColors.bg,
+              borderColor: pillarColors.border,
             }}
           >
             <h3
               className="text-sm font-semibold mb-4"
-              style={{ color: pillarColors?.text || '#334155' }}
+              style={{ color: pillarColors.text }}
             >
-              {pillar.name}
+              {group.pillarName}
             </h3>
             <div className="flex flex-wrap gap-4 justify-start items-end">
-              {pillarPlants.map(plant => (
+              {group.plants.map(plant => (
                 <Building
                   key={plant.skillId}
                   plant={plant}
@@ -53,4 +53,27 @@ export function CityscapeView({ data, onPlantClick }: Props) {
       <CityscapeLegend />
     </div>
   )
+}
+
+interface PillarGroup {
+  pillarId: string
+  pillarName: string
+  plants: GardenPlant[]
+}
+
+function groupPlantsByPillar(plants: GardenPlant[]): PillarGroup[] {
+  const groups = new Map<string, PillarGroup>()
+  for (const plant of plants) {
+    const existing = groups.get(plant.pillarId)
+    if (existing) {
+      existing.plants.push(plant)
+    } else {
+      groups.set(plant.pillarId, {
+        pillarId: plant.pillarId,
+        pillarName: plant.pillarName,
+        plants: [plant],
+      })
+    }
+  }
+  return Array.from(groups.values())
 }
