@@ -1,0 +1,165 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+
+/**
+ * One-time data-handling notice shown to students on their first
+ * portfolio visit. Pops up over the garden, explains in plain
+ * language what we pull from D2L, and records an acknowledgement
+ * timestamp so it doesn't show again.
+ *
+ * Mounted unconditionally on the garden page; the component decides
+ * whether to render based on /api/student/acknowledge-consent. That
+ * means non-students (a coach who somehow lands on /garden) and
+ * already-acknowledged students see nothing — the rendering branch
+ * never fires.
+ *
+ * Not a legal-grade consent flow. Doesn't gate access. Purpose is
+ * "no surprises the first time you see your D2L work appear in the
+ * portfolio" + an auditable timestamp on the student row.
+ */
+
+interface ConsentStatus {
+  acknowledged: boolean
+  acknowledgedAt: string | null
+}
+
+export function DataConsentModal() {
+  const [status, setStatus] = useState<ConsentStatus | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/student/acknowledge-consent', { cache: 'no-store' })
+      .then(r => r.json())
+      .then((j: ConsentStatus) => {
+        if (!cancelled) setStatus(j)
+      })
+      .catch(() => {
+        // If the status fetch fails, default to "don't show" — better
+        // to skip the modal than to show it spuriously and risk
+        // hammering an unauthenticated user with a privacy notice
+        // they shouldn't see.
+        if (!cancelled) setStatus({ acknowledged: true, acknowledgedAt: null })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // While loading, OR if already acknowledged, render nothing.
+  if (!status || status.acknowledged) return null
+
+  const handleAcknowledge = async () => {
+    setSubmitting(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/student/acknowledge-consent', {
+        method: 'POST',
+      })
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new Error(j.error || `HTTP ${res.status}`)
+      }
+      const j = (await res.json()) as { acknowledgedAt: string }
+      setStatus({ acknowledged: true, acknowledgedAt: j.acknowledgedAt })
+    } catch (e) {
+      setError(String(e))
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50">
+      <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-2xl">🌱</span>
+          <h2 className="text-lg font-bold text-green-900">
+            Welcome to your Growth Portfolio
+          </h2>
+        </div>
+
+        <p className="text-sm text-gray-700 mb-3">
+          Before you get started, here&rsquo;s what we want you to know about
+          how this works.
+        </p>
+
+        <h3 className="text-sm font-semibold text-gray-900 mt-4 mb-2">
+          What we bring in from Brightspace
+        </h3>
+        <p className="text-sm text-gray-700 mb-2">
+          To help you reflect on your actual work, we automatically pull a few
+          things from your LE3 courses on D2L Brightspace:
+        </p>
+        <ul className="text-sm text-gray-700 list-disc pl-5 space-y-1 mb-3">
+          <li>
+            Your enrollment in LE3 courses (the course names you&rsquo;re
+            taking)
+          </li>
+          <li>
+            Assignments your instructors have set up — title, instructions,
+            and due date
+          </li>
+          <li>
+            Files you&rsquo;ve submitted to those assignments. We extract
+            text from those files so we can reference them in conversations
+            with you.
+          </li>
+          <li>
+            Grades and feedback your instructors provided on those
+            submissions
+          </li>
+          <li>
+            Your name and email (the same ones D2L has)
+          </li>
+        </ul>
+
+        <h3 className="text-sm font-semibold text-gray-900 mt-4 mb-2">
+          What we don&rsquo;t do
+        </h3>
+        <ul className="text-sm text-gray-700 list-disc pl-5 space-y-1 mb-3">
+          <li>We don&rsquo;t share your reflections with other students</li>
+          <li>
+            We don&rsquo;t send your work to instructors — only your assigned
+            LE3 coach sees what you write here
+          </li>
+          <li>
+            We don&rsquo;t use your work to train external AI models
+          </li>
+        </ul>
+
+        <h3 className="text-sm font-semibold text-gray-900 mt-4 mb-2">
+          AI in the conversations
+        </h3>
+        <p className="text-sm text-gray-700 mb-3">
+          The reflective questions you&rsquo;ll see are generated by an AI
+          model that reads your submitted work and your previous responses.
+          It does not replace your coach — it helps you think out loud
+          before you meet with them.
+        </p>
+
+        {error && (
+          <div className="mb-3 p-2 rounded bg-red-50 border border-red-200 text-xs text-red-800">
+            Couldn&rsquo;t record acknowledgement: {error}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 mt-5 pt-4 border-t border-gray-100">
+          <button
+            type="button"
+            onClick={handleAcknowledge}
+            disabled={submitting}
+            className="px-4 py-2 text-sm font-medium rounded-lg bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 transition-colors"
+          >
+            {submitting ? 'Saving…' : 'I understand — let’s go'}
+          </button>
+        </div>
+
+        <p className="text-[11px] text-gray-400 mt-3 text-center">
+          Questions about your data? Reach out to your LE3 coach.
+        </p>
+      </div>
+    </div>
+  )
+}

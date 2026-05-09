@@ -1,6 +1,7 @@
 import { getGardenData, getCurrentStudent } from '@/lib/queries'
 import { redirect } from 'next/navigation'
 import { GardenClient } from './GardenClient'
+import { DataConsentModal } from '@/components/student/DataConsentModal'
 
 export default async function GardenPage() {
   const student = await getCurrentStudent()
@@ -14,6 +15,10 @@ export default async function GardenPage() {
         {data.student.firstName}&apos;s Growth Portfolio
       </h1>
       <GardenClient data={data} />
+      {/* First-visit data-handling notice. Self-gates: renders
+          nothing if the student has already acknowledged or isn't
+          actually a student row. */}
+      <DataConsentModal />
     </main>
   )
 }
