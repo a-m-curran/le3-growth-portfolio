@@ -1,17 +1,21 @@
-import { StubCard } from '@/components/v2/StubCard'
+import { CaseloadView } from './CaseloadView'
 
+/**
+ * v2 Caseload page — full list of the coach's assigned students.
+ * Server component shell that mounts the client CaseloadView, which
+ * does the data fetching + filtering + click-through to student
+ * detail. Server-side here just to keep the route's metadata simple.
+ */
 export default function V2CaseloadPage() {
   return (
-    <StubCard
-      title="Caseload"
-      description="Browse all your assigned students. On desktop this will be a two-pane master/detail — list on the left, selected student summary on the right."
-      willContain={[
-        'Filterable list (needs attention / active this week / alphabetical)',
-        'Per-row: name, last activity, skill highlights, attention flag',
-        'Selecting a row opens the detail pane (or navigates on mobile)',
-        'Persistent "selected student" updates the sidebar picker',
-        'Empty state when caseload is empty (just-flushed, or fresh prod)',
-      ]}
-    />
+    <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Caseload</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Every student assigned to you. Click a card to dive in.
+        </p>
+      </div>
+      <CaseloadView />
+    </div>
   )
 }
