@@ -104,14 +104,16 @@ export function TodayView() {
       {data.ltiPinned && (
         <LtiPinnedCard
           pinned={data.ltiPinned}
-          onStart={() => router.push(`/v2/reflect?lti=${data.ltiPinned!.resourceLinkId}`)}
+          onStart={() =>
+            router.push(`/v2/reflect/start?lti=${data.ltiPinned!.resourceLinkId}`)
+          }
         />
       )}
 
       {/* Featured work */}
       <FeaturedWorkSection
         items={data.featuredWork}
-        onSelect={id => router.push(`/v2/reflect?work=${id}`)}
+        onSelect={id => router.push(`/v2/reflect/start?work=${id}`)}
       />
 
       {/* Week stats */}

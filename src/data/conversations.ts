@@ -463,6 +463,40 @@ export const conversations: GrowthConversation[] = [
     ],
   },
 
+  // Conv 19: BUS 200 Reflection (Spring Wk 13) — IN PROGRESS, mid Phase 2
+  // Tests the "Resume" affordance on /v2/reflect: Phase 1 answered,
+  // Phase 2 question generated, Phase 2 response not yet given.
+  {
+    id: 'conv_aja_19_inprogress',
+    studentId: 'stu_aja',
+    workId: 'work_aja_bus200_pivot',
+    quarter: 'Spring 2026',
+    weekNumber: 13,
+    status: 'in_progress',
+    startedAt: '2026-06-20T09:15:00Z',
+    workContext: 'Aja\'s BUS 200 group hit a wall when their survey data was inconclusive — she pivoted the methodology mid-project to interviews.',
+    promptPhase1: "You said the BUS 200 group survey didn't give you usable data and you pivoted to interviews instead. Walk me through that moment — what did the room feel like right before you suggested it?",
+    responsePhase1: "Everyone was panicking. The deadline was in like four days and our whole project was built around this survey. People were starting to blame each other and I was getting that familiar feeling of wanting to bail. But I'd been working on this exact issue at work — when one method doesn't work you don't just give up, you find another method. So I said 'what if we just talk to people instead.' I didn't expect anyone to say yes.",
+    promptPhase2: "You said \"I didn't expect anyone to say yes.\" Sit with that for a second — you offered the pivot anticipating you'd be ignored. What does it tell you about how you saw your role in the group before that moment?",
+    skillTags: [],
+  },
+
+  // Conv 20: Open reflection (Spring Wk 13) — IN PROGRESS journal entry
+  // Tests the journal in-progress experience: no work tied, Phase 1 only.
+  {
+    id: 'conv_aja_20_inprogress',
+    studentId: 'stu_aja',
+    conversationType: 'open_reflection',
+    quarter: 'Spring 2026',
+    weekNumber: 13,
+    status: 'in_progress',
+    startedAt: '2026-06-21T08:30:00Z',
+    reflectionDescription: 'Had a hard conversation with a classmate about our group project direction.',
+    workContext: 'Had a hard conversation with a classmate about our group project direction.',
+    promptPhase1: "You said you had a hard conversation with a classmate. Hard how — was it the topic, or the way the conversation went?",
+    skillTags: [],
+  },
+
   // ─── MARCUS CHEN — 4 CONVERSATIONS ────────────────
 
   {

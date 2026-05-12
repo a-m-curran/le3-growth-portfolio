@@ -108,7 +108,7 @@ export function ReflectView() {
               <li key={c.id}>
                 <button
                   type="button"
-                  onClick={() => router.push(`/conversation/${c.id}`)}
+                  onClick={() => setOpenConversationId(c.id)}
                   className="w-full text-left flex items-center gap-3 p-3 rounded-lg bg-amber-50/50 border border-amber-100 hover:border-amber-300 hover:bg-amber-50 transition-colors"
                 >
                   <div className="flex-1 min-w-0">
@@ -119,7 +119,7 @@ export function ReflectView() {
                       Phase {c.currentPhase} · Started {formatRelative(c.startedAt)}
                     </p>
                   </div>
-                  <span className="text-amber-600 text-sm shrink-0">Resume →</span>
+                  <span className="text-amber-600 text-sm shrink-0">View →</span>
                 </button>
               </li>
             ))}
@@ -139,7 +139,7 @@ export function ReflectView() {
               <li key={w.id}>
                 <button
                   type="button"
-                  onClick={() => router.push(`/reflect?work=${w.id}`)}
+                  onClick={() => router.push(`/v2/reflect/start?work=${w.id}`)}
                   className="w-full text-left flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   <div className="flex-1 min-w-0">

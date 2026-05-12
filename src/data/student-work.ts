@@ -223,6 +223,19 @@ export const studentWork: StudentWork[] = [
     weekNumber: 13,
     content: 'Presented her final project: a redesign plan for her nonprofit\'s organizational structure. Recommended flattening the hierarchy, creating cross-site communication channels, and establishing a feedback mechanism that doesn\'t route through the program director. Spoke without notes for the first time.',
   },
+  {
+    id: 'work_aja_bus200_pivot',
+    studentId: 'stu_aja',
+    title: 'BUS 200 Group Project Pivot',
+    description: 'Mid-project methodology change from surveys to interviews',
+    workType: 'project',
+    courseName: 'Business Fundamentals',
+    courseCode: 'BUS 200',
+    submittedAt: '2026-06-20T09:00:00Z',
+    quarter: 'Spring 2026',
+    weekNumber: 13,
+    content: 'Aja\'s BUS 200 group hit a wall when their survey data was inconclusive. With four days to deadline, she proposed pivoting to interview-based research. The group accepted, and Aja led the redesign mid-week.',
+  },
 
   // ─── MARCUS CHEN ──────────────────────────────────
   {

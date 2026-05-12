@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { AnimatePresence } from 'framer-motion'
 import { ConversationPanel } from '@/components/panels/ConversationPanel'
 import { ReflectForm } from '@/app/reflect/ReflectForm'
@@ -35,7 +34,6 @@ interface JournalResponse {
 }
 
 export function JournalView() {
-  const router = useRouter()
   const [data, setData] = useState<JournalResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [openConversationId, setOpenConversationId] = useState<string | null>(null)
@@ -85,14 +83,14 @@ export function JournalView() {
                   <li key={c.id}>
                     <button
                       type="button"
-                      onClick={() => router.push(`/conversation/${c.id}`)}
+                      onClick={() => setOpenConversationId(c.id)}
                       className="w-full text-left p-3 rounded-lg bg-amber-50/50 border border-amber-100 hover:border-amber-300 hover:bg-amber-50 transition-colors"
                     >
                       <p className="text-sm text-gray-900 line-clamp-2">
                         {c.description || 'Reflection'}
                       </p>
                       <p className="text-xs text-amber-700 mt-1">
-                        Phase {c.currentPhase} · Started {formatRelative(c.startedAt)} · Resume →
+                        Phase {c.currentPhase} · Started {formatRelative(c.startedAt)} · View →
                       </p>
                     </button>
                   </li>
