@@ -1,7 +1,8 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Sidebar } from './Sidebar'
 import { BottomTabBar } from './BottomTabBar'
 import { StudentPicker } from './StudentPicker'
@@ -63,11 +64,17 @@ export function AppShell({
  * Subtle sticky brand strip across the top of every v2 surface.
  * Keeps the app identity present without competing with sidebar /
  * tab nav. Click navigates home (/v2).
+ *
+ * NLU logo on the right is loaded from /nlu-logo.png. If the file
+ * isn't there (Next.js Image renders nothing on 404), the text
+ * "National Louis University" still appears as a fallback via
+ * useState onError.
  */
 function BrandBar({ role }: { role: 'student' | 'coach' }) {
+  const [logoFailed, setLogoFailed] = useState(false)
   return (
     <div className="sticky top-0 z-30 bg-white/85 backdrop-blur-sm border-b border-gray-200">
-      <div className="flex items-center justify-between gap-3 px-6 py-2.5">
+      <div className="flex items-center justify-between gap-3 px-6 py-2">
         <Link
           href={role === 'coach' ? '/v2/coach' : '/v2/today'}
           className="flex items-center gap-2 text-sm font-semibold text-green-900 hover:text-green-700 transition-colors"
@@ -75,9 +82,22 @@ function BrandBar({ role }: { role: 'student' | 'coach' }) {
           <span aria-hidden="true">🌱</span>
           <span>LE3 Growth Portfolio</span>
         </Link>
-        <span className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">
-          National Louis University
-        </span>
+        {logoFailed ? (
+          <span className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">
+            National Louis University
+          </span>
+        ) : (
+          <Image
+            src="/nlu-logo.png"
+            alt="National Louis University"
+            width={140}
+            height={24}
+            className="h-6 w-auto opacity-80"
+            onError={() => setLogoFailed(true)}
+            unoptimized
+            priority
+          />
+        )}
       </div>
     </div>
   )
