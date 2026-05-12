@@ -51,18 +51,39 @@ export async function GET() {
   }
 
   // ─── Demo mode short-circuit ─────────────────
+  // Give demo students fake activity profiles so the Today view shows
+  // a realistic mix of "needs attention" and "active recently" rather
+  // than every student showing as never-active.
   if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
+    const now = Date.now()
+    const daysAgo = (n: number) => new Date(now - n * 24 * 60 * 60 * 1000).toISOString()
+    // Hardcoded variation profile keyed by index. Deterministic so the
+    // demo always looks the same regardless of when it's loaded.
+    const profiles: Array<{ daysSinceActivity: number | null; count: number }> = [
+      { daysSinceActivity: 2, count: 10 },   // active, no attention
+      { daysSinceActivity: 25, count: 3 },   // needs attention (stale)
+      { daysSinceActivity: 5, count: 7 },    // active
+      { daysSinceActivity: null, count: 0 }, // needs attention (never active)
+    ]
     return NextResponse.json({
-      students: staticStudents.map(s => ({
-        id: s.id,
-        firstName: s.firstName,
-        lastName: s.lastName,
-        email: s.email,
-        cohort: s.cohort,
-        conversationCount: 0, // wire up later if useful for demo
-        lastActivityAt: null,
-        needsAttention: false,
-      })),
+      students: staticStudents.map((s, i) => {
+        const profile = profiles[i % profiles.length]
+        const lastActivityAt = profile.daysSinceActivity == null
+          ? null
+          : daysAgo(profile.daysSinceActivity)
+        const needsAttention =
+          profile.daysSinceActivity == null || profile.daysSinceActivity >= 21
+        return {
+          id: s.id,
+          firstName: s.firstName,
+          lastName: s.lastName,
+          email: s.email,
+          cohort: s.cohort,
+          conversationCount: profile.count,
+          lastActivityAt,
+          needsAttention,
+        }
+      }),
     })
   }
 
