@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { AnimatePresence } from 'framer-motion'
 import { ConversationPanel } from '@/components/panels/ConversationPanel'
 import { ReflectForm } from '@/app/reflect/ReflectForm'
@@ -34,6 +35,7 @@ interface JournalResponse {
 }
 
 export function JournalView() {
+  const router = useRouter()
   const [data, setData] = useState<JournalResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [openConversationId, setOpenConversationId] = useState<string | null>(null)
@@ -104,14 +106,14 @@ export function JournalView() {
             <Card>
               <SectionHeader
                 title="Past entries"
-                meta={`${data.completed.length} reflection${data.completed.length === 1 ? '' : 's'}`}
+                meta={`${data.completed.length} reflection${data.completed.length === 1 ? '' : 's'} · click to replay`}
               />
               <ul className="space-y-2">
                 {data.completed.map(c => (
                   <li key={c.id}>
                     <button
                       type="button"
-                      onClick={() => setOpenConversationId(c.id)}
+                      onClick={() => router.push(`/v2/conversation/${c.id}`)}
                       className="w-full text-left p-3 rounded-lg bg-gray-50 border border-gray-100 hover:border-green-300 hover:bg-white transition-colors"
                     >
                       <div className="flex items-center gap-2 mb-1">

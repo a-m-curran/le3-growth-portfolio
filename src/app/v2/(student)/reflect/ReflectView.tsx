@@ -162,14 +162,14 @@ export function ReflectView() {
         <Card>
           <SectionHeader
             title="Past reflections"
-            meta={`${data.completed.length} completed`}
+            meta={`${data.completed.length} completed · click to replay`}
           />
           <ul className="space-y-2">
             {data.completed.map(c => (
               <li key={c.id}>
                 <button
                   type="button"
-                  onClick={() => setOpenConversationId(c.id)}
+                  onClick={() => router.push(`/v2/conversation/${c.id}`)}
                   className="w-full text-left p-3 rounded-lg bg-gray-50 border border-gray-100 hover:border-green-300 hover:bg-white transition-colors"
                 >
                   <div className="flex items-center gap-2 mb-1">
