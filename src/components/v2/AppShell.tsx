@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { Sidebar } from './Sidebar'
 import { BottomTabBar } from './BottomTabBar'
 import { StudentPicker } from './StudentPicker'
@@ -65,13 +64,11 @@ export function AppShell({
  * Keeps the app identity present without competing with sidebar /
  * tab nav. Click navigates home (/v2).
  *
- * NLU logo on the right is loaded from /nlu-logo.png. If the file
- * isn't there (Next.js Image renders nothing on 404), the text
- * "National Louis University" still appears as a fallback via
- * useState onError.
+ * NLU logo is an SVG loaded directly via <img>. SVG renders sharply
+ * at any size, doesn't need Next.js Image optimization, and is small
+ * enough (~10KB) that the perf overhead is negligible.
  */
 function BrandBar({ role }: { role: 'student' | 'coach' }) {
-  const [logoFailed, setLogoFailed] = useState(false)
   return (
     <div className="sticky top-0 z-30 bg-white/85 backdrop-blur-sm border-b border-gray-200">
       <div className="flex items-center justify-between gap-3 px-6 py-2">
@@ -82,22 +79,12 @@ function BrandBar({ role }: { role: 'student' | 'coach' }) {
           <span aria-hidden="true">🌱</span>
           <span>LE3 Growth Portfolio</span>
         </Link>
-        {logoFailed ? (
-          <span className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">
-            National Louis University
-          </span>
-        ) : (
-          <Image
-            src="/nlu-logo.png"
-            alt="National Louis University"
-            width={140}
-            height={24}
-            className="h-6 w-auto opacity-80"
-            onError={() => setLogoFailed(true)}
-            unoptimized
-            priority
-          />
-        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/nlu-logo.svg"
+          alt="National Louis University"
+          className="h-6 w-auto opacity-80"
+        />
       </div>
     </div>
   )
