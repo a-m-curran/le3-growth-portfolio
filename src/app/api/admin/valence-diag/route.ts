@@ -231,10 +231,16 @@ export async function GET() {
   // endpoint specifically requires v1.82+.
 
   // Pick the first course offering as a probe target.
-  // Probe 6 already hit descendants, so look for that probe's body excerpt
-  // and extract the first course org unit ID. If that probe failed, fall
-  // back to probing one known test course ID hardcoded for context.
-  const firstCourseOuId = extractFirstCourseOuId(results) ?? '242430'
+  // 1. Prefer the first course extracted from the descendants probe body
+  //    (works when the configured org unit is a container with children).
+  // 2. Otherwise fall back to the configured le3OrgUnitId itself — that's
+  //    the right target when NLU scoped the OAuth app directly to a
+  //    single course rather than a parent container (sandbox / pilot
+  //    cohort setup).
+  // The old hardcoded fallback (a stale test course ID) caused 403s
+  // against any other instance.
+  const firstCourseOuId =
+    extractFirstCourseOuId(results) ?? config.le3OrgUnitId
 
   // Probe 9: classlist for the first course — shows us the full roster
   // including whether emails are populated. This is the critical probe
