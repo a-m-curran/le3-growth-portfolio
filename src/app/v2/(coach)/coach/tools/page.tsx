@@ -1,23 +1,23 @@
 import { redirect } from 'next/navigation'
-import { getCurrentCoach, getRecentSyncRuns, getLastSuccessfulSyncRun } from '@/lib/queries'
+import { getRecentSyncRuns, getLastSuccessfulSyncRun } from '@/lib/queries'
+import { getV2Identity, isAdminEmail } from '@/lib/v2-auth'
 import { ToolsView } from './ToolsView'
 
 /**
  * v2 Tools — admin observability surface.
  *
  * Relocates the Sync / LTI / Live Activity / Sync Status panels off
- * the main /coach Today view. Gated to ADMIN_EMAILS (the layout's
- * showAdmin flag also hides this from the sidebar nav for
- * non-admins) so the daily-driver path stays clean for other coaches.
- *
- * Components reused from v1 wholesale — they're already self-contained
- * client components with their own data fetching.
+ * the main /coach Today view. Gated to ADMIN_EMAILS via real auth
+ * identity (getV2Identity) — NOT getCurrentCoach, which in demo mode
+ * returns the demo coach (Elizabeth) and would fail the admin check
+ * even for the actual builder.
  */
 export default async function V2ToolsPage() {
-  const coach = await getCurrentCoach()
-  if (!coach) redirect('/login')
+  const identity = await getV2Identity()
+  if (!identity) redirect('/login')
 
-  if (!isAdminEmail(coach.email)) {
+  const allowed = identity.role === 'coach' && isAdminEmail(identity.email)
+  if (!allowed) {
     return (
       <div className="max-w-2xl mx-auto px-6 py-10">
         <div className="rounded-2xl bg-white border border-gray-200 p-8 text-center">
@@ -51,11 +51,4 @@ export default async function V2ToolsPage() {
       <ToolsView recentSyncRuns={recentSyncRuns} lastSuccessful={lastSuccessful} />
     </div>
   )
-}
-
-function isAdminEmail(email: string): boolean {
-  const raw = process.env.ADMIN_EMAILS || ''
-  if (!raw.trim()) return false
-  const list = raw.split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
-  return list.includes(email.toLowerCase())
 }

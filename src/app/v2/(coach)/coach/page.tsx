@@ -1,5 +1,5 @@
-import { getCurrentCoach } from '@/lib/queries'
 import { redirect } from 'next/navigation'
+import { getV2Identity } from '@/lib/v2-auth'
 import { CoachTodayView } from './TodayView'
 
 /**
@@ -18,10 +18,13 @@ import { CoachTodayView } from './TodayView'
  *   5. Quick actions — Sync, View caseload, Diagnostics
  */
 export default async function V2CoachTodayPage() {
-  const coach = await getCurrentCoach()
-  if (!coach) redirect('/login')
+  // Use real auth identity so the greeting reflects the actual user,
+  // not a demo-mode placeholder. Data on the page still flows through
+  // /api/coach/students which has its own demo short-circuit.
+  const identity = await getV2Identity()
+  if (!identity) redirect('/login')
 
-  const firstName = coach.name.split(/\s+/)[0] || coach.name
+  const firstName = identity.name.split(/\s+/)[0] || identity.name
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">

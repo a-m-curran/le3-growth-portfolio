@@ -12,7 +12,11 @@ import { MeView } from './MeView'
  */
 export default async function V2MePage() {
   const identity = await getV2Identity()
-  if (!identity) redirect('/login')
+  if (!identity) {
+    redirect(
+      process.env.NEXT_PUBLIC_DEMO_MODE === 'true' ? '/v2/demo' : '/login'
+    )
+  }
 
   const showAdmin =
     identity.role === 'coach' && isAdminEmail(identity.email)

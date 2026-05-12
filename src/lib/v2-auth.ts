@@ -17,6 +17,9 @@
 import { createServerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { students as staticStudents, coaches as staticCoaches } from '@/data'
+
+const PERSONA_COOKIE = 'le3-v2-demo-persona'
 
 export type V2Identity =
   | {
@@ -39,6 +42,22 @@ export type V2Identity =
 
 export async function getV2Identity(): Promise<V2Identity | null> {
   const cookieStore = cookies()
+
+  // ─── Demo persona override ──────────────────
+  // When demo mode is on AND a persona cookie is set (via /v2/demo),
+  // the persona's identity drives the shell. Lets stakeholders click
+  // "Try as Aja" and have the whole experience feel like they're Aja —
+  // sidebar shows her name, not the actual authenticated user. No real
+  // auth required, which is appropriate for demo viewing.
+  if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
+    const persona = cookieStore.get(PERSONA_COOKIE)?.value
+    if (persona) {
+      const fromPersona = resolveDemoPersona(persona)
+      if (fromPersona) return fromPersona
+    }
+  }
+
+  // ─── Real Supabase auth ─────────────────────
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -113,3 +132,37 @@ export function isAdminEmail(email: string): boolean {
   const list = raw.split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
   return list.includes(email.toLowerCase())
 }
+
+/**
+ * Resolve a demo persona id (e.g. 'stu_aja' or 'coach_elizabeth')
+ * to a V2Identity object using the static seed in src/data/.
+ * Returns null if the id doesn't match a known persona.
+ */
+function resolveDemoPersona(personaId: string): V2Identity | null {
+  const student = staticStudents.find(s => s.id === personaId)
+  if (student) {
+    return {
+      role: 'student',
+      id: student.id,
+      firstName: student.firstName,
+      lastName: student.lastName,
+      name: `${student.firstName} ${student.lastName}`.trim(),
+      email: student.email,
+      cohort: student.cohort,
+      authUserId: `demo:${student.id}`,
+    }
+  }
+  const coach = staticCoaches.find(c => c.id === personaId)
+  if (coach) {
+    return {
+      role: 'coach',
+      id: coach.id,
+      name: coach.name,
+      email: coach.email,
+      authUserId: `demo:${coach.id}`,
+    }
+  }
+  return null
+}
+
+export { PERSONA_COOKIE }

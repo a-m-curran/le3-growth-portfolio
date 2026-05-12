@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { AppShell } from '@/components/v2/AppShell'
 import { getV2Identity, isAdminEmail } from '@/lib/v2-auth'
 
@@ -10,11 +11,16 @@ import { getV2Identity, isAdminEmail } from '@/lib/v2-auth'
  */
 export default async function CoachGroupLayout({ children }: { children: React.ReactNode }) {
   const identity = await getV2Identity()
-  const name = identity?.name ?? 'You'
+  if (!identity) {
+    redirect(
+      process.env.NEXT_PUBLIC_DEMO_MODE === 'true' ? '/v2/demo' : '/login'
+    )
+  }
+  const name = identity.name
   const subLabel =
-    identity?.role === 'coach' ? 'Coach' : 'Previewing coach experience'
+    identity.role === 'coach' ? 'Coach' : 'Previewing coach experience'
 
-  const showAdmin = identity?.role === 'coach' && isAdminEmail(identity.email)
+  const showAdmin = identity.role === 'coach' && isAdminEmail(identity.email)
 
   return (
     <AppShell role="coach" userName={name} userSubLabel={subLabel} showAdmin={showAdmin}>
