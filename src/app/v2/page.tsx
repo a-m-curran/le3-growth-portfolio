@@ -1,17 +1,13 @@
 import { redirect } from 'next/navigation'
-import { getCurrentStudent, getCurrentCoach } from '@/lib/queries'
+import { getV2Identity } from '@/lib/v2-auth'
 
 /**
- * /v2 root — redirects to the right Today view based on role.
- * Layout above already enforces auth; this is just the
- * coach-vs-student fork.
+ * /v2 root — redirects to the right Today view based on the real
+ * authenticated role. Layout above already enforces auth.
  */
 export default async function V2RootPage() {
-  const coach = await getCurrentCoach()
-  if (coach) redirect('/v2/coach')
-
-  const student = await getCurrentStudent()
-  if (student) redirect('/v2/today')
-
+  const identity = await getV2Identity()
+  if (identity?.role === 'coach') redirect('/v2/coach')
+  if (identity?.role === 'student') redirect('/v2/today')
   redirect('/login')
 }

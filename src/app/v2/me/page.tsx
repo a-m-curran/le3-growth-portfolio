@@ -1,44 +1,44 @@
 import { redirect } from 'next/navigation'
-import {
-  getCurrentCoach,
-  getCurrentStudent,
-} from '@/lib/queries'
+import { AppShell } from '@/components/v2/AppShell'
+import { getV2Identity, isAdminEmail } from '@/lib/v2-auth'
 import { MeView } from './MeView'
 
 /**
  * v2 Me — profile + account controls.
  *
- * Server component: resolves the current user (coach or student),
- * passes the relevant identity to the client view, which renders
- * account info and sign-out. Settings (notification preferences,
- * data-handling preferences re-show) are stubbed for now.
+ * Lives outside the (student) and (coach) route groups because it's
+ * accessible to both roles. Renders its own AppShell with role
+ * picked from the real authenticated identity.
  */
 export default async function V2MePage() {
-  const coach = await getCurrentCoach()
-  if (coach) {
-    return (
-      <MeView
-        kind="coach"
-        name={coach.name}
-        email={coach.email}
-        meta={coach.status === 'active' ? 'Active coach' : `Coach (${coach.status})`}
-      />
-    )
-  }
+  const identity = await getV2Identity()
+  if (!identity) redirect('/login')
 
-  const student = await getCurrentStudent()
-  if (student) {
-    return (
-      <MeView
-        kind="student"
-        name={`${student.firstName} ${student.lastName}`.trim()}
-        email={student.email}
-        meta={student.cohort || 'No cohort assigned'}
-        nluId={student.nluId}
-        programStartDate={student.programStartDate}
-      />
-    )
-  }
+  const showAdmin =
+    identity.role === 'coach' && isAdminEmail(identity.email)
 
-  redirect('/login')
+  return (
+    <AppShell
+      role={identity.role}
+      userName={identity.name}
+      userSubLabel={identity.role === 'coach' ? 'Coach' : identity.cohort}
+      showAdmin={showAdmin}
+    >
+      {identity.role === 'coach' ? (
+        <MeView
+          kind="coach"
+          name={identity.name}
+          email={identity.email}
+          meta="Active coach"
+        />
+      ) : (
+        <MeView
+          kind="student"
+          name={identity.name}
+          email={identity.email}
+          meta={identity.cohort || 'No cohort assigned'}
+        />
+      )}
+    </AppShell>
+  )
 }
