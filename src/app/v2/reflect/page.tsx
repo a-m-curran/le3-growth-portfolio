@@ -1,17 +1,28 @@
-import { StubCard } from '@/components/v2/StubCard'
+import { ReflectView } from './ReflectView'
 
+/**
+ * v2 Reflect — work-tied reflections.
+ *
+ * Sections:
+ *   - In progress: resume cards linking back to the v1 conversation
+ *     flow at /conversation/[id]
+ *   - Featured work: submissions awaiting reflection, click → v1
+ *     /reflect?work=<id> to start the conversation
+ *   - Completed: past work reflections, click → ConversationPanel
+ *     slide-out with full content
+ *
+ * Open standalone reflections live at /v2/journal, not here.
+ */
 export default function V2ReflectPage() {
   return (
-    <StubCard
-      title="Reflect"
-      description="Reflect on submitted student work. Work-tied conversations live here — each card represents an assignment you've submitted, in progress or completed. Open reflections (the “something on my mind” kind) live under Journal instead."
-      willContain={[
-        'In-progress reflections (resume cards)',
-        'Completed work reflections, grouped by quarter',
-        'Click a card → opens the conversation slide-out (full prompts + responses + synthesis)',
-        'Quick-start: pick a recent submission to reflect on',
-        'Empty state when D2L hasn\'t synced anything to reflect on',
-      ]}
-    />
+    <div className="max-w-3xl mx-auto px-6 py-8">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Reflect</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Reflect on submitted student work.
+        </p>
+      </div>
+      <ReflectView />
+    </div>
   )
 }

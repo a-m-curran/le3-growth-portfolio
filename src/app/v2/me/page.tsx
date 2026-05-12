@@ -1,17 +1,44 @@
-import { StubCard } from '@/components/v2/StubCard'
+import { redirect } from 'next/navigation'
+import {
+  getCurrentCoach,
+  getCurrentStudent,
+} from '@/lib/queries'
+import { MeView } from './MeView'
 
-export default function V2MePage() {
-  return (
-    <StubCard
-      title="Me"
-      description="Profile, settings, and account controls."
-      willContain={[
-        'Your name, NLU ID, cohort, coach',
-        'Privacy / data-handling preferences (re-show consent notice)',
-        'Notification preferences (once PWA push is wired)',
-        'Sign out',
-        'For coaches: program-level settings + sync schedule',
-      ]}
-    />
-  )
+/**
+ * v2 Me — profile + account controls.
+ *
+ * Server component: resolves the current user (coach or student),
+ * passes the relevant identity to the client view, which renders
+ * account info and sign-out. Settings (notification preferences,
+ * data-handling preferences re-show) are stubbed for now.
+ */
+export default async function V2MePage() {
+  const coach = await getCurrentCoach()
+  if (coach) {
+    return (
+      <MeView
+        kind="coach"
+        name={coach.name}
+        email={coach.email}
+        meta={coach.status === 'active' ? 'Active coach' : `Coach (${coach.status})`}
+      />
+    )
+  }
+
+  const student = await getCurrentStudent()
+  if (student) {
+    return (
+      <MeView
+        kind="student"
+        name={`${student.firstName} ${student.lastName}`.trim()}
+        email={student.email}
+        meta={student.cohort || 'No cohort assigned'}
+        nluId={student.nluId}
+        programStartDate={student.programStartDate}
+      />
+    )
+  }
+
+  redirect('/login')
 }
