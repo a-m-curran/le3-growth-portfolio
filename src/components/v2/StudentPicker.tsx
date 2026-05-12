@@ -28,7 +28,18 @@ export function StudentPicker() {
   const router = useRouter()
   const pathname = usePathname()
   const params = useSearchParams()
-  const selectedId = params.get('student')
+  // Selected student can come from either:
+  //   - The path /v2/coach/[id] (when viewing student detail)
+  //   - A ?student=<id> query param (when on other coach routes)
+  // Path always wins because it's the canonical "currently viewing"
+  // location.
+  const pathMatch = pathname.match(/^\/v2\/coach\/([^/?]+)$/)
+  const pathId =
+    pathMatch &&
+    !['caseload', 'tools'].includes(pathMatch[1])
+      ? pathMatch[1]
+      : null
+  const selectedId = pathId || params.get('student')
 
   const [open, setOpen] = useState(false)
   const [students, setStudents] = useState<StudentOption[]>([])
