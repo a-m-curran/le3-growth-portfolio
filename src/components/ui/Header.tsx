@@ -6,10 +6,14 @@ import { usePathname } from 'next/navigation'
 export function Header() {
   const pathname = usePathname()
 
-  // Hide on demo, login, privacy, and terms pages (they have their own layouts
-  // or no authenticated user to scope the header to)
+  // Hide on demo, login, privacy, terms, and v2 pages.
+  // v2 is the IA exploration shell — it has its own sidebar and bottom
+  // tab bar, so the global top nav would be redundant and visually
+  // noisy alongside it. When we cut over from v1 routes to v2, the
+  // global Header is replaced wholesale by AppShell (sidebar + tab bar).
   if (
     pathname.startsWith('/demo') ||
+    pathname.startsWith('/v2') ||
     pathname === '/login' ||
     pathname === '/privacy' ||
     pathname === '/terms'
