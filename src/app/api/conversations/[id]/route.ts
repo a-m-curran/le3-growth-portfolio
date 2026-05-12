@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase-admin'
+import {
+  getConversation as getStaticConversation,
+  getStudentWork as getStaticWork,
+  getSkill as getStaticSkill,
+} from '@/data'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -17,19 +22,64 @@ export const runtime = 'nodejs'
  *   - Work title + course (joined from student_work) so the panel
  *     header reads correctly without a separate fetch
  *
- * Authorization: only the student who owns the conversation, or a
- * coach who is assigned to that student, can read.
+ * In demo mode (NEXT_PUBLIC_DEMO_MODE=true) returns the static seed
+ * from src/data/conversations.ts so demo flows work without a DB.
+ * In normal mode queries growth_conversation via Supabase admin client.
  *
- * Built specifically to back ConversationPanel.tsx's "open past
- * conversation from the garden plant detail" flow. The previous
- * implementation imported from a static seed and never resolved DB
- * UUIDs — clicking a past conversation would silently render
- * nothing.
+ * Authorization (DB mode only): only the student who owns the
+ * conversation, or a coach who is assigned to that student, can read.
+ * Demo mode is unauthenticated since the seed data is non-sensitive.
  */
 export async function GET(
   _req: Request,
   { params }: { params: { id: string } }
 ) {
+  // ─── Demo mode short-circuit ─────────────────
+  if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
+    const conv = getStaticConversation(params.id)
+    if (!conv) {
+      return NextResponse.json(
+        { error: 'Conversation not found' },
+        { status: 404 }
+      )
+    }
+    const work = conv.workId ? getStaticWork(conv.workId) : null
+    return NextResponse.json({
+      id: conv.id,
+      studentId: conv.studentId,
+      workId: conv.workId,
+      status: conv.status,
+      startedAt: conv.startedAt,
+      completedAt: conv.completedAt ?? null,
+      durationSeconds: conv.durationSeconds ?? null,
+      quarter: conv.quarter,
+      weekNumber: conv.weekNumber ?? null,
+      workContext: conv.workContext,
+      workTitle: work?.title ?? null,
+      courseName: work?.courseName ?? null,
+      courseCode: work?.courseCode ?? null,
+      promptPhase1: conv.promptPhase1 ?? null,
+      responsePhase1: conv.responsePhase1 ?? null,
+      promptPhase2: conv.promptPhase2 ?? null,
+      responsePhase2: conv.responsePhase2 ?? null,
+      promptPhase3: conv.promptPhase3 ?? null,
+      responsePhase3: conv.responsePhase3 ?? null,
+      synthesisText: conv.synthesisText ?? null,
+      suggestedInsight: conv.suggestedInsight ?? null,
+      skillTags: (conv.skillTags ?? []).map(t => {
+        const skill = getStaticSkill(t.skillId)
+        return {
+          skillId: t.skillId,
+          skillName: skill?.name ?? null,
+          confidence: t.confidence,
+          studentConfirmed: t.studentConfirmed,
+          rationale: t.rationale ?? null,
+        }
+      }),
+    })
+  }
+
+  // ─── DB-backed flow (production) ─────────────
   const cookieStore = cookies()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
