@@ -710,17 +710,22 @@ export async function getSessionPrep(
 
   const { data: convoRows } = await supabase
     .from('growth_conversation')
-    .select('*, conversation_skill_tag(*)')
+    .select('*, conversation_skill_tag(*), student_work(title)')
     .eq('student_id', studentId)
     .eq('status', 'completed')
     .order('started_at', { ascending: false })
     .limit(3)
 
   const recentConversations = (convoRows || []).map(row => {
-    const conv = snakeToCamel(row) as unknown as GrowthConversation
+    const conv = snakeToCamel(row) as unknown as GrowthConversation & {
+      workTitle?: string | null
+    }
     conv.skillTags = (row.conversation_skill_tag || []).map(
       (t: Record<string, unknown>) => snakeToCamel(t)
     )
+    // Pull joined work title onto the conversation for Prep card display
+    const work = (row as { student_work?: { title: string } | null }).student_work
+    conv.workTitle = work?.title ?? null
     return conv
   }).reverse()
 
@@ -766,7 +771,7 @@ export async function getSessionPrep(
     const previousDef = defs.find(d => d.skillId === skill.id && !d.isCurrent)
     if (currentDef && previousDef) {
       patterns.push(
-        `${student.firstName}'s ${skill.name} language has shifted from "${previousDef.definitionText.substring(0, 50)}..." to "${currentDef.definitionText.substring(0, 50)}..."`
+        `${student.firstName}'s ${skill.name} language has shifted from "${previousDef.definitionText}" to "${currentDef.definitionText}"`
       )
     }
   }
@@ -779,7 +784,12 @@ function buildSessionPrepFromStatic(coachId: string, studentId: string): Session
   if (!student) throw new Error(`Student not found: ${studentId}`)
 
   const allConvos = staticData.getStudentConversations(studentId)
-  const recentConversations = allConvos.slice(-3)
+  // Join work title onto each recent conversation so Prep cards show
+  // the assignment name instead of generic "Reflection".
+  const recentConversations = allConvos.slice(-3).map(c => ({
+    ...c,
+    workTitle: c.workId ? staticData.getStudentWork(c.workId)?.title ?? null : null,
+  }))
 
   const notes = staticData.getCoachNotes(coachId, studentId)
   const lastNote = notes[0] ?? null
@@ -796,7 +806,7 @@ function buildSessionPrepFromStatic(coachId: string, studentId: string): Session
     const curr = staticData.getCurrentDefinition(studentId, skill.id)
     if (prev && curr && prev.id !== curr.id) {
       patterns.push(
-        `${student.firstName}'s ${skill.name} language has shifted from "${prev.definitionText.substring(0, 50)}..." to "${curr.definitionText.substring(0, 50)}..."`
+        `${student.firstName}'s ${skill.name} language has shifted from "${prev.definitionText}" to "${curr.definitionText}"`
       )
     }
   }

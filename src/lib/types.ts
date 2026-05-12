@@ -284,7 +284,11 @@ export interface AttentionItem {
 
 export interface SessionPrepData {
   student: Student
-  recentConversations: GrowthConversation[]
+  // Each conversation carries an optional workTitle joined from
+  // student_work so the coach Prep view can show the assignment name
+  // instead of generic "Reflection". Populated by both queries.ts
+  // (DB mode) and demo-queries.ts (demo mode).
+  recentConversations: (GrowthConversation & { workTitle?: string | null })[]
   patterns: string[]
   currentGoals: StudentGoal[]
   lastNote: CoachNote | null

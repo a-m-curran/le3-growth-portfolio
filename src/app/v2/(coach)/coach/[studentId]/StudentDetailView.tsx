@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { ConversationPanel } from '@/components/panels/ConversationPanel'
-import type { CoachNote, GardenData, SessionPrepData } from '@/lib/types'
+import { SkillPanel } from '@/components/panels/SkillPanel'
+import type { CoachNote, GardenData, GardenPlant, SessionPrepData } from '@/lib/types'
 
 /**
  * v2 Student Detail view — coach's deep view of one student.
@@ -46,6 +47,7 @@ export function StudentDetailView({
 }: StudentDetailViewProps) {
   const [tab, setTabState] = useState<Tab>(initialTab)
   const [openConversationId, setOpenConversationId] = useState<string | null>(null)
+  const [selectedPlant, setSelectedPlant] = useState<GardenPlant | null>(null)
 
   const setTab = (next: Tab) => {
     setTabState(next)
@@ -89,15 +91,28 @@ export function StudentDetailView({
           onOpenConversation={id => setOpenConversationId(id)}
         />
       )}
-      {tab === 'portfolio' && <PortfolioTab garden={garden} />}
+      {tab === 'portfolio' && (
+        <PortfolioTab garden={garden} onSelectSkill={p => setSelectedPlant(p)} />
+      )}
       {tab === 'notes' && <NotesTab notes={notes} student={student} />}
 
-      {/* Conversation panel triggered from Prep tab */}
+      {/* Conversation panel triggered from Prep tab AND from inside
+          SkillPanel when a coach clicks into a skill's conversations */}
       <AnimatePresence>
         {openConversationId && (
           <ConversationPanel
             conversationId={openConversationId}
             onClose={() => setOpenConversationId(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Skill drill-in panel triggered from Portfolio tab */}
+      <AnimatePresence>
+        {selectedPlant && (
+          <SkillPanel
+            plant={selectedPlant}
+            onClose={() => setSelectedPlant(null)}
           />
         )}
       </AnimatePresence>
@@ -212,12 +227,17 @@ function PrepTab({
       {/* Patterns */}
       {patterns.length > 0 && (
         <Card>
-          <SectionHeader title="Patterns to explore" />
+          <SectionHeader
+            title="Patterns to explore"
+            meta={`${patterns.length} observation${patterns.length === 1 ? '' : 's'}`}
+          />
           <ul className="space-y-2">
             {patterns.map((p, i) => (
-              <li key={i} className="text-sm text-gray-700 flex gap-2">
-                <span className="text-gray-400 mt-0.5">•</span>
-                <span>{p}</span>
+              <li
+                key={i}
+                className="p-3 rounded-lg bg-amber-50/50 border border-amber-100 text-sm text-gray-800"
+              >
+                {p}
               </li>
             ))}
           </ul>
@@ -244,7 +264,13 @@ function PrepTab({
   )
 }
 
-function PortfolioTab({ garden }: { garden: GardenData | null }) {
+function PortfolioTab({
+  garden,
+  onSelectSkill,
+}: {
+  garden: GardenData | null
+  onSelectSkill: (plant: GardenPlant) => void
+}) {
   if (!garden) {
     return (
       <Card>
@@ -283,9 +309,11 @@ function PortfolioTab({ garden }: { garden: GardenData | null }) {
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {group.plants.map(plant => (
-                <div
+                <button
                   key={plant.skillId}
-                  className="p-3 rounded-lg bg-gray-50 border border-gray-100"
+                  type="button"
+                  onClick={() => onSelectSkill(plant)}
+                  className="text-left p-3 rounded-lg bg-gray-50 border border-gray-100 hover:border-green-400 hover:bg-white hover:shadow-sm transition-colors"
                 >
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-sm font-medium text-gray-900">{plant.skillName}</span>
@@ -301,8 +329,11 @@ function PortfolioTab({ garden }: { garden: GardenData | null }) {
                   <p className="text-[11px] text-gray-400 mt-1">
                     {plant.conversationCount} conversation
                     {plant.conversationCount === 1 ? '' : 's'}
+                    {plant.conversationCount > 0 && (
+                      <span className="ml-2 text-green-700">View →</span>
+                    )}
                   </p>
-                </div>
+                </button>
               ))}
             </div>
           </div>

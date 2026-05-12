@@ -123,7 +123,12 @@ export function getSessionPrep(coachId: string, studentId: string): SessionPrepD
   if (!student) throw new Error(`Student not found: ${studentId}`)
 
   const allConvos = staticData.getStudentConversations(studentId)
-  const recentConversations = allConvos.slice(-3)
+  // Join work title onto each recent conversation so Prep cards show
+  // the assignment name instead of a generic "Reflection".
+  const recentConversations = allConvos.slice(-3).map(c => ({
+    ...c,
+    workTitle: c.workId ? staticData.getStudentWork(c.workId)?.title ?? null : null,
+  }))
 
   const notes = staticData.getCoachNotes(coachId, studentId)
   const lastNote = notes[0] ?? null
@@ -140,7 +145,7 @@ export function getSessionPrep(coachId: string, studentId: string): SessionPrepD
     const curr = staticData.getCurrentDefinition(studentId, skill.id)
     if (prev && curr && prev.id !== curr.id) {
       patterns.push(
-        `${student.firstName}'s ${skill.name} language has shifted from "${prev.definitionText.substring(0, 50)}..." to "${curr.definitionText.substring(0, 50)}..."`
+        `${student.firstName}'s ${skill.name} language has shifted from "${prev.definitionText}" to "${curr.definitionText}"`
       )
     }
   }
