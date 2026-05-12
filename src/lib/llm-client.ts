@@ -54,7 +54,12 @@ function createAnthropicClient(): LLMClient {
   const Anthropic = require('@anthropic-ai/sdk').default
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-  const model = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5-20250929'
+  // Default to the latest Sonnet at time of writing. Anthropic's API
+  // doesn't expose a "claude-sonnet-latest" alias — every ID is a pinned
+  // snapshot — so this default needs to be bumped manually when a new
+  // generation lands. Override per-deployment via the ANTHROPIC_MODEL
+  // env var rather than editing this file.
+  const model = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
 
   return {
     provider: 'anthropic',
