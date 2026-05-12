@@ -1,17 +1,25 @@
-import { StubCard } from '@/components/v2/StubCard'
+import { TodayView } from './TodayView'
 
-export default function V2TodayPage() {
+/**
+ * v2 Student Today — the "what should I do now" home for students.
+ *
+ * Lands here on:
+ *   - Direct sign-in (replaces /garden as the post-auth destination)
+ *   - LTI launch (the launched resource is pinned at the top)
+ *
+ * Layout sections:
+ *   - LTI pinned: when arriving from Brightspace, the launched
+ *     assignment surfaces as the top action
+ *   - Featured work: submitted assignments not yet reflected on
+ *   - Recent journal: open standalone reflections (the "something
+ *     on my mind" kind, not work-tied)
+ *   - Quick actions: start a journal entry, open the garden
+ *   - This week summary: stats card
+ */
+export default function V2StudentTodayPage() {
   return (
-    <StubCard
-      title="Today"
-      description="What you should do right now. Surfaces the one thing waiting on you — usually a submitted assignment you haven't reflected on yet, or the LTI-launched resource if you arrived from Brightspace."
-      willContain={[
-        'Pinned LTI resource (when launched from Brightspace)',
-        'Featured assignments: submitted to D2L but not yet reflected on',
-        'Recent journal entries (your private reflections)',
-        '“Start something new” quick action',
-        'Quick-stat card: this week’s activity',
-      ]}
-    />
+    <div className="max-w-3xl mx-auto px-6 py-8">
+      <TodayView />
+    </div>
   )
 }
