@@ -3,16 +3,27 @@
 import type { ConversationSkillTag } from '@/lib/types'
 import { SkillTagSelector } from './SkillTagSelector'
 
+/**
+ * NOTE: This component previously included a "definition evolution"
+ * prompt block — two buttons ("Update Definition" / "Not Yet") that
+ * rendered when a `currentDefinition` prop was passed but had no
+ * onClick handlers and no backing API. The prop was never actually
+ * passed by either ConversationFlow caller, so the orphan buttons
+ * never appeared in practice. Removed in the clickability audit so
+ * the dead code can't accidentally ship visible later. If/when the
+ * team wants to ship the definition-update flow, it should be built
+ * with real handlers + a backing /api/student-skill-definition endpoint.
+ */
+
 interface SynthesisProps {
   synthesisText: string
   skillTags: ConversationSkillTag[]
-  currentDefinition?: string | null
   onDone: () => void
   onTagsChange?: (tags: ConversationSkillTag[]) => void
   editable?: boolean
 }
 
-export function Synthesis({ synthesisText, skillTags, currentDefinition, onDone, onTagsChange, editable = true }: SynthesisProps) {
+export function Synthesis({ synthesisText, skillTags, onDone, onTagsChange, editable = true }: SynthesisProps) {
   return (
     <div className="space-y-6">
       {/* Synthesis */}
@@ -37,27 +48,6 @@ export function Synthesis({ synthesisText, skillTags, currentDefinition, onDone,
           </p>
         )}
       </div>
-
-      {/* Definition evolution prompt (if applicable) */}
-      {currentDefinition && (
-        <div className="p-4 rounded-xl bg-purple-50 border border-purple-200">
-          <p className="text-xs text-purple-600 font-medium mb-1">Your current definition:</p>
-          <p className="text-sm text-purple-900 italic mb-3">
-            &ldquo;{currentDefinition}&rdquo;
-          </p>
-          <p className="text-sm text-purple-800 mb-3">
-            Your reflections sound different now. Would you like to update your definition?
-          </p>
-          <div className="flex gap-2">
-            <button className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-medium hover:bg-purple-700 transition-colors">
-              Update Definition
-            </button>
-            <button className="px-3 py-1.5 bg-white text-purple-600 rounded-lg text-xs font-medium border border-purple-300 hover:bg-purple-50 transition-colors">
-              Not Yet
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Done */}
       <div className="text-center pt-2">
