@@ -84,15 +84,20 @@ export function GrowthView({ data }: Props) {
 function SkillCard({ plant, onClick }: { plant: GardenPlant; onClick: () => void }) {
   const level = plant.sdtLevel as 1 | 2 | 3 | 4 | 5
   const config = SDT_LEVELS[level]
+  const [hovering, setHovering] = useState(false)
   return (
     <button
       type="button"
       onClick={onClick}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+      onFocus={() => setHovering(true)}
+      onBlur={() => setHovering(false)}
       className="group flex flex-col items-center p-3 rounded-xl bg-white/70 hover:bg-white border border-transparent hover:border-gray-200 transition-all focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1"
       aria-label={`${plant.skillName}: ${config.name} level, ${plant.conversationCount} conversation${plant.conversationCount === 1 ? '' : 's'}`}
     >
       <div className="w-28 h-28 sm:w-32 sm:h-32 transition-transform group-hover:scale-105">
-        <SkillVisual plant={plant} />
+        <SkillVisual plant={plant} hovering={hovering} />
       </div>
       <div className="mt-1 text-center min-h-[2.5rem] flex flex-col justify-center">
         <div className="text-xs font-semibold text-gray-900 leading-tight">
