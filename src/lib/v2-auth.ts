@@ -1,23 +1,26 @@
 /**
  * v2 authentication identity helper.
  *
- * IMPORTANT: this is DIFFERENT from getCurrentCoach/getCurrentStudent
- * in lib/queries.ts. Those helpers short-circuit to static demo data
- * in demo mode regardless of real auth — useful for data fetching in
- * demo flows, but wrong for IDENTITY (the name in the sidebar).
+ * Resolution order:
+ *   1. If a demo persona cookie is set (set by /api/v2/demo-as), look up
+ *      the matching row in `student`/`coach` by `demo_slug` and act as
+ *      that real DB persona. The cookie is the slug ('stu_aja',
+ *      'coach_elizabeth', etc.); demo_slug is unique per row.
+ *   2. Otherwise, fall through to real Supabase auth — look up
+ *      coach/student by `auth_user_id`.
  *
- * This helper always uses real Supabase auth. The sidebar / header /
- * Me page should always show the actually-authenticated user, even
- * when the rest of the app is rendering demo data.
+ * The persona cookie is the only "demo" code path left. Everything
+ * downstream reads from the same DB tables real students do, with
+ * `is_demo = true` on the persona rows so real-cohort queries can
+ * filter them out.
  *
- * Returns null when there's no authenticated user — caller should
- * redirect to /login.
+ * Returns null when there's no resolvable identity — caller should
+ * redirect to /v2/demo or /login.
  */
 
 import { createServerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase-admin'
-import { students as staticStudents, coaches as staticCoaches } from '@/data'
 
 const PERSONA_COOKIE = 'le3-v2-demo-persona'
 
@@ -28,6 +31,7 @@ export type V2Identity =
       name: string
       email: string
       authUserId: string
+      isDemo: boolean
     }
   | {
       role: 'student'
@@ -38,23 +42,20 @@ export type V2Identity =
       email: string
       cohort: string | null
       authUserId: string
+      isDemo: boolean
     }
 
 export async function getV2Identity(): Promise<V2Identity | null> {
   const cookieStore = cookies()
 
   // ─── Demo persona override ──────────────────
-  // When demo mode is on AND a persona cookie is set (via /v2/demo),
-  // the persona's identity drives the shell. Lets stakeholders click
-  // "Try as Aja" and have the whole experience feel like they're Aja —
-  // sidebar shows her name, not the actual authenticated user. No real
-  // auth required, which is appropriate for demo viewing.
-  if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
-    const persona = cookieStore.get(PERSONA_COOKIE)?.value
-    if (persona) {
-      const fromPersona = resolveDemoPersona(persona)
-      if (fromPersona) return fromPersona
-    }
+  // Persona cookie maps to a real DB row via demo_slug. No more
+  // static-seed lookup — the persona acts as the actual student or
+  // coach row, with the same downstream data the v2 surfaces read.
+  const personaSlug = cookieStore.get(PERSONA_COOKIE)?.value
+  if (personaSlug) {
+    const fromPersona = await resolvePersonaFromDb(personaSlug)
+    if (fromPersona) return fromPersona
   }
 
   // ─── Real Supabase auth ─────────────────────
@@ -86,7 +87,7 @@ export async function getV2Identity(): Promise<V2Identity | null> {
   // the coach shell as their primary view.
   const { data: coachRow } = await admin
     .from('coach')
-    .select('id, name, email')
+    .select('id, name, email, is_demo')
     .eq('auth_user_id', user.id)
     .maybeSingle()
 
@@ -97,12 +98,13 @@ export async function getV2Identity(): Promise<V2Identity | null> {
       name: coachRow.name as string,
       email: coachRow.email as string,
       authUserId: user.id,
+      isDemo: !!(coachRow.is_demo as boolean | null),
     }
   }
 
   const { data: studentRow } = await admin
     .from('student')
-    .select('id, first_name, last_name, email, cohort')
+    .select('id, first_name, last_name, email, cohort, is_demo')
     .eq('auth_user_id', user.id)
     .maybeSingle()
 
@@ -116,6 +118,7 @@ export async function getV2Identity(): Promise<V2Identity | null> {
       email: studentRow.email as string,
       cohort: (studentRow.cohort as string | null) ?? null,
       authUserId: user.id,
+      isDemo: !!(studentRow.is_demo as boolean | null),
     }
   }
 
@@ -134,34 +137,53 @@ export function isAdminEmail(email: string): boolean {
 }
 
 /**
- * Resolve a demo persona id (e.g. 'stu_aja' or 'coach_elizabeth')
- * to a V2Identity object using the static seed in src/data/.
- * Returns null if the id doesn't match a known persona.
+ * Resolve a demo persona slug to a V2Identity from the live DB.
+ * Looks up by `demo_slug` (which the seed script wrote per persona)
+ * and short-circuits with a synthetic auth_user_id of `demo:<slug>`
+ * since demo personas don't have real Supabase auth accounts.
  */
-function resolveDemoPersona(personaId: string): V2Identity | null {
-  const student = staticStudents.find(s => s.id === personaId)
-  if (student) {
+async function resolvePersonaFromDb(personaSlug: string): Promise<V2Identity | null> {
+  const admin = createAdminClient()
+
+  const { data: studentRow } = await admin
+    .from('student')
+    .select('id, first_name, last_name, email, cohort')
+    .eq('demo_slug', personaSlug)
+    .eq('is_demo', true)
+    .maybeSingle()
+
+  if (studentRow) {
     return {
       role: 'student',
-      id: student.id,
-      firstName: student.firstName,
-      lastName: student.lastName,
-      name: `${student.firstName} ${student.lastName}`.trim(),
-      email: student.email,
-      cohort: student.cohort,
-      authUserId: `demo:${student.id}`,
+      id: studentRow.id as string,
+      firstName: studentRow.first_name as string,
+      lastName: studentRow.last_name as string,
+      name: `${studentRow.first_name} ${studentRow.last_name}`.trim(),
+      email: studentRow.email as string,
+      cohort: (studentRow.cohort as string | null) ?? null,
+      authUserId: `demo:${personaSlug}`,
+      isDemo: true,
     }
   }
-  const coach = staticCoaches.find(c => c.id === personaId)
-  if (coach) {
+
+  const { data: coachRow } = await admin
+    .from('coach')
+    .select('id, name, email')
+    .eq('demo_slug', personaSlug)
+    .eq('is_demo', true)
+    .maybeSingle()
+
+  if (coachRow) {
     return {
       role: 'coach',
-      id: coach.id,
-      name: coach.name,
-      email: coach.email,
-      authUserId: `demo:${coach.id}`,
+      id: coachRow.id as string,
+      name: coachRow.name as string,
+      email: coachRow.email as string,
+      authUserId: `demo:${personaSlug}`,
+      isDemo: true,
     }
   }
+
   return null
 }
 
