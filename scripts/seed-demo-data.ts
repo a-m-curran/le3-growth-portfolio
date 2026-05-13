@@ -280,6 +280,15 @@ async function main() {
       skillName: sd.skillName,
       resumeLanguage: sd.resumeLanguage,
       talkingPoints: sd.talkingPoints,
+      // Map annotation conversationId slugs to real DB UUIDs so the
+      // career view can wire the inline source links the same way
+      // the narrative view does.
+      annotations: sd.annotations
+        ? sd.annotations.map(a => ({
+            sentence: a.sentence,
+            conversationId: uuidFor(a.conversationId),
+          }))
+        : undefined,
     })),
   }))
   await insert('career_output', careerRows)

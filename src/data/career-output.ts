@@ -6,6 +6,18 @@ export interface DemoCareerOutput {
     skillName: string
     resumeLanguage: string
     talkingPoints: string[]
+    /**
+     * Optional sentence-to-conversation mapping for this skill block.
+     * Each entry's `sentence` must appear verbatim somewhere in
+     * `resumeLanguage` or in one of the `talkingPoints` (the renderer
+     * uses indexOf). Linked sentences become inline buttons that open
+     * the source conversation in the ConversationPanel.
+     *
+     * In real mode this would come from a post-processing LLM pass at
+     * generation time and ride along in the career_output.skill_descriptions
+     * JSONB. For demo we hand-annotate.
+     */
+    annotations?: Array<{ sentence: string; conversationId: string }>
   }[]
   version: number
 }
@@ -26,6 +38,11 @@ export const careerOutputs: DemoCareerOutput[] = [
           'I failed a statistics quiz and went to office hours the same afternoon. I used to see setbacks as proof I wasn\'t smart enough, but I\'ve learned to treat them as information about what I need to work on next.',
           'Over three quarters I\'ve shifted from handling problems alone to building a network of support — writing centers, study groups, professors. I now define resilience as knowing when to push through, when to ask for help, and how to learn from things that don\'t go as planned.',
         ],
+        annotations: [
+          { sentence: 'When my childcare fell through on the morning of a midterm, I called my professor before class to arrange an alternative instead of missing the exam.', conversationId: 'conv_aja_06' },
+          { sentence: 'I failed a statistics quiz and went to office hours the same afternoon.', conversationId: 'conv_aja_08' },
+          { sentence: 'Over three quarters I\'ve shifted from handling problems alone to building a network of support — writing centers, study groups, professors.', conversationId: 'conv_aja_09' },
+        ],
       },
       {
         skillId: 'skill_initiative',
@@ -36,6 +53,10 @@ export const careerOutputs: DemoCareerOutput[] = [
           'I noticed my statistics class was struggling collectively, so I organized a study group that now meets weekly with eight regular members. It started with one text to a classmate and grew from there.',
           'At my campus job, I saw my manager tracking inventory on paper and taught myself Excel from YouTube tutorials on my own time. I built a spreadsheet system that my manager now uses daily, and it led to additional responsibilities.',
           'I\'ve learned that I don\'t need to wait for permission to solve a problem. If I see something that needs to happen, I trust myself to figure out how to make it happen.',
+        ],
+        annotations: [
+          { sentence: 'I noticed my statistics class was struggling collectively, so I organized a study group that now meets weekly with eight regular members.', conversationId: 'conv_aja_05' },
+          { sentence: 'At my campus job, I saw my manager tracking inventory on paper and taught myself Excel from YouTube tutorials on my own time.', conversationId: 'conv_aja_11' },
         ],
       },
       {
@@ -48,6 +69,10 @@ export const careerOutputs: DemoCareerOutput[] = [
           'When midterm scheduling conflicted with my work shifts, I proposed a shift swap with another student employee that benefited both of us. I reframed the problem from needing help to solving something together.',
           'I\'m learning to question the way things are "supposed" to be done. Just because a method is standard doesn\'t mean it\'s the best approach for the situation at hand.',
         ],
+        annotations: [
+          { sentence: 'During a community needs assessment for sociology, I noticed that written surveys were a barrier for participants with limited literacy.', conversationId: 'conv_aja_09' },
+          { sentence: 'When midterm scheduling conflicted with my work shifts, I proposed a shift swap with another student employee that benefited both of us.', conversationId: 'conv_aja_04' },
+        ],
       },
       {
         skillId: 'skill_critical_thinking',
@@ -57,6 +82,10 @@ export const careerOutputs: DemoCareerOutput[] = [
         talkingPoints: [
           'After a class on media literacy, I caught myself about to share a news article with unverified statistics on social media. I stopped, checked the sources, and decided not to share it. That moment showed me how easily misinformation spreads when we don\'t pause to verify.',
           'For a reflective essay, I analyzed three moments of adaptation across a quarter and identified patterns in how I respond to challenges. My professor praised the self-awareness, but the real value was learning to step back and examine my own thinking.',
+        ],
+        annotations: [
+          { sentence: 'After a class on media literacy, I caught myself about to share a news article with unverified statistics on social media.', conversationId: 'conv_aja_10' },
+          { sentence: 'For a reflective essay, I analyzed three moments of adaptation across a quarter and identified patterns in how I respond to challenges.', conversationId: 'conv_aja_07' },
         ],
       },
     ],

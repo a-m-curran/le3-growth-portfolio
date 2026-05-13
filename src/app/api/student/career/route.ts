@@ -11,12 +11,18 @@ export const runtime = 'nodejs'
  * Powers /v2/career. Returns the latest career_output for the
  * current student — a professional summary plus per-skill resume
  * language + interview talking points. Each skill description is
- * enriched with pillarName so the v2 UI can tint per-skill cards
- * without a second round-trip.
+ * enriched with:
+ *   - pillarName: drives the v2 card tint
+ *   - annotations: sentence → conversation_id mapping carried over
+ *     from the career_output.skill_descriptions JSONB so the v2 UI
+ *     can render inline source links the same way the narrative
+ *     view does
+ *   - sources: every conversation tagged with this skill, for the
+ *     "Built from N conversations" disclosure at the bottom of
+ *     each card
  *
- * Returns 200 with `output: null` when nothing has been generated
- * yet, so the UI lands on the "Generate Career Output" CTA rather
- * than a hard error.
+ * Returns `{ output: null }` when no career output exists yet so the
+ * UI can land on the empty CTA rather than throwing.
  *
  * Demo personas are real DB rows; student id resolved via
  * `getV2StudentId` (persona cookie OR real auth).
@@ -43,6 +49,7 @@ export async function GET() {
       skillName: string
       resumeLanguage: string
       talkingPoints: string[]
+      annotations?: Array<{ sentence: string; conversationId: string }>
     }>
     version: number
     generated_at: string | null
@@ -70,12 +77,57 @@ export async function GET() {
     }
   }
 
+  // Source list per skill — every conversation tagged with that
+  // skill, chronological. Same shape as narrative's sources.
+  const sourcesBySkill = new Map<
+    string,
+    Array<{ id: string; workTitle: string; date: string }>
+  >()
+  if (skillIds.length > 0) {
+    const { data: tagRows } = await admin
+      .from('conversation_skill_tag')
+      .select(
+        'skill_id, growth_conversation!inner(id, started_at, student_id, student_work(title))'
+      )
+      .eq('growth_conversation.student_id', studentId)
+      .in('skill_id', skillIds)
+
+    interface TagRow {
+      skill_id: string
+      growth_conversation: {
+        id: string
+        started_at: string
+        student_id: string
+        student_work: { title: string } | null
+      }
+    }
+    for (const t of (tagRows ?? []) as unknown as TagRow[]) {
+      if (!t.growth_conversation) continue
+      const entry = {
+        id: t.growth_conversation.id,
+        workTitle: t.growth_conversation.student_work?.title ?? 'Reflection',
+        date: t.growth_conversation.started_at,
+      }
+      const arr = sourcesBySkill.get(t.skill_id) ?? []
+      if (!arr.some(e => e.id === entry.id)) arr.push(entry)
+      sourcesBySkill.set(t.skill_id, arr)
+    }
+    sourcesBySkill.forEach(arr => {
+      arr.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    })
+  }
+
   return NextResponse.json({
     output: {
       resumeSummary: row.resume_summary,
       skillDescriptions: row.skill_descriptions.map(sd => ({
-        ...sd,
+        skillId: sd.skillId,
+        skillName: sd.skillName,
+        resumeLanguage: sd.resumeLanguage,
+        talkingPoints: sd.talkingPoints,
         pillarName: skillToPillarName.get(sd.skillId) ?? null,
+        annotations: sd.annotations ?? [],
+        sources: sourcesBySkill.get(sd.skillId) ?? [],
       })),
       version: row.version,
       generatedAt: row.generated_at,
