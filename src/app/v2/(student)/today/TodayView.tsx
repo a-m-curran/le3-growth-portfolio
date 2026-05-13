@@ -25,6 +25,13 @@ interface TodayResponse {
     courseName: string | null
     submittedAt: string | null
     workType: string | null
+    /**
+     * Demo mode only: id of the existing conversation for this work,
+     * used to route to the /v2/conversation/[id] replay. Real mode
+     * leaves this absent (featuredWork is unreflected work) and the
+     * card routes to the /v2/reflect/start stub instead.
+     */
+    conversationId?: string | null
   }>
   recentJournal: Array<{
     id: string
@@ -113,7 +120,17 @@ export function TodayView() {
       {/* Featured work */}
       <FeaturedWorkSection
         items={data.featuredWork}
-        onSelect={id => router.push(`/v2/reflect/start?work=${id}`)}
+        onSelect={item => {
+          // Demo mode: each featured item carries a conversationId so
+          // we deep-link into the replay. Real mode: no conversation
+          // yet (the whole point of "featured" is "unreflected"), so
+          // we land on the start stub.
+          if (item.conversationId) {
+            router.push(`/v2/conversation/${item.conversationId}`)
+          } else {
+            router.push(`/v2/reflect/start?work=${item.id}`)
+          }
+        }}
       />
 
       {/* Week stats */}
@@ -170,7 +187,7 @@ function FeaturedWorkSection({
   onSelect,
 }: {
   items: TodayResponse['featuredWork']
-  onSelect: (id: string) => void
+  onSelect: (item: TodayResponse['featuredWork'][number]) => void
 }) {
   if (items.length === 0) return null
   return (
@@ -181,7 +198,7 @@ function FeaturedWorkSection({
           <li key={w.id}>
             <button
               type="button"
-              onClick={() => onSelect(w.id)}
+              onClick={() => onSelect(w)}
               className="w-full text-left flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors"
             >
               <div className="flex-1 min-w-0">

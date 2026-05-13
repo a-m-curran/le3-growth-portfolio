@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase-admin'
+import {
+  conversations as staticConversations,
+  studentWork as staticWork,
+} from '@/data'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -32,34 +36,73 @@ export async function GET() {
   const cookieStore = cookies()
 
   // ─── Demo mode short-circuit ─────────────────
+  // Pull real seed data for the canonical demo student (Aja) so
+  // featured-work clicks can route into the conversation replay
+  // (each item carries the conversationId for its work, looked up
+  // from the static seed). Otherwise demo viewers would land on
+  // the /v2/reflect/start stub with no way to "see it in action."
   if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
+    const demoStudentId = 'stu_aja'
     const ltiPinnedCookie = cookieStore.get('lti_context')?.value
+
+    // Map work_id → most recent completed conversation id so the
+    // featured cards can deep-link into a replay.
+    const completedByWork = new Map<string, string>()
+    for (const c of staticConversations) {
+      if (
+        c.studentId === demoStudentId &&
+        c.status === 'completed' &&
+        c.workId
+      ) {
+        const existing = completedByWork.get(c.workId)
+        if (!existing || (new Date(c.startedAt) > new Date(
+          staticConversations.find(x => x.id === existing)?.startedAt || 0
+        ))) {
+          completedByWork.set(c.workId, c.id)
+        }
+      }
+    }
+
+    // Pick three of the more recent work items as "featured" for
+    // Today. In real mode this section means "submitted but not
+    // reflected"; in demo we instead use it as "click into a recent
+    // reflection to see it play out" — clearer signal for stakeholder
+    // demos than a synthetic "unreflected" set.
+    const featuredWork = staticWork
+      .filter(w => w.studentId === demoStudentId && completedByWork.has(w.id))
+      .slice(-3)
+      .reverse()
+      .map(w => ({
+        id: w.id,
+        title: w.title,
+        courseName: w.courseName ?? null,
+        submittedAt: w.submittedAt ?? null,
+        workType: w.workType ?? null,
+        conversationId: completedByWork.get(w.id) ?? null,
+      }))
+
+    // Recent journal entries from the demo seed (open_reflection)
+    const journalConvos = staticConversations
+      .filter(
+        c =>
+          c.studentId === demoStudentId &&
+          c.conversationType === 'open_reflection' &&
+          c.status === 'completed'
+      )
+      .slice(-3)
+      .reverse()
+
     return NextResponse.json({
-      featuredWork: [
-        {
-          id: 'demo_work_1',
-          title: 'Reflection on Group Project Conflict',
-          courseName: 'HUM 350',
-          submittedAt: daysAgo(2),
-          workType: 'essay',
-        },
-        {
-          id: 'demo_work_2',
-          title: 'Career Discovery Statement',
-          courseName: 'LE3 101',
-          submittedAt: daysAgo(4),
-          workType: 'portfolio_piece',
-        },
-      ],
-      recentJournal: [
-        {
-          id: 'demo_journal_1',
-          startedAt: daysAgo(3),
-          description: 'Felt overwhelmed before the presentation',
-          synthesisExcerpt:
-            'You noticed your old pattern starting up, and you chose to do something different…',
-        },
-      ],
+      featuredWork,
+      recentJournal: journalConvos.map(c => ({
+        id: c.id,
+        startedAt: c.startedAt,
+        description: c.workContext ?? null,
+        synthesisExcerpt: c.synthesisText
+          ? c.synthesisText.slice(0, 140) +
+            (c.synthesisText.length > 140 ? '…' : '')
+          : null,
+      })),
       weekStats: {
         conversationsCompleted: 2,
         workSubmitted: 1,
@@ -211,10 +254,6 @@ export async function GET() {
     },
     ltiPinned,
   })
-}
-
-function daysAgo(n: number): string {
-  return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString()
 }
 
 interface LtiContext {
