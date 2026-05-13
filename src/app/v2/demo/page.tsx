@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase-admin'
 
 export const dynamic = 'force-dynamic'
@@ -84,9 +83,14 @@ export default async function V2DemoEntryPage() {
             <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">
               Students
             </h2>
+            {/* Plain <a> tags (not <Link>) because /api/v2/demo-as is
+                a state-changing GET. Next.js Link prefetches on hover,
+                which would fire the API and set the cookie just from
+                moving the mouse — turning every hover into a silent
+                persona switch. Anchor tags don't prefetch. */}
             <div className="grid gap-2">
               {students.map(s => (
-                <Link
+                <a
                   key={s.id}
                   href={`/api/v2/demo-as?persona=${s.demo_slug}`}
                   className="group block px-4 py-3 bg-white border border-gray-200 rounded-xl hover:border-green-400 hover:shadow-sm transition-all"
@@ -95,7 +99,7 @@ export default async function V2DemoEntryPage() {
                     {s.first_name} {s.last_name}
                   </div>
                   <div className="text-xs text-gray-500 mt-0.5">{s.cohort}</div>
-                </Link>
+                </a>
               ))}
             </div>
           </section>
@@ -108,7 +112,7 @@ export default async function V2DemoEntryPage() {
             </h2>
             <div className="grid gap-2">
               {coaches.map(c => (
-                <Link
+                <a
                   key={c.id}
                   href={`/api/v2/demo-as?persona=${c.demo_slug}`}
                   className="group block px-4 py-3 bg-white border border-gray-200 rounded-xl hover:border-green-400 hover:shadow-sm transition-all"
@@ -117,7 +121,7 @@ export default async function V2DemoEntryPage() {
                     {c.name}
                   </div>
                   <div className="text-xs text-gray-500 mt-0.5">Coach</div>
-                </Link>
+                </a>
               ))}
             </div>
           </section>
@@ -125,9 +129,9 @@ export default async function V2DemoEntryPage() {
 
         <p className="text-xs text-gray-400 text-center pt-2">
           Clear demo persona:{' '}
-          <Link href="/api/v2/demo-as?persona=clear" className="text-green-700 hover:underline">
+          <a href="/api/v2/demo-as?persona=clear" className="text-green-700 hover:underline">
             switch back to real auth
-          </Link>
+          </a>
         </p>
       </div>
     </main>
