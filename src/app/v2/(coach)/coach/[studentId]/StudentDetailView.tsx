@@ -275,8 +275,8 @@ function PortfolioTab({
     return (
       <Card>
         <p className="text-sm text-gray-500 italic">
-          Portfolio not available — this student hasn&rsquo;t generated a
-          garden yet.
+          Portfolio not available — this student hasn&rsquo;t generated
+          any skill data yet.
         </p>
       </Card>
     )

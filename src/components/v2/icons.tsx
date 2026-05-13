@@ -30,13 +30,17 @@ export function TodayIcon({ className }: IconProps) {
   )
 }
 
-export function GardenIcon({ className }: IconProps) {
+export function GrowthIcon({ className }: IconProps) {
+  // Three rising arcs of different heights — a small bar chart that
+  // suggests progress without anchoring to a specific metaphor (plant,
+  // mountain, etc). Lets the page name carry the abstraction.
   return (
     <svg {...baseProps(className)}>
-      <path d="M12 22V12" />
-      <path d="M12 12c-2-3-5-3-5-1 0 3 5 4 5 4" />
-      <path d="M12 12c2-4 5-4 5-2 0 3-5 5-5 5" />
-      <path d="M5 22h14" />
+      <path d="M4 20V14" />
+      <path d="M10 20V10" />
+      <path d="M16 20V6" />
+      <path d="M22 20V4" />
+      <path d="M3 20h20" />
     </svg>
   )
 }

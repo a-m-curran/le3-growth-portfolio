@@ -13,7 +13,7 @@ import { TodayView } from './TodayView'
  *   - Featured work: submitted assignments not yet reflected on
  *   - Recent journal: open standalone reflections (the "something
  *     on my mind" kind, not work-tied)
- *   - Quick actions: start a journal entry, open the garden
+ *   - Quick actions: start a journal entry, open growth view
  *   - This week summary: stats card
  */
 export default function V2StudentTodayPage() {

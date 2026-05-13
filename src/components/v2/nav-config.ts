@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react'
 import {
   TodayIcon,
-  GardenIcon,
+  GrowthIcon,
   ReflectIcon,
   JournalIcon,
   MeIcon,
@@ -31,7 +31,7 @@ export interface NavItem {
 
 export const STUDENT_NAV: NavItem[] = [
   { key: 'today', label: 'Today', href: '/v2/today', icon: TodayIcon },
-  { key: 'garden', label: 'Garden', href: '/v2/garden', icon: GardenIcon },
+  { key: 'growth', label: 'Growth', href: '/v2/growth', icon: GrowthIcon },
   { key: 'reflect', label: 'Reflect', href: '/v2/reflect', icon: ReflectIcon },
   { key: 'journal', label: 'Journal', href: '/v2/journal', icon: JournalIcon },
   { key: 'me', label: 'Me', href: '/v2/me', icon: MeIcon },

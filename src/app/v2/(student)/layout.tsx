@@ -5,7 +5,7 @@ import { getV2Identity } from '@/lib/v2-auth'
 /**
  * Student-shell wrapper. Forces the student sidebar / bottom-tab-bar
  * regardless of the authenticated user's actual role — so a coach
- * previewing the demo can browse /v2/today, /v2/garden, etc. and
+ * previewing the demo can browse /v2/today, /v2/growth, etc. and
  * experience the student IA.
  *
  * The shell's identity (name + sub-label in the sidebar) always shows

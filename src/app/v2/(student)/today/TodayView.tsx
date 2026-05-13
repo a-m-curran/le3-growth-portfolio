@@ -12,7 +12,7 @@ import { useRouter } from 'next/navigation'
  *   2. Featured work — submitted assignments awaiting reflection
  *   3. This week — count card (conversations + uploads)
  *   4. Recent journal — last few open reflections
- *   5. Quick actions — start a journal entry, open the garden
+ *   5. Quick actions — start a journal entry, open growth view
  *
  * Designed so on most visits, the top card answers "what should I do
  * now?" within one glance.
@@ -145,7 +145,7 @@ export function TodayView() {
       {/* Quick actions */}
       <QuickActions
         onStartJournal={() => router.push('/v2/journal?new=1')}
-        onOpenGarden={() => router.push('/v2/garden')}
+        onOpenGrowth={() => router.push('/v2/growth')}
       />
     </div>
   )
@@ -270,10 +270,10 @@ function RecentJournalSection({
 
 function QuickActions({
   onStartJournal,
-  onOpenGarden,
+  onOpenGrowth,
 }: {
   onStartJournal: () => void
-  onOpenGarden: () => void
+  onOpenGrowth: () => void
 }) {
   return (
     <Card>
@@ -289,10 +289,10 @@ function QuickActions({
         </button>
         <button
           type="button"
-          onClick={onOpenGarden}
+          onClick={onOpenGrowth}
           className="px-4 py-3 text-sm font-medium rounded-lg bg-white border border-gray-200 hover:border-green-400 hover:bg-green-50/30 text-left transition-colors"
         >
-          <span className="text-gray-900 font-semibold block">See your garden</span>
+          <span className="text-gray-900 font-semibold block">See your growth</span>
           <span className="text-xs text-gray-500">How your skills are growing</span>
         </button>
       </div>
