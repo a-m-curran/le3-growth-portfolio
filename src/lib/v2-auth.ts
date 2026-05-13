@@ -188,3 +188,26 @@ async function resolvePersonaFromDb(personaSlug: string): Promise<V2Identity | n
 }
 
 export { PERSONA_COOKIE }
+
+/**
+ * Convenience helper for API routes: get the resolved student id
+ * (persona override or real auth) without dragging in the full
+ * V2Identity shape. Returns null when there's no usable identity.
+ *
+ * Use in routes that previously had two branches (demo + real DB):
+ *   const studentId = await getV2StudentId()
+ *   if (!studentId) return 401
+ *   // single DB query path follows
+ */
+export async function getV2StudentId(): Promise<string | null> {
+  const id = await getV2Identity()
+  if (!id || id.role !== 'student') return null
+  return id.id
+}
+
+/** Same as getV2StudentId but for coaches. */
+export async function getV2CoachId(): Promise<string | null> {
+  const id = await getV2Identity()
+  if (!id || id.role !== 'coach') return null
+  return id.id
+}

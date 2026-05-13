@@ -1,36 +1,27 @@
 import { redirect } from 'next/navigation'
-import { getCurrentStudent, getGardenData } from '@/lib/queries'
+import { getGardenData } from '@/lib/queries'
+import { getV2StudentId } from '@/lib/v2-auth'
 import { GrowthView } from './GrowthView'
 
 /**
  * v2 Growth — student skill visualization, second-gen.
  *
- * Replaces the old /v2/garden route. Each skill gets a bespoke
- * procedural artwork (Critical Thinking = crystalline lattice,
- * Resilience = bent-but-growing trunk, etc.) rather than the previous
- * five-discrete-stages plant template. See
+ * Each skill gets a bespoke procedural artwork (Critical Thinking
+ * = crystalline lattice, Resilience = castle, etc.) rather than the
+ * v1 five-discrete-stages plant template. See
  * `src/components/v2/growth/SkillVisual.tsx` for the dispatcher and
  * `./archetypes/` for each skill's renderer.
  *
- * Data source unchanged: `getGardenData(studentId)` from queries.ts,
- * which is already demo-aware (returns Aja's static skills in demo
- * mode and DB-sourced plants in real mode).
- *
- * Demo-mode handling: non-student authenticated viewers fall through
- * to `stu_aja` so coaches previewing the student experience see
- * meaningful content. Real-mode non-students get redirected to login.
+ * Identity is resolved through `getV2StudentId` (persona cookie OR
+ * real Supabase auth). Demo personas are real DB rows now —
+ * `getGardenData(studentId)` queries the live DB regardless of which
+ * identity path resolved the id.
  */
 export default async function V2GrowthPage() {
-  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
+  const studentId = await getV2StudentId()
+  if (!studentId) redirect('/v2/demo')
 
-  const student = await getCurrentStudent()
-  const targetStudentId = student?.id || (isDemoMode ? 'stu_aja' : null)
-
-  if (!targetStudentId) {
-    redirect('/login')
-  }
-
-  const data = await getGardenData(targetStudentId)
+  const data = await getGardenData(studentId)
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">

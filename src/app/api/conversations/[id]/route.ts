@@ -1,12 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase-admin'
-import {
-  getConversation as getStaticConversation,
-  getStudentWork as getStaticWork,
-  getSkill as getStaticSkill,
-} from '@/data'
+import { getV2Identity } from '@/lib/v2-auth'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -22,86 +16,22 @@ export const runtime = 'nodejs'
  *   - Work title + course (joined from student_work) so the panel
  *     header reads correctly without a separate fetch
  *
- * In demo mode (NEXT_PUBLIC_DEMO_MODE=true) returns the static seed
- * from src/data/conversations.ts so demo flows work without a DB.
- * In normal mode queries growth_conversation via Supabase admin client.
+ * Demo personas are real DB rows (is_demo=true) — they exercise the
+ * same query path as real students.
  *
- * Authorization (DB mode only): only the student who owns the
- * conversation, or a coach who is assigned to that student, can read.
- * Demo mode is unauthenticated since the seed data is non-sensitive.
+ * Authorization: a student can read their own conversations; a coach
+ * can read their assigned students' conversations. Demo coaches can
+ * read any is_demo student's conversations (so the demo coach view
+ * has access to the full demo cohort).
  */
 export async function GET(
   _req: Request,
   { params }: { params: { id: string } }
 ) {
-  // ─── Demo mode short-circuit ─────────────────
-  if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
-    const conv = getStaticConversation(params.id)
-    if (!conv) {
-      return NextResponse.json(
-        { error: 'Conversation not found' },
-        { status: 404 }
-      )
-    }
-    const work = conv.workId ? getStaticWork(conv.workId) : null
-    return NextResponse.json({
-      id: conv.id,
-      studentId: conv.studentId,
-      workId: conv.workId,
-      status: conv.status,
-      startedAt: conv.startedAt,
-      completedAt: conv.completedAt ?? null,
-      durationSeconds: conv.durationSeconds ?? null,
-      quarter: conv.quarter,
-      weekNumber: conv.weekNumber ?? null,
-      workContext: conv.workContext,
-      workTitle: work?.title ?? null,
-      courseName: work?.courseName ?? null,
-      courseCode: work?.courseCode ?? null,
-      promptPhase1: conv.promptPhase1 ?? null,
-      responsePhase1: conv.responsePhase1 ?? null,
-      promptPhase2: conv.promptPhase2 ?? null,
-      responsePhase2: conv.responsePhase2 ?? null,
-      promptPhase3: conv.promptPhase3 ?? null,
-      responsePhase3: conv.responsePhase3 ?? null,
-      synthesisText: conv.synthesisText ?? null,
-      suggestedInsight: conv.suggestedInsight ?? null,
-      skillTags: (conv.skillTags ?? []).map(t => {
-        const skill = getStaticSkill(t.skillId)
-        return {
-          skillId: t.skillId,
-          skillName: skill?.name ?? null,
-          confidence: t.confidence,
-          studentConfirmed: t.studentConfirmed,
-          rationale: t.rationale ?? null,
-        }
-      }),
-    })
-  }
-
-  // ─── DB-backed flow (production) ─────────────
-  const cookieStore = cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) {
+  // Auth: persona cookie OR real Supabase auth. Demo personas hit
+  // the same DB query path as real students — no static seed.
+  const identity = await getV2Identity()
+  if (!identity) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
 
@@ -168,13 +98,35 @@ export async function GET(
 
   const convRow = convRowRaw as unknown as ConvRow
 
-  // Authorization: student owns it, OR coach is assigned to that student
-  const isOwner = await isStudentOwner(admin, user.id, convRow.student_id)
-  const isAssignedCoach = isOwner
-    ? false
-    : await isCoachAssigned(admin, user.id, convRow.student_id)
+  // Authorization:
+  //   - Student persona/auth: must own the conversation.
+  //   - Coach persona/auth: must be assigned to the conversation's
+  //     student (real coaches) or the student must be a demo persona
+  //     (demo coaches see the whole demo cohort).
+  let authorized = false
+  if (identity.role === 'student') {
+    authorized = identity.id === convRow.student_id
+  } else {
+    if (identity.isDemo) {
+      // Demo coach: any demo student is fair game
+      const { data: s } = await admin
+        .from('student')
+        .select('is_demo')
+        .eq('id', convRow.student_id)
+        .maybeSingle()
+      authorized = !!s?.is_demo
+    } else {
+      // Real coach: assigned to that student
+      const { data: s } = await admin
+        .from('student')
+        .select('coach_id')
+        .eq('id', convRow.student_id)
+        .maybeSingle()
+      authorized = s?.coach_id === identity.id
+    }
+  }
 
-  if (!isOwner && !isAssignedCoach) {
+  if (!authorized) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -228,41 +180,6 @@ export async function GET(
   })
 }
 
-// ─── Authorization helpers ──────────────────────────
-
-async function isStudentOwner(
-  admin: ReturnType<typeof createAdminClient>,
-  authUserId: string,
-  studentId: string
-): Promise<boolean> {
-  const { data } = await admin
-    .from('student')
-    .select('id')
-    .eq('auth_user_id', authUserId)
-    .eq('id', studentId)
-    .maybeSingle()
-  return !!data
-}
-
-async function isCoachAssigned(
-  admin: ReturnType<typeof createAdminClient>,
-  authUserId: string,
-  studentId: string
-): Promise<boolean> {
-  // Find the coach record for the authenticated user (if any).
-  const { data: coach } = await admin
-    .from('coach')
-    .select('id')
-    .eq('auth_user_id', authUserId)
-    .maybeSingle()
-  if (!coach) return false
-
-  // Is the student assigned to this coach?
-  const { data: student } = await admin
-    .from('student')
-    .select('id')
-    .eq('id', studentId)
-    .eq('coach_id', coach.id)
-    .maybeSingle()
-  return !!student
-}
+// Authorization is now inline above using getV2Identity (which already
+// gives us the resolved student/coach id and isDemo flag) — the old
+// auth_user_id-keyed helpers are unnecessary.

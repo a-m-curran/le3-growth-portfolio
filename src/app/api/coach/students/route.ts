@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase-admin'
-import { students as staticStudents } from '@/data'
+import { getV2CoachId, getV2Identity } from '@/lib/v2-auth'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -20,93 +18,40 @@ export const runtime = 'nodejs'
  *   - lastActivityAt (most recent completed conversation start)
  *   - needsAttention (boolean — derived from error_count or stale activity)
  *
- * Demo mode (NEXT_PUBLIC_DEMO_MODE=true) returns all demo students
- * regardless of coach assignment, so the exploration shell shows
- * meaningful data even when the real DB caseload is empty.
+ * Demo coaches (acted via persona cookie) see all is_demo=true
+ * students — demo personas form their own "caseload" so the demo
+ * experience shows a populated coach view. Real coaches only see
+ * their assigned, non-demo students.
  */
 export async function GET() {
-  const cookieStore = cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  const identity = await getV2Identity()
+  if (!identity || identity.role !== 'coach') {
+    return NextResponse.json({ error: 'Coach access required' }, { status: 401 })
+  }
+  const coachId = await getV2CoachId()
+  if (!coachId) {
+    return NextResponse.json({ error: 'Coach not found' }, { status: 404 })
   }
 
-  // ─── Demo mode short-circuit ─────────────────
-  // Give demo students fake activity profiles so the Today view shows
-  // a realistic mix of "needs attention" and "active recently" rather
-  // than every student showing as never-active.
-  if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
-    const now = Date.now()
-    const daysAgo = (n: number) => new Date(now - n * 24 * 60 * 60 * 1000).toISOString()
-    // Hardcoded variation profile keyed by index. Deterministic so the
-    // demo always looks the same regardless of when it's loaded.
-    const profiles: Array<{ daysSinceActivity: number | null; count: number }> = [
-      { daysSinceActivity: 2, count: 10 },   // active, no attention
-      { daysSinceActivity: 25, count: 3 },   // needs attention (stale)
-      { daysSinceActivity: 5, count: 7 },    // active
-      { daysSinceActivity: null, count: 0 }, // needs attention (never active)
-    ]
-    return NextResponse.json({
-      students: staticStudents.map((s, i) => {
-        const profile = profiles[i % profiles.length]
-        const lastActivityAt = profile.daysSinceActivity == null
-          ? null
-          : daysAgo(profile.daysSinceActivity)
-        const needsAttention =
-          profile.daysSinceActivity == null || profile.daysSinceActivity >= 21
-        return {
-          id: s.id,
-          firstName: s.firstName,
-          lastName: s.lastName,
-          email: s.email,
-          cohort: s.cohort,
-          conversationCount: profile.count,
-          lastActivityAt,
-          needsAttention,
-        }
-      }),
-    })
-  }
-
-  // ─── DB-backed (production) ──────────────────
   const admin = createAdminClient()
 
-  const { data: coach } = await admin
-    .from('coach')
-    .select('id')
-    .eq('auth_user_id', user.id)
-    .maybeSingle()
-
-  if (!coach) {
-    return NextResponse.json({ error: 'Coach access required' }, { status: 403 })
-  }
-
-  // Fetch all students assigned to this coach
-  const { data: studentsRaw } = await admin
+  // Real coach: only their assigned non-demo students.
+  // Demo coach (acting via persona): all demo students they're assigned to
+  // PLUS demo students from other demo coaches, so the demo caseload
+  // always shows the full set of personas.
+  let query = admin
     .from('student')
     .select('id, first_name, last_name, email, cohort, status')
-    .eq('coach_id', coach.id)
     .eq('status', 'active')
     .order('last_name', { ascending: true })
+
+  if (identity.isDemo) {
+    query = query.eq('is_demo', true)
+  } else {
+    query = query.eq('coach_id', coachId).eq('is_demo', false)
+  }
+
+  const { data: studentsRaw } = await query
 
   interface StudentRow {
     id: string

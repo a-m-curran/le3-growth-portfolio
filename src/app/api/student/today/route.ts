@@ -1,11 +1,7 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase-admin'
-import {
-  conversations as staticConversations,
-  studentWork as staticWork,
-} from '@/data'
+import { getV2StudentId } from '@/lib/v2-auth'
 import { primaryPillarFromTags } from '@/lib/pillar-resolution'
 
 export const dynamic = 'force-dynamic'
@@ -14,13 +10,16 @@ export const runtime = 'nodejs'
 /**
  * GET /api/student/today
  *
- * Aggregates the dynamic data behind /v2/today (student) into a
- * single response so the page doesn't have to chain three fetches.
+ * Aggregates the dynamic data behind /v2/today into a single response
+ * so the page doesn't have to chain three fetches.
  *
  * Returns:
- *   featuredWork    — submitted student_work without a completed
- *                     growth_conversation. "Next thing to reflect on."
- *                     Capped at 5.
+ *   featuredWork    — most recent submitted work, each enriched with
+ *                     its dominant conversation (if any) so the card
+ *                     can deep-link into the conversation replay
+ *                     (`conversationId`) or, when no conversation
+ *                     exists, route to `/v2/reflect/start?work=X` to
+ *                     start one.
  *   recentJournal   — recent completed conversations of type
  *                     'open_reflection'. Capped at 3.
  *   weekStats       — conversations completed + work submitted in the
@@ -30,148 +29,30 @@ export const runtime = 'nodejs'
  *                     lti_context cookie set by /api/lti/launch.
  *                     Null when the student didn't arrive via LTI.
  *
- * Demo mode (NEXT_PUBLIC_DEMO_MODE=true) returns hand-built demo data
- * so the exploration shell looks alive when DB is empty.
+ * Demo personas are real DB rows (is_demo=true). The student id is
+ * resolved through `getV2StudentId` which honors the demo persona
+ * cookie OR real Supabase auth — same query path for both.
  */
 export async function GET() {
   const cookieStore = cookies()
-
-  // ─── Demo mode short-circuit ─────────────────
-  // Pull real seed data for the canonical demo student (Aja) so
-  // featured-work clicks can route into the conversation replay
-  // (each item carries the conversationId for its work, looked up
-  // from the static seed). Otherwise demo viewers would land on
-  // the /v2/reflect/start stub with no way to "see it in action."
-  if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
-    const demoStudentId = 'stu_aja'
-    const ltiPinnedCookie = cookieStore.get('lti_context')?.value
-
-    // Map work_id → most recent completed conversation id so the
-    // featured cards can deep-link into a replay.
-    const completedByWork = new Map<string, string>()
-    for (const c of staticConversations) {
-      if (
-        c.studentId === demoStudentId &&
-        c.status === 'completed' &&
-        c.workId
-      ) {
-        const existing = completedByWork.get(c.workId)
-        if (!existing || (new Date(c.startedAt) > new Date(
-          staticConversations.find(x => x.id === existing)?.startedAt || 0
-        ))) {
-          completedByWork.set(c.workId, c.id)
-        }
-      }
-    }
-
-    // Pick three of the more recent work items as "featured" for
-    // Today. In real mode this section means "submitted but not
-    // reflected"; in demo we instead use it as "click into a recent
-    // reflection to see it play out" — clearer signal for stakeholder
-    // demos than a synthetic "unreflected" set.
-    const featuredWork = staticWork
-      .filter(w => w.studentId === demoStudentId && completedByWork.has(w.id))
-      .slice(-3)
-      .reverse()
-      .map(w => {
-        // Pillar tint for the work card derives from the linked
-        // conversation's dominant skill tag. Featured-with-conversation
-        // is the demo's convention; in real mode "featured" means
-        // unreflected (no conversation), so pillar is null.
-        const convId = completedByWork.get(w.id) ?? null
-        const conv = convId ? staticConversations.find(c => c.id === convId) : null
-        return {
-          id: w.id,
-          title: w.title,
-          courseName: w.courseName ?? null,
-          submittedAt: w.submittedAt ?? null,
-          workType: w.workType ?? null,
-          conversationId: convId,
-          primaryPillar: conv ? primaryPillarFromTags(conv.skillTags) : null,
-        }
-      })
-
-    // Recent journal entries from the demo seed (open_reflection)
-    const journalConvos = staticConversations
-      .filter(
-        c =>
-          c.studentId === demoStudentId &&
-          c.conversationType === 'open_reflection' &&
-          c.status === 'completed'
-      )
-      .slice(-3)
-      .reverse()
-
-    return NextResponse.json({
-      featuredWork,
-      recentJournal: journalConvos.map(c => ({
-        id: c.id,
-        startedAt: c.startedAt,
-        description: c.workContext ?? null,
-        synthesisExcerpt: c.synthesisText
-          ? c.synthesisText.slice(0, 140) +
-            (c.synthesisText.length > 140 ? '…' : '')
-          : null,
-        primaryPillar: primaryPillarFromTags(c.skillTags),
-      })),
-      weekStats: {
-        conversationsCompleted: 2,
-        workSubmitted: 1,
-      },
-      ltiPinned: parseLtiContext(ltiPinnedCookie),
-    })
-  }
-
-  // ─── DB-backed flow ─────────────────────────
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) {
+  const studentId = await getV2StudentId()
+  if (!studentId) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
 
   const admin = createAdminClient()
 
-  const { data: student } = await admin
-    .from('student')
-    .select('id')
-    .eq('auth_user_id', user.id)
-    .maybeSingle()
-
-  if (!student) {
-    return NextResponse.json(
-      { error: 'Student record not found' },
-      { status: 404 }
-    )
-  }
-
-  // ─── Featured work: submitted, not yet reflected on ─
-  // Fetch all student_work for this student, then filter out any with
-  // a completed conversation. Two queries instead of an EXISTS subquery
-  // because Supabase's PostgREST doesn't expose that pattern cleanly.
+  // ─── Recent work + linked conversations ───
+  // Pull the most recent submissions, then look up any completed
+  // conversation per work_id so the card can either route to
+  // /v2/conversation/[id] (existing reflection) or /v2/reflect/start
+  // (start a new one).
   const { data: workRows } = await admin
     .from('student_work')
     .select('id, title, course_name, submitted_at, work_type')
-    .eq('student_id', student.id)
+    .eq('student_id', studentId)
     .order('submitted_at', { ascending: false, nullsFirst: false })
-    .limit(20)
+    .limit(5)
 
   interface WorkRow {
     id: string
@@ -182,48 +63,79 @@ export async function GET() {
   }
   const allWork = (workRows ?? []) as unknown as WorkRow[]
 
-  let reflectedWorkIds = new Set<string>()
+  // For the work items we just pulled, find the most recent completed
+  // conversation per work_id. Returning this enables the demo's "see
+  // it in action" flow on cards that already have a reflection.
+  const conversationByWorkId = new Map<string, string>()
+  const pillarByWorkId = new Map<string, string | null>()
   if (allWork.length > 0) {
     const { data: convoRows } = await admin
       .from('growth_conversation')
-      .select('work_id')
-      .eq('student_id', student.id)
+      .select(
+        'id, work_id, started_at, conversation_skill_tag(skill_id, confidence, student_confirmed, durable_skill(name, pillar:pillar_id(name)))'
+      )
+      .eq('student_id', studentId)
       .eq('status', 'completed')
       .in('work_id', allWork.map(w => w.id))
+      .order('started_at', { ascending: false })
+
     interface ConvoRow {
+      id: string
       work_id: string | null
+      conversation_skill_tag: Array<{
+        skill_id: string
+        confidence: number
+        student_confirmed: boolean
+        durable_skill: {
+          name: string
+          pillar: { name: string } | null
+        } | null
+      }> | null
     }
-    const convos = (convoRows ?? []) as unknown as ConvoRow[]
-    reflectedWorkIds = new Set(
-      convos.map(c => c.work_id).filter((id): id is string => !!id)
-    )
+    for (const c of (convoRows ?? []) as unknown as ConvoRow[]) {
+      if (!c.work_id || conversationByWorkId.has(c.work_id)) continue
+      conversationByWorkId.set(c.work_id, c.id)
+      // Dominant pillar — derived from skill tags joined through
+      // durable_skill → pillar. Single query, no second round-trip.
+      const tags = (c.conversation_skill_tag ?? []).map(t => ({
+        skillId: t.skill_id,
+        confidence: t.confidence,
+        studentConfirmed: t.student_confirmed,
+      }))
+      const topTag = tags.length
+        ? [...tags].sort((a, b) => b.confidence - a.confidence)[0]
+        : null
+      const topPillar = topTag
+        ? c.conversation_skill_tag?.find(t => t.skill_id === topTag.skillId)
+            ?.durable_skill?.pillar?.name ?? null
+        : null
+      pillarByWorkId.set(c.work_id, topPillar)
+    }
   }
 
-  const featuredWork = allWork
-    .filter(w => !reflectedWorkIds.has(w.id))
-    .slice(0, 5)
-    .map(w => ({
-      id: w.id,
-      title: w.title,
-      courseName: w.course_name,
-      submittedAt: w.submitted_at,
-      workType: w.work_type,
-      // Featured work in real mode is unreflected by definition, so
-      // there's no conversation to derive a primary pillar from.
-      // Leave null; the UI renders a transparent stripe.
-      primaryPillar: null as string | null,
-    }))
+  const featuredWork = allWork.map(w => ({
+    id: w.id,
+    title: w.title,
+    courseName: w.course_name,
+    submittedAt: w.submitted_at,
+    workType: w.work_type,
+    conversationId: conversationByWorkId.get(w.id) ?? null,
+    primaryPillar: pillarByWorkId.get(w.id) ?? null,
+  }))
 
-  // ─── Recent journal (open_reflection) ───────
-  // Pull skill-tag rows in the same query so we can resolve each
-  // entry's dominant pillar without a second round-trip.
+  // ─── Recent journal (open_reflection) ─────────────
+  // Pull skill-tag rows + their joined skill→pillar so we can resolve
+  // each entry's dominant pillar without a second round-trip.
   const { data: journalRows } = await admin
     .from('growth_conversation')
     .select(`
       id, started_at, work_context, synthesis_text,
-      conversation_skill_tag (skill_id, confidence, student_confirmed)
+      conversation_skill_tag (
+        skill_id, confidence, student_confirmed,
+        durable_skill ( name, pillar:pillar_id ( name ) )
+      )
     `)
-    .eq('student_id', student.id)
+    .eq('student_id', studentId)
     .eq('conversation_type', 'open_reflection')
     .eq('status', 'completed')
     .order('started_at', { ascending: false })
@@ -238,15 +150,25 @@ export async function GET() {
       skill_id: string
       confidence: number
       student_confirmed: boolean
+      durable_skill: {
+        name: string
+        pillar: { name: string } | null
+      } | null
     }> | null
   }
-  const journal = (journalRows ?? []) as unknown as JournalRow[]
-  const recentJournal = journal.map(j => {
+  const recentJournal = ((journalRows ?? []) as unknown as JournalRow[]).map(j => {
     const tags = (j.conversation_skill_tag ?? []).map(t => ({
       skillId: t.skill_id,
       confidence: t.confidence,
       studentConfirmed: t.student_confirmed,
     }))
+    const topTag = tags.length
+      ? [...tags].sort((a, b) => b.confidence - a.confidence)[0]
+      : null
+    const pillarName = topTag
+      ? j.conversation_skill_tag?.find(t => t.skill_id === topTag.skillId)
+          ?.durable_skill?.pillar?.name ?? null
+      : null
     return {
       id: j.id,
       startedAt: j.started_at,
@@ -254,7 +176,7 @@ export async function GET() {
       synthesisExcerpt: j.synthesis_text
         ? j.synthesis_text.slice(0, 140) + (j.synthesis_text.length > 140 ? '…' : '')
         : null,
-      primaryPillar: primaryPillarFromTags(tags),
+      primaryPillar: pillarName,
     }
   })
 
@@ -265,18 +187,23 @@ export async function GET() {
     admin
       .from('growth_conversation')
       .select('*', { count: 'exact', head: true })
-      .eq('student_id', student.id)
+      .eq('student_id', studentId)
       .eq('status', 'completed')
       .gte('started_at', weekAgo),
     admin
       .from('student_work')
       .select('*', { count: 'exact', head: true })
-      .eq('student_id', student.id)
+      .eq('student_id', studentId)
       .gte('submitted_at', weekAgo),
   ])
 
   // ─── LTI pinned resource ────────────────────
   const ltiPinned = parseLtiContext(cookieStore.get('lti_context')?.value)
+
+  // Note: `primaryPillarFromTags` import retained for legacy callers
+  // but unused here — pillar resolution now joins through the SQL
+  // query directly.
+  void primaryPillarFromTags
 
   return NextResponse.json({
     featuredWork,

@@ -1,5 +1,3 @@
-import * as staticData from '@/data'
-import { skills, pillars } from '@/data'
 import { SDT_LEVEL_MAP } from './constants'
 import type {
   Student,
@@ -16,8 +14,6 @@ import type {
   SdtLevel,
   SyncRun,
 } from './types'
-
-const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
 // ─── SUPABASE HELPERS ──────────────────────────────
 
@@ -39,10 +35,6 @@ function snakeToCamel(obj: Record<string, unknown>): Record<string, unknown> {
 // ─── STUDENT QUERIES ────────────────────────────────
 
 export async function getStudent(studentId: string): Promise<Student | null> {
-  if (isDemoMode) {
-    return staticData.getStudent(studentId) ?? null
-  }
-
   const supabase = await getSupabase()
   const { data } = await supabase
     .from('student')
@@ -53,10 +45,6 @@ export async function getStudent(studentId: string): Promise<Student | null> {
 }
 
 export async function getCurrentStudent(studentId?: string): Promise<Student | null> {
-  if (isDemoMode) {
-    return staticData.getStudent(studentId || 'stu_aja') ?? null
-  }
-
   const supabase = await getSupabase()
 
   if (studentId) {
@@ -81,26 +69,18 @@ export async function getCurrentStudent(studentId?: string): Promise<Student | n
 }
 
 export async function getAllStudents(): Promise<Student[]> {
-  if (isDemoMode) return staticData.students
-
   const supabase = await getSupabase()
   const { data } = await supabase.from('student').select('*')
   return (data || []).map(s => snakeToCamel(s) as unknown as Student)
 }
 
 export async function getAllCoaches(): Promise<Coach[]> {
-  if (isDemoMode) return staticData.coaches
-
   const supabase = await getSupabase()
   const { data } = await supabase.from('coach').select('*')
   return (data || []).map(c => snakeToCamel(c) as unknown as Coach)
 }
 
 export async function getCurrentCoach(coachId?: string): Promise<Coach | null> {
-  if (isDemoMode) {
-    return staticData.getCoach(coachId || 'coach_elizabeth') ?? null
-  }
-
   const supabase = await getSupabase()
 
   if (coachId) {
@@ -127,10 +107,6 @@ export async function getCurrentCoach(coachId?: string): Promise<Coach | null> {
 // ─── GARDEN DATA ────────────────────────────────────
 
 export async function getGardenData(studentId: string): Promise<GardenData> {
-  if (isDemoMode) {
-    return buildGardenDataFromStatic(studentId)
-  }
-
   const supabase = await getSupabase()
 
   // Fetch student
@@ -225,56 +201,11 @@ export async function getGardenData(studentId: string): Promise<GardenData> {
   }
 }
 
-function buildGardenDataFromStatic(studentId: string): GardenData {
-  const student = staticData.getStudent(studentId)
-  if (!student) throw new Error(`Student not found: ${studentId}`)
-
-  const studentConversations = staticData.getStudentConversations(studentId)
-  const activeSkills = skills.filter(s => s.isActive)
-
-  const plants: GardenPlant[] = activeSkills.map(skill => {
-    const pillar = pillars.find(p => p.id === skill.pillarId)!
-    const coachAssessment = staticData.getLatestCoachAssessment(studentId, skill.id)
-    const selfAssessment = staticData.getLatestSelfAssessment(studentId, skill.id)
-    const currentDef = staticData.getCurrentDefinition(studentId, skill.id)
-    const previousDef = staticData.getPreviousDefinition(studentId, skill.id)
-    const skillConversations = staticData.getConversationsForSkill(studentId, skill.id)
-
-    const conversations: ConversationSummary[] = skillConversations.map(c => {
-      const work = c.workId ? staticData.getStudentWork(c.workId) : null
-      return {
-        id: c.id,
-        workTitle: work?.title || 'Reflection',
-        quarter: c.quarter,
-        date: c.startedAt,
-        pullQuote: extractPullQuote(c),
-      }
-    })
-
-    return {
-      skillId: skill.id,
-      skillName: skill.name,
-      pillarId: skill.pillarId,
-      pillarName: pillar.name,
-      sdtLevel: coachAssessment ? SDT_LEVEL_MAP[coachAssessment.sdtLevel] : 1,
-      selfLevel: selfAssessment ? SDT_LEVEL_MAP[selfAssessment.sdtLevel] : null,
-      currentDefinition: currentDef?.definitionText ?? null,
-      previousDefinition: previousDef?.definitionText ?? null,
-      definitionRevised: !!previousDef && !!currentDef,
-      conversationCount: skillConversations.length,
-      conversations,
-    }
-  })
-
-  const quarters = new Set(studentConversations.map(c => c.quarter))
-
-  return {
-    student,
-    plants,
-    totalConversations: studentConversations.length,
-    quartersActive: quarters.size,
-  }
-}
+// Removed: buildGardenDataFromStatic, buildCoachDashboardFromStatic,
+// buildSessionPrepFromStatic, buildAttentionItems. Demo personas
+// now live in the DB with is_demo=true and flow through the same
+// real-DB query paths. extractPullQuote is kept since it's still
+// used by the DB-mode paths.
 
 function extractPullQuote(conversation: GrowthConversation): string {
   const phase2 = conversation.responsePhase2 || ''
@@ -294,7 +225,6 @@ function extractPullQuote(conversation: GrowthConversation): string {
 // ─── CONVERSATION QUERIES ───────────────────────────
 
 export async function getConversation(id: string): Promise<GrowthConversation | null> {
-  if (isDemoMode) return staticData.getConversation(id) ?? null
 
   const supabase = await getSupabase()
   const { data } = await supabase
@@ -313,7 +243,6 @@ export async function getConversation(id: string): Promise<GrowthConversation | 
 }
 
 export async function getStudentConversations(studentId: string): Promise<GrowthConversation[]> {
-  if (isDemoMode) return staticData.getStudentConversations(studentId)
 
   const supabase = await getSupabase()
   const { data } = await supabase
@@ -336,7 +265,6 @@ export async function getConversationsForSkill(
   studentId: string,
   skillId: string
 ): Promise<GrowthConversation[]> {
-  if (isDemoMode) return staticData.getConversationsForSkill(studentId, skillId)
 
   const supabase = await getSupabase()
   const { data } = await supabase
@@ -357,7 +285,6 @@ export async function getConversationsForSkill(
 }
 
 export async function getAllStudentConversations(studentId: string): Promise<GrowthConversation[]> {
-  if (isDemoMode) return staticData.getStudentConversations(studentId)
 
   const supabase = await getSupabase()
   const { data } = await supabase
@@ -383,24 +310,6 @@ export async function getAllStudentConversations(studentId: string): Promise<Gro
 // ─── SKILL COVERAGE ─────────────────────────────────
 
 export async function getSkillCoverage(studentId: string): Promise<import('./types').SkillCoverageData[]> {
-  if (isDemoMode) {
-    // In demo mode, derive coverage from static data
-    const activeSkills = skills.filter(s => s.isActive)
-    return activeSkills.map(skill => {
-      const pillar = pillars.find(p => p.id === skill.pillarId)
-      const convos = staticData.getConversationsForSkill(studentId, skill.id)
-      return {
-        skillId: skill.id,
-        skillName: skill.name,
-        pillarId: skill.pillarId,
-        pillarName: pillar?.name || '',
-        taggedAssignments: convos.length, // approximate
-        completedConversations: convos.length,
-        coverageRatio: convos.length > 0 ? 1 : 0,
-      }
-    })
-  }
-
   const supabase = await getSupabase()
 
   // Get all active skills with pillars
@@ -453,10 +362,6 @@ export async function getSkillCoverage(studentId: string): Promise<import('./typ
 // ─── WORK WITH SKILL TAGS ───────────────────────────
 
 export async function getAvailableWorkWithTags(studentId: string): Promise<(import('./types').StudentWork & { skillTags: { skillId: string; skillName: string }[] })[]> {
-  if (isDemoMode) {
-    return staticData.getAvailableWork(studentId).map(w => ({ ...w, skillTags: [] }))
-  }
-
   const supabase = await getSupabase()
 
   const { data: allWork } = await supabase
@@ -488,7 +393,6 @@ export async function getAvailableWorkWithTags(studentId: string): Promise<(impo
 // ─── WORK QUERIES ───────────────────────────────────
 
 export async function getAvailableWork(studentId: string): Promise<StudentWork[]> {
-  if (isDemoMode) return staticData.getAvailableWork(studentId)
 
   const supabase = await getSupabase()
 
@@ -516,7 +420,6 @@ export async function getAvailableWork(studentId: string): Promise<StudentWork[]
 // ─── COACH QUERIES ──────────────────────────────────
 
 export async function getCoachDashboard(coachId: string): Promise<CoachDashboardData> {
-  if (isDemoMode) return buildCoachDashboardFromStatic(coachId)
 
   const supabase = await getSupabase()
 
@@ -594,83 +497,6 @@ export async function getCoachDashboard(coachId: string): Promise<CoachDashboard
   return { coach, students: studentSummaries, attentionItems }
 }
 
-function buildCoachDashboardFromStatic(coachId: string): CoachDashboardData {
-  const coach = staticData.getCoach(coachId)
-  if (!coach) throw new Error(`Coach not found: ${coachId}`)
-
-  const coachStudents = staticData.getStudentsByCoach(coachId)
-  const activeSkills = skills.filter(s => s.isActive)
-
-  const studentSummaries: CoachStudentSummary[] = coachStudents.map(student => {
-    const studentConvos = staticData.getStudentConversations(student.id)
-    const thisQuarterConvos = studentConvos.filter(c => c.quarter === 'Spring 2026')
-    const latestConvo = studentConvos[studentConvos.length - 1]
-
-    const skillLevels = activeSkills.map(skill => {
-      const assessment = staticData.getLatestCoachAssessment(student.id, skill.id)
-      return {
-        skillId: skill.id,
-        skillName: skill.name,
-        sdtLevel: (assessment?.sdtLevel || 'external') as SdtLevel,
-      }
-    })
-
-    return {
-      student,
-      conversationsThisQuarter: thisQuarterConvos.length,
-      latestPullQuote: latestConvo ? extractPullQuote(latestConvo) : null,
-      latestConversationDate: latestConvo?.startedAt ?? null,
-      skillLevels,
-    }
-  })
-
-  const attentionItems = buildAttentionItems(coachStudents)
-
-  return { coach, students: studentSummaries, attentionItems }
-}
-
-function buildAttentionItems(students: Student[]): AttentionItem[] {
-  const items: AttentionItem[] = []
-  const now = new Date()
-  const threeWeeksAgo = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000)
-
-  for (const student of students) {
-    const convos = staticData.getStudentConversations(student.id)
-    const latestConvo = convos[convos.length - 1]
-
-    if (!latestConvo || new Date(latestConvo.startedAt) < threeWeeksAgo) {
-      items.push({
-        type: 'inactive',
-        studentId: student.id,
-        studentName: `${student.firstName} ${student.lastName}`,
-        message: `${student.firstName} hasn't had a conversation in 3+ weeks.`,
-      })
-    }
-
-    const activeSkills = skills.filter(s => s.isActive)
-    for (const skill of activeSkills) {
-      const coachAssess = staticData.getLatestCoachAssessment(student.id, skill.id)
-      const selfAssess = staticData.getLatestSelfAssessment(student.id, skill.id)
-
-      if (coachAssess && selfAssess) {
-        const coachLevel = SDT_LEVEL_MAP[coachAssess.sdtLevel]
-        const selfLevel = SDT_LEVEL_MAP[selfAssess.sdtLevel]
-
-        if (Math.abs(coachLevel - selfLevel) >= 2) {
-          items.push({
-            type: 'assessment_gap',
-            studentId: student.id,
-            studentName: `${student.firstName} ${student.lastName}`,
-            message: `${student.firstName}'s self-assessment for ${skill.name} is ${Math.abs(coachLevel - selfLevel)} levels ${selfLevel < coachLevel ? 'below' : 'above'} your assessment. Worth discussing.`,
-          })
-        }
-      }
-    }
-  }
-
-  return items
-}
-
 function buildAttentionItemsFromSummaries(summaries: CoachStudentSummary[]): AttentionItem[] {
   const items: AttentionItem[] = []
   const now = new Date()
@@ -696,7 +522,6 @@ export async function getSessionPrep(
   coachId: string,
   studentId: string
 ): Promise<SessionPrepData> {
-  if (isDemoMode) return buildSessionPrepFromStatic(coachId, studentId)
 
   const supabase = await getSupabase()
 
@@ -779,58 +604,6 @@ export async function getSessionPrep(
   return { student, recentConversations, patterns, currentGoals, lastNote }
 }
 
-function buildSessionPrepFromStatic(coachId: string, studentId: string): SessionPrepData {
-  const student = staticData.getStudent(studentId)
-  if (!student) throw new Error(`Student not found: ${studentId}`)
-
-  const allConvos = staticData.getStudentConversations(studentId)
-  // Join work title onto each recent conversation so Prep cards show
-  // the assignment name instead of generic "Reflection".
-  const recentConversations = allConvos.slice(-3).map(c => ({
-    ...c,
-    workTitle: c.workId ? staticData.getStudentWork(c.workId)?.title ?? null : null,
-  }))
-
-  const notes = staticData.getCoachNotes(coachId, studentId)
-  const lastNote = notes[0] ?? null
-
-  const currentGoals = staticData
-    .getStudentGoals(studentId)
-    .filter(g => g.status === 'active')
-
-  const patterns: string[] = []
-
-  const activeSkills = skills.filter(s => s.isActive)
-  for (const skill of activeSkills) {
-    const prev = staticData.getPreviousDefinition(studentId, skill.id)
-    const curr = staticData.getCurrentDefinition(studentId, skill.id)
-    if (prev && curr && prev.id !== curr.id) {
-      patterns.push(
-        `${student.firstName}'s ${skill.name} language has shifted from "${prev.definitionText}" to "${curr.definitionText}"`
-      )
-    }
-  }
-
-  for (const skill of activeSkills) {
-    const coachAssess = staticData.getLatestCoachAssessment(studentId, skill.id)
-    const selfAssess = staticData.getLatestSelfAssessment(studentId, skill.id)
-    if (coachAssess && selfAssess && coachAssess.sdtLevel !== selfAssess.sdtLevel) {
-      patterns.push(
-        `Assessment gap for ${skill.name}: Self=${selfAssess.sdtLevel}, Coach=${coachAssess.sdtLevel}. Worth surfacing gently.`
-      )
-    }
-  }
-
-  const thisQuarterConvos = allConvos.filter(c => c.quarter === 'Spring 2026')
-  if (thisQuarterConvos.length >= 3) {
-    patterns.push(
-      `${student.firstName} has completed ${thisQuarterConvos.length} conversations this quarter — strong engagement.`
-    )
-  }
-
-  return { student, recentConversations, patterns, currentGoals, lastNote }
-}
-
 // ─── SYNC OBSERVABILITY ─────────────────────────────
 
 /**
@@ -841,7 +614,6 @@ function buildSessionPrepFromStatic(coachId: string, studentId: string): Session
  * Safe to call in demo mode — returns an empty array.
  */
 export async function getRecentSyncRuns(limit: number = 5): Promise<SyncRun[]> {
-  if (isDemoMode) return []
 
   const supabase = await getSupabase()
   const { data, error } = await supabase
@@ -865,7 +637,6 @@ export async function getRecentSyncRuns(limit: number = 5): Promise<SyncRun[]> {
  * have happened since.
  */
 export async function getLastSuccessfulSyncRun(): Promise<SyncRun | null> {
-  if (isDemoMode) return null
 
   const supabase = await getSupabase()
   const { data } = await supabase

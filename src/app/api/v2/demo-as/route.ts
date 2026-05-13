@@ -1,33 +1,32 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { students as staticStudents, coaches as staticCoaches } from '@/data'
+import { createAdminClient } from '@/lib/supabase-admin'
 import { PERSONA_COOKIE } from '@/lib/v2-auth'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 /**
- * GET /api/v2/demo-as?persona=<id>
+ * GET /api/v2/demo-as?persona=<slug>
  *
  * Sets the v2 demo persona cookie and redirects to the appropriate
- * Today view for that role. Only effective when NEXT_PUBLIC_DEMO_MODE
- * is true — in real mode the cookie is ignored by getV2Identity().
+ * Today view for that role.
+ *
+ * Validation: the persona slug must match an `is_demo = true` row's
+ * `demo_slug` in the DB (student or coach). This prevents arbitrary
+ * URL values from being honored. After the cutover, demo data lives
+ * in the same DB real students will use; the is_demo flag is what
+ * gates real-cohort exposure.
  *
  * GET ?persona=clear unsets the cookie and redirects to /v2.
  *
- * No real auth required — this is for demo navigation, and the
- * persona it sets only takes effect in demo mode.
+ * No real auth required — demo personas are intentionally accessible
+ * to stakeholders demoing the product. The is_demo flag keeps demo
+ * personas out of real coach caseloads and analytics.
  */
 export async function GET(req: Request) {
   const url = new URL(req.url)
   const persona = url.searchParams.get('persona')
-
-  if (process.env.NEXT_PUBLIC_DEMO_MODE !== 'true') {
-    return NextResponse.json(
-      { error: 'Demo persona switching only works when NEXT_PUBLIC_DEMO_MODE=true' },
-      { status: 400 }
-    )
-  }
 
   // Clear branch
   if (persona === 'clear' || !persona) {
@@ -36,10 +35,23 @@ export async function GET(req: Request) {
     return res
   }
 
-  // Validate persona id against static seed so we don't honor arbitrary
-  // values from the URL.
-  const student = staticStudents.find(s => s.id === persona)
-  const coach = staticCoaches.find(c => c.id === persona)
+  // Validate against the DB — demo_slug must match an is_demo row
+  const admin = createAdminClient()
+  const [{ data: student }, { data: coach }] = await Promise.all([
+    admin
+      .from('student')
+      .select('id')
+      .eq('demo_slug', persona)
+      .eq('is_demo', true)
+      .maybeSingle(),
+    admin
+      .from('coach')
+      .select('id')
+      .eq('demo_slug', persona)
+      .eq('is_demo', true)
+      .maybeSingle(),
+  ])
+
   if (!student && !coach) {
     return NextResponse.json(
       { error: `Unknown demo persona: ${persona}` },
@@ -58,7 +70,7 @@ export async function GET(req: Request) {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
-    maxAge: 60 * 60 * 24, // 1 day — keeps the demo persona for a session, not forever
+    maxAge: 60 * 60 * 24, // 1 day — session-scoped marker
   })
 
   return NextResponse.redirect(new URL(target, req.url), 302)

@@ -1,73 +1,17 @@
-import { createServerClient } from '@supabase/auth-helpers-nextjs'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { generateSkillNarrative } from '@/lib/conversation-engine-live'
-import { getSkillNarrative } from '@/data'
-import { cookies } from 'next/headers'
+import { getV2StudentId } from '@/lib/v2-auth'
 import { NextResponse } from 'next/server'
 import type { NarrativeContext } from '@/lib/llm-prompts'
 
 export async function POST(request: Request) {
   try {
-    const cookieStore = cookies()
-
-    // ─── Demo mode ──────────────────────────────
-    // Return the static seed for the requested skill (with a brief
-    // synthetic delay so the loading state in the v2 UI gets a beat).
-    // Append the skillId to the `demo-narrative-revealed` cookie so
-    // /api/student/narrative knows to surface this skill's text on
-    // the next read.
-    if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
-      const { skillId } = await request.json()
-      if (!skillId) {
-        return NextResponse.json({ error: 'skillId is required' }, { status: 400 })
-      }
-      const demoStudentId = 'stu_aja'
-      const seed = getSkillNarrative(demoStudentId, skillId)
-      if (!seed) {
-        return NextResponse.json(
-          { error: 'No demo narrative available for this skill' },
-          { status: 404 }
-        )
-      }
-      await new Promise(resolve => setTimeout(resolve, 2000))
-
-      // Merge skillId into the revealed-set cookie
-      const existing = cookieStore.get('demo-narrative-revealed')?.value ?? ''
-      const revealed = new Set(existing.split(',').filter(Boolean))
-      revealed.add(skillId)
-      cookieStore.set('demo-narrative-revealed', Array.from(revealed).join(','), {
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 60 * 60 * 24,
-      })
-
-      return NextResponse.json({
-        narrativeText: seed.narrativeText,
-        richness: seed.narrativeRichness,
-        version: seed.version,
-        annotations: seed.annotations ?? [],
-        conversationCount: 0,
-      })
-    }
-
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() { return cookieStore.getAll() },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
-          },
-        },
-      }
-    )
-
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
+    // Student id is resolved through the v2 auth shim (persona cookie
+    // OR real auth). Demo personas are real DB rows now, so Generate
+    // runs the actual LLM against their actual DB conversations —
+    // no static-seed short-circuit anywhere.
+    const studentId = await getV2StudentId()
+    if (!studentId) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
@@ -78,11 +22,10 @@ export async function POST(request: Request) {
 
     const admin = createAdminClient()
 
-    // Get student
     const { data: studentRow } = await admin
       .from('student')
       .select('*')
-      .eq('auth_user_id', user.id)
+      .eq('id', studentId)
       .single()
 
     if (!studentRow) {

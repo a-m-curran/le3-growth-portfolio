@@ -1,39 +1,23 @@
 import { createAdminClient } from '@/lib/supabase-admin'
 import { NextResponse } from 'next/server'
-import { skills as staticSkills, pillars as staticPillars } from '@/data'
 
 export const dynamic = 'force-dynamic'
 
 /**
  * GET /api/skills
  *
- * Returns the active skills framework. In demo mode
- * (NEXT_PUBLIC_DEMO_MODE=true) returns the static seed from
- * src/data/skills.ts so demo students see the same skill names that
- * their seeded conversations reference. In normal mode queries
- * durable_skill from the DB.
+ * Returns the active skills framework — name + pillar — for any
+ * caller that needs to resolve skill ids to names without the
+ * full schema. The taxonomy (pillars + durable_skills) is
+ * pre-seeded in the DB and is the same across demo and real
+ * students, so there's no demo branch.
  *
- * Response shape is identical either way:
+ * Response shape:
  *   { skills: [{ id, name, pillarName }] }
  */
 export async function GET() {
-  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
-
-  if (isDemoMode) {
-    const pillarNameById = new Map(staticPillars.map(p => [p.id, p.name]))
-    const formatted = staticSkills
-      .filter(s => s.isActive)
-      .map(s => ({
-        id: s.id,
-        name: s.name,
-        pillarName: pillarNameById.get(s.pillarId) || 'Unknown',
-      }))
-    return NextResponse.json({ skills: formatted })
-  }
-
   try {
     const admin = createAdminClient()
-
     const { data: skills } = await admin
       .from('durable_skill')
       .select('id, name, pillar:pillar_id(name)')

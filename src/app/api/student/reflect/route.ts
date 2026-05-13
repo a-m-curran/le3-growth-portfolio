@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase-admin'
-import { conversations as staticConversations, studentWork as staticWork } from '@/data'
-import { primaryPillarFromTags } from '@/lib/pillar-resolution'
+import { getV2StudentId } from '@/lib/v2-auth'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -13,119 +10,26 @@ export const runtime = 'nodejs'
  *
  * Powers /v2/reflect. Returns three lists for the work-tied reflection
  * surface:
- *   inProgress    — conversations the student is mid-way through (status
- *                   'in_progress'), with current phase derived from
- *                   which response fields are filled.
- *   completed     — completed conversations with synthesis excerpts.
- *                   Excludes open_reflection (those live under journal).
+ *   inProgress    — conversations the student is mid-way through
+ *   completed     — completed conversations with synthesis excerpts
+ *                   (excludes open_reflection — those live under
+ *                   /api/student/journal)
  *   featuredWork  — submitted student_work rows that have no completed
- *                   conversation yet — i.e. the "what could I reflect on
- *                   next?" candidates.
+ *                   conversation yet — the "what could I reflect on next?"
+ *                   candidates
  *
- * Demo mode returns static seed conversations + work, filtered by the
- * first demo student so the page shows realistic content.
+ * Demo personas are real DB rows (is_demo=true). The student id is
+ * resolved through `getV2StudentId` which honors the demo persona
+ * cookie OR real Supabase auth — same query path for both.
  */
 export async function GET() {
-  const cookieStore = cookies()
-
-  // ─── Demo mode short-circuit ─────────────────
-  if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
-    // Use the first demo student as the "current" one (the v2 layout
-    // doesn't yet route demo viewers to a specific demo student, so
-    // we anchor to one for consistent presentation).
-    const demoStudentId = 'stu_aja'
-    const studentConvos = staticConversations.filter(c => c.studentId === demoStudentId)
-    const completedWorkBased = studentConvos.filter(
-      c => c.status === 'completed' && c.conversationType !== 'open_reflection'
-    )
-    const inProgress = studentConvos.filter(c => c.status === 'in_progress')
-
-    const reflectedWorkIds = new Set(
-      completedWorkBased.map(c => c.workId).filter((id): id is string => !!id)
-    )
-    const studentWorkRows = staticWork.filter(w => w.studentId === demoStudentId)
-    const featuredWork = studentWorkRows
-      .filter(w => !reflectedWorkIds.has(w.id))
-      .slice(0, 5)
-      .map(w => ({
-        id: w.id,
-        title: w.title,
-        courseName: w.courseName ?? null,
-        submittedAt: w.submittedAt ?? null,
-        workType: w.workType ?? null,
-      }))
-
-    return NextResponse.json({
-      inProgress: inProgress.map(c => ({
-        id: c.id,
-        workId: c.workId,
-        workTitle: c.workId
-          ? staticWork.find(w => w.id === c.workId)?.title ?? null
-          : null,
-        startedAt: c.startedAt,
-        currentPhase: derivePhase(c),
-        primaryPillar: primaryPillarFromTags(c.skillTags),
-      })),
-      completed: completedWorkBased.map(c => ({
-        id: c.id,
-        workId: c.workId,
-        workTitle: c.workId
-          ? staticWork.find(w => w.id === c.workId)?.title ?? null
-          : null,
-        completedAt: c.completedAt ?? null,
-        synthesisExcerpt: c.synthesisText
-          ? c.synthesisText.slice(0, 140) + (c.synthesisText.length > 140 ? '…' : '')
-          : null,
-        skillTagCount: c.skillTags?.length ?? 0,
-        primaryPillar: primaryPillarFromTags(c.skillTags),
-      })),
-      featuredWork,
-    })
-  }
-
-  // ─── DB-backed flow ─────────────────────────
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) {
+  const studentId = await getV2StudentId()
+  if (!studentId) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
 
   const admin = createAdminClient()
-  const { data: student } = await admin
-    .from('student')
-    .select('id')
-    .eq('auth_user_id', user.id)
-    .maybeSingle()
 
-  if (!student) {
-    return NextResponse.json(
-      { error: 'Student record not found' },
-      { status: 404 }
-    )
-  }
-
-  // Fetch all conversations + work for this student in two queries.
-  // Include skill_id/confidence/student_confirmed on the skill_tag join
-  // so we can resolve each conversation's primary pillar without a
-  // second round-trip.
   const [{ data: convoRows }, { data: workRows }] = await Promise.all([
     admin
       .from('growth_conversation')
@@ -135,19 +39,29 @@ export async function GET() {
           'prompt_phase_2, prompt_phase_3, ' +
           'synthesis_text, conversation_type, ' +
           'student_work(title), ' +
-          'conversation_skill_tag(skill_id, confidence, student_confirmed)'
+          'conversation_skill_tag(skill_id, confidence, student_confirmed, ' +
+          '  durable_skill(name, pillar:pillar_id(name)))'
       )
-      .eq('student_id', student.id)
+      .eq('student_id', studentId)
       .order('started_at', { ascending: false })
       .limit(50),
     admin
       .from('student_work')
       .select('id, title, course_name, submitted_at, work_type')
-      .eq('student_id', student.id)
+      .eq('student_id', studentId)
       .order('submitted_at', { ascending: false, nullsFirst: false })
       .limit(20),
   ])
 
+  interface ConvoTag {
+    skill_id: string
+    confidence: number
+    student_confirmed: boolean
+    durable_skill: {
+      name: string
+      pillar: { name: string } | null
+    } | null
+  }
   interface ConvoRow {
     id: string
     work_id: string | null
@@ -162,11 +76,7 @@ export async function GET() {
     synthesis_text: string | null
     conversation_type: string | null
     student_work: { title: string } | null
-    conversation_skill_tag: Array<{
-      skill_id: string
-      confidence: number
-      student_confirmed: boolean
-    }> | null
+    conversation_skill_tag: ConvoTag[] | null
   }
   interface WorkRow {
     id: string
@@ -178,12 +88,11 @@ export async function GET() {
   const convos = (convoRows ?? []) as unknown as ConvoRow[]
   const work = (workRows ?? []) as unknown as WorkRow[]
 
-  function tagsForConvo(c: ConvoRow) {
-    return (c.conversation_skill_tag ?? []).map(t => ({
-      skillId: t.skill_id,
-      confidence: t.confidence,
-      studentConfirmed: t.student_confirmed,
-    }))
+  function dominantPillar(c: ConvoRow): string | null {
+    const tags = c.conversation_skill_tag ?? []
+    if (tags.length === 0) return null
+    const top = [...tags].sort((a, b) => b.confidence - a.confidence)[0]
+    return top.durable_skill?.pillar?.name ?? null
   }
 
   const inProgress = convos
@@ -194,7 +103,7 @@ export async function GET() {
       workTitle: c.student_work?.title ?? null,
       startedAt: c.started_at,
       currentPhase: deriveDbPhase(c),
-      primaryPillar: primaryPillarFromTags(tagsForConvo(c)),
+      primaryPillar: dominantPillar(c),
     }))
 
   const completed = convos
@@ -210,7 +119,7 @@ export async function GET() {
         ? c.synthesis_text.slice(0, 140) + (c.synthesis_text.length > 140 ? '…' : '')
         : null,
       skillTagCount: c.conversation_skill_tag?.length ?? 0,
-      primaryPillar: primaryPillarFromTags(tagsForConvo(c)),
+      primaryPillar: dominantPillar(c),
     }))
 
   const reflectedWorkIds = new Set(
@@ -232,19 +141,6 @@ export async function GET() {
     }))
 
   return NextResponse.json({ inProgress, completed, featuredWork })
-}
-
-interface PhaseSource {
-  responsePhase1?: string | null
-  responsePhase2?: string | null
-  promptPhase2?: string | null
-  promptPhase3?: string | null
-}
-
-function derivePhase(c: PhaseSource): 1 | 2 | 3 {
-  if (c.responsePhase2 && c.promptPhase3) return 3
-  if (c.responsePhase1 && c.promptPhase2) return 2
-  return 1
 }
 
 function deriveDbPhase(c: {
