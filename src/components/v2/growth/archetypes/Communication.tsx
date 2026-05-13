@@ -1,64 +1,78 @@
 'use client'
 
 import type { ArchetypeProps } from '../shared'
-import { clamp01, artworkFilterIds } from '../shared'
+import { seededRandom, clamp01, lerp, artworkFilterIds } from '../shared'
 import { ArtworkFilters } from '../ArtworkFilters'
 import { CelebrationGlow, CelebrationSparkles } from '../CelebrationLayer'
 
 /**
- * Communication — two speech bubbles facing each other.
+ * Communication — a megaphone broadcasting outward.
  *
- * Why: communication is back-and-forth. Two bubbles facing each
- * other, content filling them over time, with small "message dots"
- * travelling between them — the universal "people talking" icon.
+ * Why: the megaphone is the universal icon for "I have something to
+ * say and I want it heard." We render a megaphone angled up-right,
+ * with concentric sound-wave arcs emanating from its mouth and small
+ * symbols ("words being broadcast") flying along the wave fronts.
  *
  * Composition stages (continuous):
- *   g 0.00–0.20  empty bubble outlines
- *   g 0.20–0.50  left bubble fills with content lines
- *   g 0.50–0.80  both bubbles fill; message dots fly between them
- *   g 0.80–1.00  rich back-and-forth; bubbles overflow slightly
+ *   g 0.00–0.20  megaphone alone, no sound coming out yet
+ *   g 0.20–0.50  one sound wave; one or two flying symbols
+ *   g 0.50–0.80  multiple wave arcs; rich symbol stream
+ *   g 0.80–1.00  full broadcast — waves reach the canvas edge,
+ *                many symbols traveling, celebration sparkles
  *
- * Depth: bubbles use a subtle highlight on the upper-left edge
- * (paper-like quality); drop shadows lift them off the canvas;
- * "messages in transit" glow as they travel.
+ * Depth: megaphone body has a metallic gradient (light on the upper
+ * edge, dark underside); waves layer in front-to-back order with
+ * decreasing opacity; flying symbols drop-shadow forward.
  */
 export function CommunicationVisual({ growth, density, palette, seed, animate = true }: ArchetypeProps) {
+  const rand = seededRandom(seed)
   const fid = artworkFilterIds(seed)
   const g = clamp01(growth)
 
-  // Two bubbles — left smaller (incoming), right larger (you)
-  const leftCx = 48
-  const leftCy = 68
-  const leftW = 50
-  const leftH = 36
+  // Megaphone geometry — anchored in lower-left, pointed up-right
+  // Mouth (the wide end) is at (mouthX, mouthY), grip (narrow end)
+  // is below-and-left.
+  const mouthX = 95
+  const mouthY = 65
+  const gripX = 50
+  const gripY = 110
+  // Mouth circle (outer rim)
+  const mouthR = 22
+  // Inner depth circle (the dark "inside the cone" look)
+  const innerR = 14
 
-  const rightCx = 108
-  const rightCy = 92
-  const rightW = 52
-  const rightH = 38
+  // Sound wave count + reach
+  const waveCount = Math.max(0, Math.round(lerp(0, 4, fadeIn(g, 0.2, 0.95))))
 
-  // Content lines visibility
-  const leftLines = fadeIn(g, 0.15, 0.45)
-  const rightLines = fadeIn(g, 0.4, 0.7)
-  const messagesVisible = g > 0.5
-
-  // Number of message dots flying between — more at peak so the
-  // dialogue feels rich and alive
-  const messageCount = Math.floor(density * 5) + (g > 0.5 ? 2 : 0) + (g > 0.8 ? 2 : 0)
+  // Flying symbols — small dots that travel outward along the wave
+  // axis at the mouth direction
+  const symbolCount = Math.floor(density * 4) + (g > 0.5 ? 2 : 0) + (g > 0.85 ? 2 : 0)
+  // Direction from grip to mouth (the broadcast direction)
+  const dx = mouthX - gripX
+  const dy = mouthY - gripY
+  const dirLen = Math.hypot(dx, dy)
+  const dirX = dx / dirLen
+  const dirY = dy / dirLen
 
   return (
     <svg viewBox="0 0 160 160" className="w-full h-full" aria-hidden="true">
       <defs>
         <ArtworkFilters seed={seed} />
-        <linearGradient id={`com-bubbleL-${seed}`} x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor="white" />
-          <stop offset="100%" stopColor={palette.bg} stopOpacity="0.9" />
+        <linearGradient id={`com-body-${seed}`} x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0%" stopColor="white" stopOpacity="0.55" />
+          <stop offset="40%" stopColor={palette.accent} />
+          <stop offset="100%" stopColor={palette.dark} />
         </linearGradient>
-        <linearGradient id={`com-bubbleR-${seed}`} x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor={palette.bg} />
-          <stop offset="100%" stopColor={palette.mid} stopOpacity="0.4" />
+        <linearGradient id={`com-inside-${seed}`} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor={palette.dark} stopOpacity="0.95" />
+          <stop offset="100%" stopColor={palette.dark} stopOpacity="0.5" />
         </linearGradient>
-        <radialGradient id={`com-msg-${seed}`} cx="50%" cy="50%" r="50%">
+        <linearGradient id={`com-grip-${seed}`} x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0%" stopColor="#4b5563" />
+          <stop offset="50%" stopColor="#9ca3af" />
+          <stop offset="100%" stopColor="#4b5563" />
+        </linearGradient>
+        <radialGradient id={`com-symbol-${seed}`} cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="white" stopOpacity="1" />
           <stop offset="50%" stopColor={palette.accent} stopOpacity="0.95" />
           <stop offset="100%" stopColor={palette.accent} stopOpacity="0" />
@@ -68,109 +82,134 @@ export function CommunicationVisual({ growth, density, palette, seed, animate = 
       {/* Peak-glow halo */}
       <CelebrationGlow growth={growth} palette={palette} seed={seed} />
 
-      {/* Soft ground shadow under the conversation */}
-      <ellipse cx="80" cy="140" rx="50" ry="5" fill={`url(#${fid.ground})`} />
+      {/* Ground shadow */}
+      <ellipse cx="80" cy="145" rx="50" ry="5" fill={`url(#${fid.ground})`} />
 
-      {/* Left bubble — incoming */}
+      {/* Sound wave arcs — drawn from far → near so foreground waves
+          sit on top. Each is a partial ring centered at the mouth,
+          arcing outward in the broadcast direction. */}
+      {Array.from({ length: waveCount }, (_, i) => {
+        const rIndex = waveCount - 1 - i // outermost first
+        const r = mouthR + 10 + rIndex * 12
+        // Visibility of this wave — only fully visible when growth
+        // has progressed enough
+        const waveVisible = fadeIn(g, 0.2 + rIndex * 0.18, 0.4 + rIndex * 0.18)
+        if (waveVisible < 0.05) return null
+        // Arc spans about 100 degrees centered on the broadcast direction
+        const dirAngle = Math.atan2(dirY, dirX)
+        const startAngle = dirAngle - (50 * Math.PI) / 180
+        const endAngle = dirAngle + (50 * Math.PI) / 180
+        const x1 = mouthX + Math.cos(startAngle) * r
+        const y1 = mouthY + Math.sin(startAngle) * r
+        const x2 = mouthX + Math.cos(endAngle) * r
+        const y2 = mouthY + Math.sin(endAngle) * r
+        return (
+          <path
+            key={i}
+            d={`M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`}
+            stroke={palette.accent}
+            strokeWidth={lerp(2.4, 1.4, rIndex / Math.max(waveCount - 1, 1))}
+            fill="none"
+            strokeLinecap="round"
+            opacity={lerp(0.95, 0.4, rIndex / Math.max(waveCount, 1)) * waveVisible}
+          >
+            {animate && (
+              <animate
+                attributeName="opacity"
+                values={`${0.3 * waveVisible};${lerp(0.95, 0.4, rIndex / Math.max(waveCount, 1)) * waveVisible};${0.3 * waveVisible}`}
+                dur="1.6s"
+                begin={`${rIndex * 0.25}s`}
+                repeatCount="indefinite"
+              />
+            )}
+          </path>
+        )
+      })}
+
+      {/* Megaphone body */}
       <g filter={`url(#${fid.drop})`}>
-        <BubbleShape
-          cx={leftCx}
-          cy={leftCy}
-          w={leftW}
-          h={leftH}
-          fill={`url(#com-bubbleL-${seed})`}
-          stroke={palette.mid}
-          tailSide="right"
+        {/* Cone shape — from grip-end to mouth-end. The cone is a
+            trapezoid rotated along the broadcast direction. */}
+        <ConeShape
+          gripX={gripX}
+          gripY={gripY}
+          mouthX={mouthX}
+          mouthY={mouthY}
+          gripR={6}
+          mouthR={mouthR}
+          fill={`url(#com-body-${seed})`}
         />
-        {/* Upper-left specular highlight */}
-        <path
-          d={`M ${leftCx - leftW / 2 + 4} ${leftCy - leftH / 2 + 6} Q ${leftCx - leftW / 2 + 8} ${leftCy - leftH / 2 + 2} ${leftCx - leftW / 4} ${leftCy - leftH / 2 + 3}`}
+
+        {/* Mouth rim — the wide oval at the front */}
+        <ellipse
+          cx={mouthX}
+          cy={mouthY}
+          rx={mouthR}
+          ry={mouthR * 0.55}
+          fill={`url(#com-body-${seed})`}
+          transform={`rotate(${(Math.atan2(dirY, dirX) * 180) / Math.PI - 90} ${mouthX} ${mouthY})`}
+        />
+        {/* Inside the cone — dark depth */}
+        <ellipse
+          cx={mouthX}
+          cy={mouthY}
+          rx={innerR}
+          ry={innerR * 0.55}
+          fill={`url(#com-inside-${seed})`}
+          transform={`rotate(${(Math.atan2(dirY, dirX) * 180) / Math.PI - 90} ${mouthX} ${mouthY})`}
+        />
+
+        {/* Highlight strip along the upper edge of the cone */}
+        <line
+          x1={gripX + dirX * 6}
+          y1={gripY + dirY * 6 - 4}
+          x2={mouthX + Math.cos(Math.atan2(dirY, dirX) + Math.PI / 2) * mouthR * 0.45}
+          y2={mouthY + Math.sin(Math.atan2(dirY, dirX) + Math.PI / 2) * mouthR * 0.45}
           stroke="white"
+          strokeOpacity="0.35"
           strokeWidth="1.2"
           strokeLinecap="round"
-          fill="none"
-          opacity="0.7"
+        />
+
+        {/* Grip / handle — small cylinder behind the cone */}
+        <rect
+          x={gripX - 4}
+          y={gripY - 2}
+          width="10"
+          height="14"
+          rx="1.5"
+          fill={`url(#com-grip-${seed})`}
+          transform={`rotate(${(Math.atan2(dirY, dirX) * 180) / Math.PI + 90} ${gripX + 1} ${gripY + 5})`}
         />
       </g>
 
-      {/* Left bubble content lines */}
-      {leftLines > 0.01 && (
-        <g opacity={leftLines}>
-          <BubbleLines cx={leftCx} cy={leftCy} w={leftW} h={leftH} progress={leftLines} color={palette.dark} />
-        </g>
-      )}
-
-      {/* Right bubble — yours */}
-      <g filter={`url(#${fid.drop})`}>
-        <BubbleShape
-          cx={rightCx}
-          cy={rightCy}
-          w={rightW}
-          h={rightH}
-          fill={`url(#com-bubbleR-${seed})`}
-          stroke={palette.dark}
-          tailSide="left"
-        />
-        <path
-          d={`M ${rightCx - rightW / 2 + 4} ${rightCy - rightH / 2 + 6} Q ${rightCx - rightW / 2 + 8} ${rightCy - rightH / 2 + 2} ${rightCx - rightW / 4} ${rightCy - rightH / 2 + 3}`}
-          stroke="white"
-          strokeWidth="1.2"
-          strokeLinecap="round"
-          fill="none"
-          opacity="0.55"
-        />
-      </g>
-
-      {/* Right bubble content lines */}
-      {rightLines > 0.01 && (
-        <g opacity={rightLines}>
-          <BubbleLines cx={rightCx} cy={rightCy} w={rightW} h={rightH} progress={rightLines} color={palette.dark} />
-        </g>
-      )}
-
-      {/* Messages in transit — small glowing dots flying between bubbles */}
-      {messagesVisible && (
+      {/* Flying symbols — small bright dots/circles riding along the
+          broadcast direction, fading as they reach the edge */}
+      {symbolCount > 0 && (
         <g filter={`url(#${fid.glow})`}>
-          {Array.from({ length: messageCount }, (_, i) => {
-            // Some go left-to-right, some right-to-left
-            const dir = i % 2 === 0 ? 1 : -1
-            const startX = dir === 1 ? leftCx + leftW / 2 : rightCx - rightW / 2
-            const endX = dir === 1 ? rightCx - rightW / 2 : leftCx + leftW / 2
-            const startY = dir === 1 ? leftCy : rightCy
-            const endY = dir === 1 ? rightCy : leftCy
-            const delay = i * 0.6
+          {Array.from({ length: symbolCount }, (_, i) => {
+            const delay = i * 0.45 + rand() * 0.5
+            const lateralOffset = (rand() - 0.5) * 24
+            // Start point: just outside the mouth
+            const startX = mouthX + dirX * 8
+            const startY = mouthY + dirY * 8
+            // End point: well past the canvas in the broadcast direction
+            // (offset laterally so symbols fan out)
+            const endX = mouthX + dirX * 90 + (-dirY) * lateralOffset
+            const endY = mouthY + dirY * 90 + dirX * lateralOffset
             return (
-              <circle key={i} r="2.5" fill={`url(#com-msg-${seed})`}>
+              <circle key={i} r="2.4" fill={`url(#com-symbol-${seed})`}>
                 {animate ? (
                   <>
-                    <animate
-                      attributeName="cx"
-                      values={`${startX};${endX}`}
-                      dur="1.8s"
-                      begin={`${delay}s`}
-                      repeatCount="indefinite"
-                    />
-                    <animate
-                      attributeName="cy"
-                      values={`${startY};${(startY + endY) / 2 - 6};${endY}`}
-                      dur="1.8s"
-                      begin={`${delay}s`}
-                      repeatCount="indefinite"
-                    />
-                    <animate
-                      attributeName="opacity"
-                      values="0;1;1;0"
-                      dur="1.8s"
-                      begin={`${delay}s`}
-                      repeatCount="indefinite"
-                    />
+                    <animate attributeName="cx" values={`${startX};${endX}`} dur="2s" begin={`${delay}s`} repeatCount="indefinite" />
+                    <animate attributeName="cy" values={`${startY};${endY}`} dur="2s" begin={`${delay}s`} repeatCount="indefinite" />
+                    <animate attributeName="opacity" values="0;1;1;0" dur="2s" begin={`${delay}s`} repeatCount="indefinite" />
                   </>
                 ) : (
-                  // Static: park the dot in the middle
                   <>
                     <set attributeName="cx" to={(startX + endX) / 2} />
-                    <set attributeName="cy" to={(startY + endY) / 2 - 6} />
-                    <set attributeName="opacity" to="0.9" />
+                    <set attributeName="cy" to={(startY + endY) / 2} />
+                    <set attributeName="opacity" to="0.85" />
                   </>
                 )}
               </circle>
@@ -179,101 +218,60 @@ export function CommunicationVisual({ growth, density, palette, seed, animate = 
         </g>
       )}
 
-      {/* Celebration sparkles around the chat at peak */}
+      {/* Celebration sparkles around the broadcast at peak */}
       <CelebrationSparkles
         growth={growth}
         density={density}
         palette={palette}
         seed={seed}
         animate={animate}
-        innerExclude={50}
+        innerExclude={48}
       />
     </svg>
   )
 }
 
-/** A speech bubble — rounded rect with a tail on one side. */
-function BubbleShape({
-  cx,
-  cy,
-  w,
-  h,
+/**
+ * Builds a tapered cone shape between two points: a narrow grip end
+ * and a wide mouth end. Used for the megaphone body.
+ */
+function ConeShape({
+  gripX,
+  gripY,
+  mouthX,
+  mouthY,
+  gripR,
+  mouthR,
   fill,
-  stroke,
-  tailSide,
 }: {
-  cx: number
-  cy: number
-  w: number
-  h: number
+  gripX: number
+  gripY: number
+  mouthX: number
+  mouthY: number
+  gripR: number
+  mouthR: number
   fill: string
-  stroke: string
-  tailSide: 'left' | 'right'
 }) {
-  const left = cx - w / 2
-  const top = cy - h / 2
-  const right = cx + w / 2
-  const bottom = cy + h / 2
-  const r = 8
-  // Tail anchors near the bottom of the bubble, pointing toward the
-  // other bubble.
-  const tailX = tailSide === 'right' ? right : left
-  const tailDir = tailSide === 'right' ? 1 : -1
+  // Direction & perpendicular
+  const dx = mouthX - gripX
+  const dy = mouthY - gripY
+  const len = Math.hypot(dx, dy)
+  const px = -dy / len
+  const py = dx / len
+  // Four corners of the trapezoid
+  const g1x = gripX + px * gripR
+  const g1y = gripY + py * gripR
+  const g2x = gripX - px * gripR
+  const g2y = gripY - py * gripR
+  const m1x = mouthX + px * mouthR * 0.95
+  const m1y = mouthY + py * mouthR * 0.95
+  const m2x = mouthX - px * mouthR * 0.95
+  const m2y = mouthY - py * mouthR * 0.95
   return (
     <path
-      d={`
-        M ${left + r} ${top}
-        L ${right - r} ${top}
-        Q ${right} ${top} ${right} ${top + r}
-        L ${right} ${bottom - r}
-        Q ${right} ${bottom} ${right - r} ${bottom}
-        L ${tailX + (tailSide === 'right' ? -r - 2 : r + 2)} ${bottom}
-        L ${tailX + tailDir * 8} ${bottom + 8}
-        L ${tailX + (tailSide === 'right' ? -r - 6 : r + 6)} ${bottom}
-        L ${left + r} ${bottom}
-        Q ${left} ${bottom} ${left} ${bottom - r}
-        L ${left} ${top + r}
-        Q ${left} ${top} ${left + r} ${top}
-        Z
-      `}
+      d={`M ${g1x} ${g1y} L ${m1x} ${m1y} L ${m2x} ${m2y} L ${g2x} ${g2y} Z`}
       fill={fill}
-      stroke={stroke}
-      strokeWidth="1.4"
-      strokeOpacity="0.85"
     />
-  )
-}
-
-/** Content lines that fill in as a bubble's text grows. */
-function BubbleLines({
-  cx,
-  cy,
-  w,
-  h,
-  progress,
-  color,
-}: {
-  cx: number
-  cy: number
-  w: number
-  h: number
-  progress: number
-  color: string
-}) {
-  const padding = 7
-  const left = cx - w / 2 + padding
-  const right = cx + w / 2 - padding
-  const lineGap = 5
-  const linesToShow = Math.min(4, Math.ceil(progress * 4))
-  return (
-    <g stroke={color} strokeWidth="1.8" strokeLinecap="round" opacity="0.55">
-      {Array.from({ length: linesToShow }, (_, i) => {
-        const y = cy - h / 2 + padding + 4 + i * lineGap
-        // Last line is shorter — feels like real text
-        const lineEnd = i === linesToShow - 1 ? left + (right - left) * 0.6 : right
-        return <line key={i} x1={left} y1={y} x2={lineEnd} y2={y} />
-      })}
-    </g>
   )
 }
 
