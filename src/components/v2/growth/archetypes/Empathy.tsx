@@ -3,6 +3,7 @@
 import type { ArchetypeProps } from '../shared'
 import { clamp01, lerp, artworkFilterIds } from '../shared'
 import { ArtworkFilters } from '../ArtworkFilters'
+import { CelebrationGlow, CelebrationSparkles } from '../CelebrationLayer'
 
 /**
  * Empathy — two profile silhouettes with a heart between them.
@@ -23,7 +24,7 @@ import { ArtworkFilters } from '../ArtworkFilters'
  * head, deep shadow at neck); ground gets a soft cast shadow; heart
  * is form-modeled with a radial gradient + bright specular catch.
  */
-export function EmpathyVisual({ growth, palette, seed, animate = true }: ArchetypeProps) {
+export function EmpathyVisual({ growth, density, palette, seed, animate = true }: ArchetypeProps) {
   const fid = artworkFilterIds(seed)
   const g = clamp01(growth)
 
@@ -32,10 +33,11 @@ export function EmpathyVisual({ growth, palette, seed, animate = true }: Archety
   const leftCx = 45
   const rightCx = 115
 
-  // Heart visibility & size
+  // Heart visibility & size — peak heart pushed bigger so it
+  // really shines as the climax
   const heartOpacity = fadeIn(g, 0.5, 0.8)
   const heartGlow = fadeIn(g, 0.8, 1)
-  const heartSize = lerp(8, 14, fadeIn(g, 0.5, 0.95))
+  const heartSize = lerp(8, 18, fadeIn(g, 0.5, 0.95))
 
   // Pre-heart dots
   const dotsOpacity = fadeIn(g, 0.2, 0.5) * fadeOut(g, 0.55, 0.7)
@@ -58,6 +60,9 @@ export function EmpathyVisual({ growth, palette, seed, animate = true }: Archety
           <stop offset="100%" stopColor={palette.dark} stopOpacity="0.9" />
         </radialGradient>
       </defs>
+
+      {/* Peak-glow halo */}
+      <CelebrationGlow growth={growth} palette={palette} seed={seed} />
 
       {/* Ground shadow */}
       <ellipse cx="80" cy="142" rx="56" ry="6" fill={`url(#${fid.ground})`} />
@@ -120,7 +125,7 @@ export function EmpathyVisual({ growth, palette, seed, animate = true }: Archety
         </g>
       )}
 
-      {/* Radiating heartbeat lines — only at full growth */}
+      {/* Radiating heartbeat lines — only at full growth, more rings now */}
       {heartGlow > 0.1 && (
         <g
           opacity={heartGlow * 0.7}
@@ -129,18 +134,28 @@ export function EmpathyVisual({ growth, palette, seed, animate = true }: Archety
           fill="none"
           strokeLinecap="round"
         >
-          {[0, 1].map((i) => {
-            const r = heartSize + 6 + i * 4
+          {[0, 1, 2, 3].map((i) => {
+            const r = heartSize + 6 + i * 5
             return (
               <path
                 key={i}
                 d={`M ${80 - r} 80 Q 80 ${80 - r}, ${80 + r} 80`}
-                opacity={0.45 - i * 0.15}
+                opacity={0.5 - i * 0.1}
               />
             )
           })}
         </g>
       )}
+
+      {/* Celebration sparkles around the connection at peak */}
+      <CelebrationSparkles
+        growth={growth}
+        density={density}
+        palette={palette}
+        seed={seed}
+        animate={animate}
+        innerExclude={50}
+      />
     </svg>
   )
 }

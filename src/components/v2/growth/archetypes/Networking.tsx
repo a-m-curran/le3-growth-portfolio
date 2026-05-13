@@ -3,6 +3,7 @@
 import type { ArchetypeProps } from '../shared'
 import { clamp01, lerp, artworkFilterIds } from '../shared'
 import { ArtworkFilters } from '../ArtworkFilters'
+import { CelebrationGlow, CelebrationSparkles } from '../CelebrationLayer'
 
 /**
  * Networking — your network of people, branching outward.
@@ -69,6 +70,9 @@ export function NetworkingVisual({ growth, density, palette, seed, animate = tru
           <stop offset="100%" stopColor={palette.accent} stopOpacity="0" />
         </radialGradient>
       </defs>
+
+      {/* Peak-glow halo */}
+      <CelebrationGlow growth={growth} palette={palette} seed={seed} />
 
       {/* Ground shadow */}
       <ellipse cx={cx} cy="148" rx="65" ry="6" fill={`url(#${fid.ground})`} />
@@ -157,6 +161,16 @@ export function NetworkingVisual({ growth, density, palette, seed, animate = tru
           <circle cx={cx - 3} cy={cy - 14} r="2" fill="white" opacity={lerp(0.3, 0.7, density)} />
         )}
       </g>
+
+      {/* Celebration sparkles surrounding the network at peak */}
+      <CelebrationSparkles
+        growth={growth}
+        density={density}
+        palette={palette}
+        seed={seed}
+        animate={animate}
+        innerExclude={60}
+      />
     </svg>
   )
 }

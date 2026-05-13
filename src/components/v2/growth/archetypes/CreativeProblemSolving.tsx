@@ -3,6 +3,7 @@
 import type { ArchetypeProps } from '../shared'
 import { clamp01, lerp, artworkFilterIds } from '../shared'
 import { ArtworkFilters } from '../ArtworkFilters'
+import { CelebrationGlow, CelebrationSparkles } from '../CelebrationLayer'
 
 /**
  * Creative Problem Solving — a lightbulb.
@@ -35,8 +36,9 @@ export function CreativeProblemSolvingVisual({ growth, density, palette, seed, a
   const haloOpacity = fadeIn(g, 0.5, 0.8)
   const raysOpacity = fadeIn(g, 0.65, 0.95)
 
-  const rayCount = 8
-  const rayLength = lerp(8, 28, fadeIn(g, 0.65, 1))
+  // More rays + longer reach at peak for a "fully realized aha" moment
+  const rayCount = 12
+  const rayLength = lerp(8, 38, fadeIn(g, 0.65, 1))
 
   // Subtle bulb sway (only when animating) — like it's "thinking"
   return (
@@ -63,6 +65,9 @@ export function CreativeProblemSolvingVisual({ growth, density, palette, seed, a
           <stop offset="100%" stopColor={palette.accent} stopOpacity="0" />
         </radialGradient>
       </defs>
+
+      {/* Peak-glow halo */}
+      <CelebrationGlow growth={growth} palette={palette} seed={seed} />
 
       {/* Soft cast shadow under the bulb's base */}
       <ellipse cx={cx} cy="135" rx="20" ry="4" fill={`url(#${fid.ground})`} />
@@ -195,15 +200,15 @@ export function CreativeProblemSolvingVisual({ growth, density, palette, seed, a
       {/* Small accent dots in the radiating phase — looks like "ideas escaping" */}
       {raysOpacity > 0.1 && density > 0.2 && (
         <g opacity={raysOpacity * density}>
-          {[0, 1, 2, 3].map((i) => {
-            const angle = (i / 4) * Math.PI * 2 + Math.PI / 8
-            const r = bulbR + 12 + lerp(0, 8, density)
+          {[0, 1, 2, 3, 4, 5].map((i) => {
+            const angle = (i / 6) * Math.PI * 2 + Math.PI / 8
+            const r = bulbR + 14 + lerp(0, 10, density)
             return (
               <circle
                 key={i}
                 cx={cx + Math.cos(angle) * r}
                 cy={cy + Math.sin(angle) * r}
-                r="1.6"
+                r="1.8"
                 fill={palette.accent}
                 filter={`url(#${fid.glow})`}
               />
@@ -211,6 +216,16 @@ export function CreativeProblemSolvingVisual({ growth, density, palette, seed, a
           })}
         </g>
       )}
+
+      {/* Celebration sparkles surrounding the bulb at peak */}
+      <CelebrationSparkles
+        growth={growth}
+        density={density}
+        palette={palette}
+        seed={seed}
+        animate={animate}
+        innerExclude={48}
+      />
     </svg>
   )
 }

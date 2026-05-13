@@ -3,6 +3,7 @@
 import type { ArchetypeProps } from '../shared'
 import { clamp01, artworkFilterIds } from '../shared'
 import { ArtworkFilters } from '../ArtworkFilters'
+import { CelebrationGlow, CelebrationSparkles } from '../CelebrationLayer'
 
 /**
  * Collaboration — interlocking gears.
@@ -77,6 +78,9 @@ export function CollaborationVisual({ growth, density, palette, seed, animate = 
         </radialGradient>
       </defs>
 
+      {/* Peak-glow halo */}
+      <CelebrationGlow growth={growth} palette={palette} seed={seed} />
+
       {/* Cast shadow under the assembly */}
       <ellipse cx="85" cy="138" rx="55" ry="6" fill={`url(#${fid.ground})`} />
 
@@ -144,16 +148,39 @@ export function CollaborationVisual({ growth, density, palette, seed, animate = 
         </g>
       )}
 
-      {/* Tiny "moving" spark where gears mesh — high-density indicator */}
+      {/* Tiny "moving" sparks where gears mesh — high-density indicator */}
       {g > 0.55 && density > 0.3 && (
         <g filter={`url(#${fid.glow})`} opacity={density}>
-          <circle cx={(mainCx + g2Cx) / 2 + 4} cy={(mainCy + g2Cy) / 2 + 4} r="1.5" fill={palette.accent}>
+          <circle cx={(mainCx + g2Cx) / 2 + 4} cy={(mainCy + g2Cy) / 2 + 4} r="1.6" fill={palette.accent}>
             {animate && (
               <animate attributeName="opacity" values="0;1;0" dur="1.2s" repeatCount="indefinite" />
             )}
           </circle>
+          {g > 0.75 && (
+            <circle cx={(g2Cx + g3Cx) / 2 - 3} cy={(g2Cy + g3Cy) / 2} r="1.4" fill={palette.accent}>
+              {animate && (
+                <animate
+                  attributeName="opacity"
+                  values="0;1;0"
+                  dur="1.3s"
+                  begin="0.4s"
+                  repeatCount="indefinite"
+                />
+              )}
+            </circle>
+          )}
         </g>
       )}
+
+      {/* Celebration sparkles around the machine at peak */}
+      <CelebrationSparkles
+        growth={growth}
+        density={density}
+        palette={palette}
+        seed={seed}
+        animate={animate}
+        innerExclude={50}
+      />
     </svg>
   )
 }

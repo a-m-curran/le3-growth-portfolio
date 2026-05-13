@@ -3,6 +3,7 @@
 import type { ArchetypeProps } from '../shared'
 import { seededRandom, clamp01, lerp, artworkFilterIds } from '../shared'
 import { ArtworkFilters } from '../ArtworkFilters'
+import { CelebrationGlow, CelebrationSparkles } from '../CelebrationLayer'
 
 /**
  * Critical Thinking — crystalline lattice.
@@ -24,15 +25,18 @@ export function CriticalThinkingVisual({ growth, density, palette, seed, animate
   const rand = seededRandom(seed)
   const fid = artworkFilterIds(seed)
 
-  // Facet count grows from 3 to 7 with maturity
-  const facetCount = Math.round(lerp(3, 7, clamp01(growth)))
-  const spireH = lerp(20, 55, clamp01(growth))
-  const satellites = Math.floor(density * 4)
+  // Facet count grows from 3 (a humble fragment) to 9 (a fully
+  // realized polyhedron) with maturity. Spire and base radius are
+  // pushed higher than the previous pass so the peak state actually
+  // looks like a hero crystal, not a fragment.
+  const facetCount = Math.round(lerp(3, 9, clamp01(growth)))
+  const spireH = lerp(14, 68, clamp01(growth))
+  const satellites = Math.floor(density * 5) + (growth > 0.7 ? 2 : 0)
 
   const cx = 80
-  const cy = 90
+  const cy = 92
 
-  const baseRadius = lerp(18, 26, clamp01(growth))
+  const baseRadius = lerp(14, 30, clamp01(growth))
   const facets = generateFacets(facetCount, cx, cy, baseRadius, spireH, rand)
 
   const shimmerDur = animate ? '3.2s' : '0s'
@@ -62,13 +66,16 @@ export function CriticalThinkingVisual({ growth, density, palette, seed, animate
         </clipPath>
       </defs>
 
+      {/* Peak-glow halo behind the artwork */}
+      <CelebrationGlow growth={growth} palette={palette} seed={seed} />
+
       {/* Ground-contact shadow — radial fade where the crystal meets
           the surface. Sized off growth so a small crystal has a
           small shadow. */}
       <ellipse
         cx={cx}
         cy={cy + 32}
-        rx={lerp(22, 38, clamp01(growth))}
+        rx={lerp(22, 42, clamp01(growth))}
         ry="7"
         fill={`url(#${fid.ground})`}
       />
@@ -173,6 +180,16 @@ export function CriticalThinkingVisual({ growth, density, palette, seed, animate
         stroke="white"
         strokeOpacity={0.45}
         strokeWidth="0.8"
+      />
+
+      {/* Celebration sparkles at high growth */}
+      <CelebrationSparkles
+        growth={growth}
+        density={density}
+        palette={palette}
+        seed={seed}
+        animate={animate}
+        innerExclude={38}
       />
     </svg>
   )

@@ -3,6 +3,7 @@
 import type { ArchetypeProps } from '../shared'
 import { seededRandom, clamp01, lerp, artworkFilterIds } from '../shared'
 import { ArtworkFilters } from '../ArtworkFilters'
+import { CelebrationGlow, CelebrationSparkles } from '../CelebrationLayer'
 
 /**
  * Curiosity — a magnifying glass discovering a constellation.
@@ -27,15 +28,16 @@ export function CuriosityVisual({ growth, density, palette, seed, animate = true
   const fid = artworkFilterIds(seed)
   const g = clamp01(growth)
 
-  // Fixed star positions
-  const totalStars = 10
+  // More stars + brighter at peak so a full curiosity sky really
+  // looks like a constellation, not a smattering of dots
+  const totalStars = 14
   const allStars = Array.from({ length: totalStars }, () => ({
-    x: 18 + rand() * 120,
-    y: 18 + rand() * 90,
-    size: lerp(1.3, 2.5, rand()),
+    x: 18 + rand() * 124,
+    y: 18 + rand() * 95,
+    size: lerp(1.4, 3.2, rand()),
     twinkle: rand() * 4,
   }))
-  const litCount = Math.max(2, Math.round(lerp(2, totalStars, g)))
+  const litCount = Math.max(1, Math.round(lerp(1, totalStars, g)))
   const lit = allStars.slice(0, litCount)
 
   // Connection lines between adjacent lit stars
@@ -83,6 +85,9 @@ export function CuriosityVisual({ growth, density, palette, seed, animate = true
 
       {/* Sky backing */}
       <rect x="0" y="0" width="160" height="160" fill={`url(#cur-bg-${seed})`} />
+
+      {/* Peak-glow halo */}
+      <CelebrationGlow growth={growth} palette={palette} seed={seed} />
 
       {/* Unlit (background) stars — barely visible */}
       <g>
@@ -179,6 +184,16 @@ export function CuriosityVisual({ growth, density, palette, seed, animate = true
           <circle cx={glassX + lensR + 10} cy={glassY - lensR - 8} r="0.9" fill={palette.accent} opacity="0.7" />
         </g>
       )}
+
+      {/* Celebration sparkles at peak — joins the constellation */}
+      <CelebrationSparkles
+        growth={growth}
+        density={density}
+        palette={palette}
+        seed={seed}
+        animate={animate}
+        innerExclude={20}
+      />
     </svg>
   )
 }

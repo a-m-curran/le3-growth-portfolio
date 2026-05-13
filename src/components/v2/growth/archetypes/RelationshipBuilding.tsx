@@ -3,6 +3,7 @@
 import type { ArchetypeProps } from '../shared'
 import { clamp01, lerp, artworkFilterIds } from '../shared'
 import { ArtworkFilters } from '../ArtworkFilters'
+import { CelebrationGlow, CelebrationSparkles } from '../CelebrationLayer'
 
 /**
  * Relationship Building — two trees with intertwined branches.
@@ -22,26 +23,26 @@ import { ArtworkFilters } from '../ArtworkFilters'
  * has a small bloom indicating shared flowering; ground gets a cast
  * shadow uniting them.
  */
-export function RelationshipBuildingVisual({ growth, palette, seed, animate = true }: ArchetypeProps) {
+export function RelationshipBuildingVisual({ growth, density, palette, seed, animate = true }: ArchetypeProps) {
   const fid = artworkFilterIds(seed)
   const g = clamp01(growth)
 
   const baseY = 138
-  // Tree 1 — left
+  // Tree 1 — left. Taller, fuller canopy at peak.
   const t1Base = 45
-  const t1H = lerp(28, 75, g)
-  const t1Lean = lerp(0, 6, g) // leans right toward the other tree
+  const t1H = lerp(22, 88, g)
+  const t1Lean = lerp(0, 6, g)
   const t1Top = baseY - t1H
 
   // Tree 2 — right
   const t2Base = 115
-  const t2H = lerp(28, 75, g)
-  const t2Lean = lerp(0, -6, g) // leans left
+  const t2H = lerp(22, 88, g)
+  const t2Lean = lerp(0, -6, g)
   const t2Top = baseY - t2H
 
-  // Canopy sizes
-  const canopyR1 = lerp(10, 22, g)
-  const canopyR2 = lerp(10, 22, g)
+  // Bigger canopies at peak
+  const canopyR1 = lerp(8, 26, g)
+  const canopyR2 = lerp(8, 26, g)
   // Canopy x positions — converge with growth
   const cnp1X = t1Base + t1Lean
   const cnp2X = t2Base + t2Lean
@@ -74,6 +75,9 @@ export function RelationshipBuildingVisual({ growth, palette, seed, animate = tr
           <stop offset="100%" stopColor={palette.accent} stopOpacity="0" />
         </radialGradient>
       </defs>
+
+      {/* Peak-glow halo */}
+      <CelebrationGlow growth={growth} palette={palette} seed={seed} />
 
       {/* Cast shadow uniting both trees */}
       <ellipse cx="80" cy={baseY + 5} rx={lerp(40, 65, g)} ry="6" fill={`url(#${fid.ground})`} />
@@ -208,8 +212,22 @@ export function RelationshipBuildingVisual({ growth, palette, seed, animate = tr
             fill="white"
             opacity="0.9"
           />
+          {/* Extra petals/blooms scattered in the overlap at peak */}
+          <circle cx={(cnp1X + cnp2X) / 2 - 8} cy={(t1Top + t2Top) / 2 + 4} r="2.5" fill={palette.accent} opacity="0.8" />
+          <circle cx={(cnp1X + cnp2X) / 2 + 7} cy={(t1Top + t2Top) / 2 - 5} r="2" fill={palette.accent} opacity="0.85" />
+          <circle cx={(cnp1X + cnp2X) / 2 + 2} cy={(t1Top + t2Top) / 2 + 6} r="1.6" fill="white" opacity="0.75" />
         </g>
       )}
+
+      {/* Celebration sparkles around the joined canopies at peak */}
+      <CelebrationSparkles
+        growth={growth}
+        density={density}
+        palette={palette}
+        seed={seed}
+        animate={animate}
+        innerExclude={48}
+      />
     </svg>
   )
 }

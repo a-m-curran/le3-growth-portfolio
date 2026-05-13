@@ -3,6 +3,7 @@
 import type { ArchetypeProps } from '../shared'
 import { clamp01, lerp, artworkFilterIds } from '../shared'
 import { ArtworkFilters } from '../ArtworkFilters'
+import { CelebrationGlow, CelebrationSparkles } from '../CelebrationLayer'
 
 /**
  * Resilience — stones becoming a fortress.
@@ -22,28 +23,30 @@ import { ArtworkFilters } from '../ArtworkFilters'
  * castle silhouette gets a drop shadow as a whole; the flag has
  * gentle sway.
  */
-export function ResilienceVisual({ growth, palette, seed, animate = true }: ArchetypeProps) {
+export function ResilienceVisual({ growth, density, palette, seed, animate = true }: ArchetypeProps) {
   const fid = artworkFilterIds(seed)
   const g = clamp01(growth)
 
   const cx = 80
   const baseY = 138
 
-  // Wall dimensions
-  const wallW = 64
-  const wallH = lerp(6, 32, g)
+  // Wall dimensions — pushed higher than the previous pass so the
+  // peak castle reads as truly fortified
+  const wallW = 72
+  const wallH = lerp(4, 38, g)
   const wallX = cx - wallW / 2
   const wallY = baseY - wallH
 
-  // Center tower extends above the wall
-  const towerW = 18
-  const towerH = wallH + lerp(0, 28, fadeIn(g, 0.5, 0.85))
+  // Center tower extends above the wall — pushed higher at peak so
+  // there's a real "keep silhouette"
+  const towerW = 20
+  const towerH = wallH + lerp(0, 38, fadeIn(g, 0.5, 0.9))
   const towerX = cx - towerW / 2
   const towerY = baseY - towerH
 
-  // Flanking towers — narrower, on each end of the wall
-  const sideTowerW = 12
-  const sideTowerH = wallH + lerp(0, 14, fadeIn(g, 0.6, 0.9))
+  // Flanking towers — taller at peak too
+  const sideTowerW = 14
+  const sideTowerH = wallH + lerp(0, 22, fadeIn(g, 0.6, 0.95))
 
   // Element visibility
   const foundationOpacity = fadeOut(g, 0.5, 0.7) // foundation stones visible early
@@ -79,8 +82,11 @@ export function ResilienceVisual({ growth, palette, seed, animate = true }: Arch
         </linearGradient>
       </defs>
 
+      {/* Peak-glow halo behind the castle */}
+      <CelebrationGlow growth={growth} palette={palette} seed={seed} />
+
       {/* Cast ground shadow */}
-      <ellipse cx={cx} cy={baseY + 5} rx={lerp(20, 40, g)} ry="5" fill={`url(#${fid.ground})`} />
+      <ellipse cx={cx} cy={baseY + 5} rx={lerp(20, 48, g)} ry="5" fill={`url(#${fid.ground})`} />
 
       {/* Foundation stones — visible early, fade as the wall rises over them */}
       {foundationOpacity > 0.01 && (
@@ -164,16 +170,30 @@ export function ResilienceVisual({ growth, palette, seed, animate = true }: Arch
                 fill={`url(#res-tower-${seed})`}
               />
             ))}
-            {/* Arrow slit / window */}
+            {/* Arrow slit / window — lights up warm at peak (the
+                "candles in the windows" moment) */}
             {towerH > 22 && (
-              <rect
-                x={cx - 1}
-                y={towerY + 6}
-                width="2"
-                height="6"
-                fill="#1a1410"
-                opacity="0.9"
-              />
+              <>
+                <rect
+                  x={cx - 1}
+                  y={towerY + 6}
+                  width="2"
+                  height="6"
+                  fill="#1a1410"
+                  opacity="0.9"
+                />
+                {/* Warm light behind the window */}
+                {g > 0.75 && (
+                  <rect
+                    x={cx - 1}
+                    y={towerY + 6}
+                    width="2"
+                    height="6"
+                    fill={palette.accent}
+                    opacity={fadeIn(g, 0.75, 1)}
+                  />
+                )}
+              </>
             )}
             {/* Horizontal joint */}
             {towerH > 20 && (
@@ -273,6 +293,16 @@ export function ResilienceVisual({ growth, palette, seed, animate = true }: Arch
           <circle cx={cx} cy={towerY - 18.5} r="1.3" fill={palette.accent} />
         </g>
       )}
+
+      {/* Celebration sparkles around the castle at peak */}
+      <CelebrationSparkles
+        growth={growth}
+        density={density}
+        palette={palette}
+        seed={seed}
+        animate={animate}
+        innerExclude={42}
+      />
     </svg>
   )
 }

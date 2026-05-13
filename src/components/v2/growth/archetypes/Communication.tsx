@@ -3,6 +3,7 @@
 import type { ArchetypeProps } from '../shared'
 import { clamp01, artworkFilterIds } from '../shared'
 import { ArtworkFilters } from '../ArtworkFilters'
+import { CelebrationGlow, CelebrationSparkles } from '../CelebrationLayer'
 
 /**
  * Communication — two speech bubbles facing each other.
@@ -41,8 +42,9 @@ export function CommunicationVisual({ growth, density, palette, seed, animate = 
   const rightLines = fadeIn(g, 0.4, 0.7)
   const messagesVisible = g > 0.5
 
-  // Number of message dots flying between
-  const messageCount = Math.floor(density * 4) + (g > 0.5 ? 1 : 0)
+  // Number of message dots flying between — more at peak so the
+  // dialogue feels rich and alive
+  const messageCount = Math.floor(density * 5) + (g > 0.5 ? 2 : 0) + (g > 0.8 ? 2 : 0)
 
   return (
     <svg viewBox="0 0 160 160" className="w-full h-full" aria-hidden="true">
@@ -62,6 +64,9 @@ export function CommunicationVisual({ growth, density, palette, seed, animate = 
           <stop offset="100%" stopColor={palette.accent} stopOpacity="0" />
         </radialGradient>
       </defs>
+
+      {/* Peak-glow halo */}
+      <CelebrationGlow growth={growth} palette={palette} seed={seed} />
 
       {/* Soft ground shadow under the conversation */}
       <ellipse cx="80" cy="140" rx="50" ry="5" fill={`url(#${fid.ground})`} />
@@ -173,6 +178,16 @@ export function CommunicationVisual({ growth, density, palette, seed, animate = 
           })}
         </g>
       )}
+
+      {/* Celebration sparkles around the chat at peak */}
+      <CelebrationSparkles
+        growth={growth}
+        density={density}
+        palette={palette}
+        seed={seed}
+        animate={animate}
+        innerExclude={50}
+      />
     </svg>
   )
 }

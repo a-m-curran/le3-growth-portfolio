@@ -3,6 +3,7 @@
 import type { ArchetypeProps } from '../shared'
 import { seededRandom, clamp01, lerp, artworkFilterIds } from '../shared'
 import { ArtworkFilters } from '../ArtworkFilters'
+import { CelebrationGlow, CelebrationSparkles } from '../CelebrationLayer'
 
 /**
  * Adaptability — bamboo bending in the wind.
@@ -27,12 +28,14 @@ export function AdaptabilityVisual({ growth, density, palette, seed, animate = t
   const g = clamp01(growth)
 
   const baseY = 142
-  const stalkCount = Math.max(2, Math.round(lerp(2, 5, g))) + Math.floor(density * 1.5)
+  // More stalks at peak so the bamboo grove looks lush, not sparse
+  const stalkCount = Math.max(1, Math.round(lerp(1, 7, g))) + Math.floor(density * 2)
 
   // Generate stalks — each at a different x, height, bend, segments
   const stalks = Array.from({ length: stalkCount }, (_, i) => {
     const x = 30 + (i / Math.max(stalkCount - 1, 1)) * 100 + (rand() - 0.5) * 8
-    const height = lerp(45, 90, rand()) * lerp(0.55, 1, g)
+    // Taller stalks at peak — the grove reaches upward
+    const height = lerp(50, 105, rand()) * lerp(0.35, 1, g)
     const bend = (rand() - 0.5) * 14 + 4 // slight rightward bias
     const segCount = Math.max(2, Math.floor(height / 15))
     const phase = rand() * 2
@@ -54,6 +57,9 @@ export function AdaptabilityVisual({ growth, density, palette, seed, animate = t
           <stop offset="100%" stopColor={palette.dark} stopOpacity="0.95" />
         </radialGradient>
       </defs>
+
+      {/* Peak-glow halo */}
+      <CelebrationGlow growth={growth} palette={palette} seed={seed} />
 
       {/* Ground shadow */}
       <ellipse cx="80" cy={baseY + 4} rx="60" ry="6" fill={`url(#${fid.ground})`} />
@@ -146,6 +152,16 @@ export function AdaptabilityVisual({ growth, density, palette, seed, animate = t
           </g>
         )
       })}
+
+      {/* Celebration sparkles drifting through the grove at peak */}
+      <CelebrationSparkles
+        growth={growth}
+        density={density}
+        palette={palette}
+        seed={seed}
+        animate={animate}
+        innerExclude={30}
+      />
     </svg>
   )
 }

@@ -3,6 +3,7 @@
 import type { ArchetypeProps } from '../shared'
 import { clamp01, lerp, artworkFilterIds } from '../shared'
 import { ArtworkFilters } from '../ArtworkFilters'
+import { CelebrationGlow, CelebrationSparkles } from '../CelebrationLayer'
 
 /**
  * Social Awareness — you in a room, sensing what's around you.
@@ -45,8 +46,9 @@ export function SocialAwarenessVisual({ growth, density, palette, seed, animate 
   // Number of figures visible scales with growth
   const figuresVisible = Math.floor(lerp(0, positions.length, fadeIn(g, 0.15, 0.85)))
 
-  // Perception rings — concentric pulsing rings from the center
-  const ringCount = Math.max(0, Math.floor(lerp(0, 3, fadeIn(g, 0.4, 0.95))))
+  // Perception rings — concentric pulsing rings from the center.
+  // More rings at peak so awareness reads as truly expansive.
+  const ringCount = Math.max(0, Math.floor(lerp(0, 5, fadeIn(g, 0.4, 0.95))))
 
   return (
     <svg viewBox="0 0 160 160" className="w-full h-full" aria-hidden="true">
@@ -69,6 +71,9 @@ export function SocialAwarenessVisual({ growth, density, palette, seed, animate 
           <stop offset="100%" stopColor={palette.mid} stopOpacity="0" />
         </radialGradient>
       </defs>
+
+      {/* Peak-glow halo */}
+      <CelebrationGlow growth={growth} palette={palette} seed={seed} />
 
       {/* Ground shadow under the whole scene */}
       <ellipse cx={cx} cy="145" rx="65" ry="6" fill={`url(#${fid.ground})`} />
@@ -139,6 +144,16 @@ export function SocialAwarenessVisual({ growth, density, palette, seed, animate 
           />
         )}
       </g>
+
+      {/* Celebration sparkles surrounding the room at peak */}
+      <CelebrationSparkles
+        growth={growth}
+        density={density}
+        palette={palette}
+        seed={seed}
+        animate={animate}
+        innerExclude={68}
+      />
     </svg>
   )
 }

@@ -3,6 +3,7 @@
 import type { ArchetypeProps } from '../shared'
 import { seededRandom, clamp01, lerp, artworkFilterIds } from '../shared'
 import { ArtworkFilters } from '../ArtworkFilters'
+import { CelebrationGlow, CelebrationSparkles } from '../CelebrationLayer'
 
 /**
  * Initiative — match evolving into a campfire.
@@ -35,12 +36,14 @@ export function InitiativeVisual({ growth, density, palette, seed, animate = tru
   const logsOpacity = fadeIn(g, 0.5, 0.75)
   const smokeOpacity = fadeIn(g, 0.55, 0.85)
 
-  // Flame size grows continuously
-  const flameH = lerp(8, 42, g)
-  const flameW = lerp(4, 16, g)
+  // Flame size grows continuously — peak pushed higher so a fully
+  // grown campfire genuinely roars
+  const flameH = lerp(6, 58, g)
+  const flameW = lerp(3, 20, g)
 
-  // Sparks above a threshold; count scales with density
-  const sparkCount = g > 0.55 ? Math.floor(density * 5) : 0
+  // Sparks above a threshold; count scales with density and peaks
+  // with growth so a mature campfire throws real sparks
+  const sparkCount = g > 0.55 ? Math.floor(density * 7) + Math.floor(g * 3) : 0
   const sparks = Array.from({ length: sparkCount }, () => ({
     x: cx + (rand() - 0.5) * 18,
     yOffset: rand() * 30 + 15,
@@ -92,12 +95,15 @@ export function InitiativeVisual({ growth, density, palette, seed, animate = tru
         </radialGradient>
       </defs>
 
+      {/* Peak-glow halo */}
+      <CelebrationGlow growth={growth} palette={palette} seed={seed} />
+
       {/* Warm ground glow from the fire */}
       <ellipse
         cx={cx}
         cy={baseY + 8}
-        rx={lerp(15, 38, g)}
-        ry="7"
+        rx={lerp(15, 48, g)}
+        ry="8"
         fill={`url(#init-light-${seed})`}
         opacity={lerp(0.4, 1, g)}
       />
@@ -277,7 +283,7 @@ export function InitiativeVisual({ growth, density, palette, seed, animate = tru
               <>
                 <animate
                   attributeName="cy"
-                  values={`${baseY - s.yOffset};${baseY - flameH - 25}`}
+                  values={`${baseY - s.yOffset};${baseY - flameH - 35}`}
                   dur="2.4s"
                   begin={`${s.delay}s`}
                   repeatCount="indefinite"
@@ -294,6 +300,16 @@ export function InitiativeVisual({ growth, density, palette, seed, animate = tru
           </circle>
         </g>
       ))}
+
+      {/* Celebration sparkles at the peak — joins the rising sparks */}
+      <CelebrationSparkles
+        growth={growth}
+        density={density}
+        palette={palette}
+        seed={seed}
+        animate={animate}
+        innerExclude={36}
+      />
     </svg>
   )
 }
