@@ -3,27 +3,29 @@ import { AppShell } from '@/components/v2/AppShell'
 import { getV2Identity, isAdminEmail } from '@/lib/v2-auth'
 
 /**
- * Coach-shell wrapper. Forces the coach sidebar regardless of role.
+ * Coach-shell wrapper. Forces the coach sidebar.
  *
- * Identity reflects the real authenticated user. ADMIN_EMAILS gate
- * controls whether Tools appears in the nav (coaches who aren't on
- * the allowlist don't see it).
+ * Redirects:
+ *   - No identity → /v2/demo (persona picker).
+ *   - Student identity → /v2/demo so they pick a coach persona to
+ *     preview as. Same shape as the student layout — explicit persona
+ *     selection beats silently leaking demo data.
+ *   - Coach identity → renders the coach shell. Tools nav item is
+ *     gated by ADMIN_EMAILS allowlist.
  */
 export default async function CoachGroupLayout({ children }: { children: React.ReactNode }) {
   const identity = await getV2Identity()
   if (!identity) {
-    redirect(
-      process.env.NEXT_PUBLIC_DEMO_MODE === 'true' ? '/v2/demo' : '/login'
-    )
+    redirect('/v2/demo')
   }
-  const name = identity.name
-  const subLabel =
-    identity.role === 'coach' ? 'Coach' : 'Previewing coach experience'
+  if (identity.role !== 'coach') {
+    redirect('/v2/demo')
+  }
 
-  const showAdmin = identity.role === 'coach' && isAdminEmail(identity.email)
+  const showAdmin = isAdminEmail(identity.email)
 
   return (
-    <AppShell role="coach" userName={name} userSubLabel={subLabel} showAdmin={showAdmin}>
+    <AppShell role="coach" userName={identity.name} userSubLabel="Coach" showAdmin={showAdmin}>
       {children}
     </AppShell>
   )

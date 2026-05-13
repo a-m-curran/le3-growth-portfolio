@@ -4,31 +4,33 @@ import { getV2Identity } from '@/lib/v2-auth'
 
 /**
  * Student-shell wrapper. Forces the student sidebar / bottom-tab-bar
- * regardless of the authenticated user's actual role — so a coach
- * previewing the demo can browse /v2/today, /v2/growth, etc. and
- * experience the student IA.
+ * regardless of the authenticated user's actual role.
  *
- * The shell's identity (name + sub-label in the sidebar) always shows
- * the real authenticated user. Data on each page handles demo mode
- * separately (via the API endpoints' demo short-circuits).
+ * Redirects:
+ *   - No identity at all → /v2/demo (persona picker) so anyone can
+ *     start exploring without a real account.
+ *   - Coach identity without a student persona cookie → /v2/demo so
+ *     they pick a student persona to preview as. Coaches can browse
+ *     the student IA, but they need to explicitly select WHICH
+ *     student first — otherwise the API routes correctly return 401
+ *     ("not a student"). This is the better default than silently
+ *     surfacing demo data regardless of who you are.
+ *   - Student identity → renders the student shell with their own
+ *     data (real or demo persona, same code path).
  */
 export default async function StudentGroupLayout({ children }: { children: React.ReactNode }) {
   const identity = await getV2Identity()
-  // Auth gate: if no identity (no real auth AND no demo persona),
-  // bounce to demo entry in demo mode or login otherwise.
   if (!identity) {
-    redirect(
-      process.env.NEXT_PUBLIC_DEMO_MODE === 'true' ? '/v2/demo' : '/login'
-    )
+    redirect('/v2/demo')
   }
-  const name = identity.name
-  const subLabel =
-    identity.role === 'student'
-      ? identity.cohort
-      : 'Previewing student experience'
+  if (identity.role !== 'student') {
+    redirect('/v2/demo')
+  }
+
+  const subLabel = identity.cohort
 
   return (
-    <AppShell role="student" userName={name} userSubLabel={subLabel}>
+    <AppShell role="student" userName={identity.name} userSubLabel={subLabel}>
       {children}
     </AppShell>
   )
