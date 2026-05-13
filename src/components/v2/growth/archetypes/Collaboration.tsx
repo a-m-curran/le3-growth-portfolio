@@ -1,137 +1,246 @@
 'use client'
 
 import type { ArchetypeProps } from '../shared'
-import { seededRandom, clamp01, lerp, artworkFilterIds } from '../shared'
+import { clamp01, artworkFilterIds } from '../shared'
 import { ArtworkFilters } from '../ArtworkFilters'
 
 /**
- * Collaboration — a mycelial network.
+ * Collaboration — interlocking gears.
  *
- * Why: collaboration is what's happening underneath, even when you
- * can't see it. Mushroom networks span vast areas, sharing nutrients
- * between trees — invisible until you look for it. Each conversation
- * is another node that lights up in the network.
+ * Why: collaboration is movement that only happens when pieces fit
+ * together. One gear alone is inert; two interlocking gears turn
+ * each other; three or more form a working machine. Each
+ * conversation is another tooth meshing.
  *
- * Depth: network threads have varying opacities (closer/further);
- * nodes glow; pulses travel along threads (light moving through the
- * dark). Background gets a subtle dark tone so the glowing nodes
- * read as light sources, not just colored shapes.
+ * Composition stages (continuous):
+ *   g 0.00–0.25  a single gear, not turning
+ *   g 0.25–0.50  second gear engages; both turn (opposite directions)
+ *   g 0.50–0.80  third gear joins the chain
+ *   g 0.80–1.00  full machine — multiple gears turning together
+ *
+ * Depth: each gear has a 3D-ish radial gradient (light face, shadow
+ * underside), a central hub with shadow, and an inner spoke pattern.
+ * Drop shadows lift the gears off the canvas.
  */
 export function CollaborationVisual({ growth, density, palette, seed, animate = true }: ArchetypeProps) {
-  const rand = seededRandom(seed)
   const fid = artworkFilterIds(seed)
   const g = clamp01(growth)
 
-  // Generate a network of nodes — first one fixed near center, rest
-  // scatter around it, with edges between nearby pairs
-  const nodeCount = Math.round(lerp(4, 10, g))
-  const center = { x: 80, y: 90 }
-  const nodes: Array<{ x: number; y: number; lit: boolean; size: number }> = [
-    { x: center.x, y: center.y, lit: true, size: 3.5 },
-  ]
-  for (let i = 1; i < nodeCount; i++) {
-    const angle = rand() * Math.PI * 2
-    const dist = lerp(20, 55, rand())
-    nodes.push({
-      x: center.x + Math.cos(angle) * dist,
-      y: center.y + Math.sin(angle) * dist * 0.7,
-      lit: i < Math.max(2, Math.round(lerp(2, nodeCount, density))),
-      size: lerp(2, 3.2, rand()),
-    })
-  }
+  // Main gear — always present
+  const mainCx = 65
+  const mainCy = 85
+  const mainR = 22
 
-  // Edges: each non-center node connects back to a closer one
-  const edges: Array<{ a: typeof nodes[0]; b: typeof nodes[0] }> = []
-  for (let i = 1; i < nodes.length; i++) {
-    // Find closest earlier node
-    let closest = 0
-    let minDist = Infinity
-    for (let j = 0; j < i; j++) {
-      const d = Math.hypot(nodes[i].x - nodes[j].x, nodes[i].y - nodes[j].y)
-      if (d < minDist) {
-        minDist = d
-        closest = j
-      }
-    }
-    edges.push({ a: nodes[i], b: nodes[closest] })
-  }
+  // Second gear — engages at g > 0.25, slightly smaller, to the right
+  const g2Visibility = fadeIn(g, 0.2, 0.45)
+  const g2Cx = 105
+  const g2Cy = 75
+  const g2R = 16
+
+  // Third gear — joins at g > 0.5, smallest, lower right
+  const g3Visibility = fadeIn(g, 0.5, 0.75)
+  const g3Cx = 112
+  const g3Cy = 110
+  const g3R = 11
+
+  // Fourth gear — top accent at full growth
+  const g4Visibility = fadeIn(g, 0.75, 0.95)
+  const g4Cx = 50
+  const g4Cy = 50
+  const g4R = 9
+
+  // Gears only turn when something engages them — main gear turns
+  // when g > 0.2 (second gear engaged), others turn with their own
+  // engagement thresholds
+  const mainShouldTurn = animate && g > 0.2
+  const g2ShouldTurn = animate && g > 0.25
+  const g3ShouldTurn = animate && g > 0.55
+  const g4ShouldTurn = animate && g > 0.8
 
   return (
     <svg viewBox="0 0 160 160" className="w-full h-full" aria-hidden="true">
       <defs>
         <ArtworkFilters seed={seed} />
-        <radialGradient id={`coll-bg-${seed}`} cx="50%" cy="50%" r="70%">
-          <stop offset="0%" stopColor={palette.dark} stopOpacity="0.15" />
-          <stop offset="100%" stopColor={palette.dark} stopOpacity="0" />
+        <radialGradient id={`coll-gear-${seed}`} cx="38%" cy="35%" r="65%">
+          <stop offset="0%" stopColor={palette.accent} />
+          <stop offset="55%" stopColor={palette.mid} />
+          <stop offset="100%" stopColor={palette.dark} />
         </radialGradient>
-        <radialGradient id={`coll-node-${seed}`} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="white" stopOpacity="1" />
-          <stop offset="40%" stopColor={palette.accent} stopOpacity="1" />
-          <stop offset="100%" stopColor={palette.accent} stopOpacity="0" />
+        <radialGradient id={`coll-gear2-${seed}`} cx="38%" cy="35%" r="65%">
+          <stop offset="0%" stopColor="white" stopOpacity="0.85" />
+          <stop offset="55%" stopColor={palette.accent} />
+          <stop offset="100%" stopColor={palette.dark} />
         </radialGradient>
-        <radialGradient id={`coll-node-dim-${seed}`} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor={palette.mid} stopOpacity="0.7" />
-          <stop offset="100%" stopColor={palette.mid} stopOpacity="0" />
+        <radialGradient id={`coll-hub-${seed}`} cx="40%" cy="40%" r="60%">
+          <stop offset="0%" stopColor="white" stopOpacity="0.5" />
+          <stop offset="100%" stopColor={palette.dark} />
         </radialGradient>
       </defs>
 
-      {/* Dark ground/underground gradient */}
-      <rect x="0" y="0" width="160" height="160" fill={`url(#coll-bg-${seed})`} />
+      {/* Cast shadow under the assembly */}
+      <ellipse cx="85" cy="138" rx="55" ry="6" fill={`url(#${fid.ground})`} />
 
-      {/* Edges — thin filaments */}
-      <g stroke={palette.mid} strokeWidth="0.7" fill="none" strokeLinecap="round">
-        {edges.map((e, i) => (
-          <g key={i}>
-            <path
-              d={`M ${e.a.x} ${e.a.y} Q ${(e.a.x + e.b.x) / 2 + (rand() - 0.5) * 6} ${(e.a.y + e.b.y) / 2 + (rand() - 0.5) * 6}, ${e.b.x} ${e.b.y}`}
-              opacity="0.55"
-            />
-          </g>
-        ))}
-      </g>
+      {/* Main gear */}
+      <Gear
+        cx={mainCx}
+        cy={mainCy}
+        r={mainR}
+        teeth={12}
+        fill={`url(#coll-gear-${seed})`}
+        hubFill={`url(#coll-hub-${seed})`}
+        spokeStroke={palette.bg}
+        animateRotation={mainShouldTurn ? { dur: '8s', direction: 1 } : undefined}
+        filterId={fid.drop}
+      />
 
-      {/* Pulses travelling along edges — small bright circles */}
-      {animate &&
-        edges.map((e, i) => (
-          <circle key={i} r="1.6" fill={palette.accent} filter={`url(#${fid.glow})`}>
-            <animateMotion
-              path={`M ${e.a.x} ${e.a.y} Q ${(e.a.x + e.b.x) / 2} ${(e.a.y + e.b.y) / 2}, ${e.b.x} ${e.b.y}`}
-              dur={`${2.5 + i * 0.4}s`}
-              begin={`${i * 0.3}s`}
-              repeatCount="indefinite"
-            />
-            <animate
-              attributeName="opacity"
-              values="0;1;0"
-              dur={`${2.5 + i * 0.4}s`}
-              begin={`${i * 0.3}s`}
-              repeatCount="indefinite"
-            />
-          </circle>
-        ))}
-
-      {/* Nodes — lit vs dim */}
-      {nodes.map((n, i) => (
-        <g key={i} filter={n.lit ? `url(#${fid.glow})` : undefined}>
-          {n.lit ? (
-            <>
-              <circle cx={n.x} cy={n.y} r={n.size * 2.2} fill={`url(#coll-node-${seed})`} />
-              <circle cx={n.x} cy={n.y} r={n.size * 0.7} fill="white">
-                {animate && (
-                  <animate
-                    attributeName="opacity"
-                    values="0.9;0.55;0.9"
-                    dur={`${2 + (i % 3) * 0.3}s`}
-                    repeatCount="indefinite"
-                  />
-                )}
-              </circle>
-            </>
-          ) : (
-            <circle cx={n.x} cy={n.y} r={n.size * 0.9} fill={`url(#coll-node-dim-${seed})`} />
-          )}
+      {/* Second gear */}
+      {g2Visibility > 0.01 && (
+        <g opacity={g2Visibility}>
+          <Gear
+            cx={g2Cx}
+            cy={g2Cy}
+            r={g2R}
+            teeth={10}
+            fill={`url(#coll-gear2-${seed})`}
+            hubFill={`url(#coll-hub-${seed})`}
+            spokeStroke={palette.bg}
+            animateRotation={g2ShouldTurn ? { dur: '6s', direction: -1 } : undefined}
+            filterId={fid.drop}
+          />
         </g>
-      ))}
+      )}
+
+      {/* Third gear */}
+      {g3Visibility > 0.01 && (
+        <g opacity={g3Visibility}>
+          <Gear
+            cx={g3Cx}
+            cy={g3Cy}
+            r={g3R}
+            teeth={8}
+            fill={`url(#coll-gear-${seed})`}
+            hubFill={`url(#coll-hub-${seed})`}
+            spokeStroke={palette.bg}
+            animateRotation={g3ShouldTurn ? { dur: '4.5s', direction: 1 } : undefined}
+            filterId={fid.drop}
+          />
+        </g>
+      )}
+
+      {/* Fourth gear */}
+      {g4Visibility > 0.01 && (
+        <g opacity={g4Visibility}>
+          <Gear
+            cx={g4Cx}
+            cy={g4Cy}
+            r={g4R}
+            teeth={8}
+            fill={`url(#coll-gear2-${seed})`}
+            hubFill={`url(#coll-hub-${seed})`}
+            spokeStroke={palette.bg}
+            animateRotation={g4ShouldTurn ? { dur: '3.5s', direction: -1 } : undefined}
+            filterId={fid.drop}
+          />
+        </g>
+      )}
+
+      {/* Tiny "moving" spark where gears mesh — high-density indicator */}
+      {g > 0.55 && density > 0.3 && (
+        <g filter={`url(#${fid.glow})`} opacity={density}>
+          <circle cx={(mainCx + g2Cx) / 2 + 4} cy={(mainCy + g2Cy) / 2 + 4} r="1.5" fill={palette.accent}>
+            {animate && (
+              <animate attributeName="opacity" values="0;1;0" dur="1.2s" repeatCount="indefinite" />
+            )}
+          </circle>
+        </g>
+      )}
     </svg>
   )
+}
+
+/** A single gear with teeth and a center hub. */
+function Gear({
+  cx,
+  cy,
+  r,
+  teeth,
+  fill,
+  hubFill,
+  spokeStroke,
+  animateRotation,
+  filterId,
+}: {
+  cx: number
+  cy: number
+  r: number
+  teeth: number
+  fill: string
+  hubFill: string
+  spokeStroke: string
+  animateRotation?: { dur: string; direction: 1 | -1 }
+  filterId: string
+}) {
+  // Generate gear silhouette: alternating outer (tooth) and inner (gap)
+  // radii around the circle.
+  const toothDepth = r * 0.18
+  const innerR = r - toothDepth
+  const pts: string[] = []
+  const segments = teeth * 2
+  // Tooth top arc — flat top with rounded shoulders
+  for (let i = 0; i < segments; i++) {
+    const onTooth = i % 2 === 0
+    const rad = onTooth ? r : innerR
+    const ang0 = ((i - 0.35) / segments) * Math.PI * 2
+    const ang1 = ((i + 0.35) / segments) * Math.PI * 2
+    pts.push(`${cx + Math.cos(ang0) * rad},${cy + Math.sin(ang0) * rad}`)
+    pts.push(`${cx + Math.cos(ang1) * rad},${cy + Math.sin(ang1) * rad}`)
+  }
+
+  return (
+    <g
+      filter={`url(#${filterId})`}
+      style={{ transformOrigin: `${cx}px ${cy}px` }}
+    >
+      {animateRotation && (
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from={`0 ${cx} ${cy}`}
+          to={`${360 * animateRotation.direction} ${cx} ${cy}`}
+          dur={animateRotation.dur}
+          repeatCount="indefinite"
+        />
+      )}
+      {/* Gear body */}
+      <polygon points={pts.join(' ')} fill={fill} stroke="rgba(0,0,0,0.25)" strokeWidth="0.4" />
+      {/* Inner ring suggesting depth */}
+      <circle cx={cx} cy={cy} r={innerR - 1.5} fill="none" stroke="rgba(0,0,0,0.25)" strokeWidth="0.5" />
+      {/* Spokes */}
+      {[0, 1, 2, 3].map((i) => {
+        const a = (i / 4) * Math.PI * 2 + Math.PI / 8
+        return (
+          <line
+            key={i}
+            x1={cx}
+            y1={cy}
+            x2={cx + Math.cos(a) * (innerR - 3)}
+            y2={cy + Math.sin(a) * (innerR - 3)}
+            stroke={spokeStroke}
+            strokeWidth="2"
+            opacity="0.65"
+          />
+        )
+      })}
+      {/* Center hub */}
+      <circle cx={cx} cy={cy} r={r * 0.22} fill={hubFill} />
+      <circle cx={cx - r * 0.07} cy={cy - r * 0.07} r={r * 0.08} fill="white" opacity="0.5" />
+    </g>
+  )
+}
+
+function fadeIn(g: number, start: number, end: number): number {
+  if (g <= start) return 0
+  if (g >= end) return 1
+  const t = (g - start) / (end - start)
+  return t * t * (3 - 2 * t)
 }

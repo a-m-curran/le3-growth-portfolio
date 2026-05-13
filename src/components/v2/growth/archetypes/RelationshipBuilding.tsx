@@ -1,141 +1,222 @@
 'use client'
 
 import type { ArchetypeProps } from '../shared'
-import { seededRandom, clamp01, lerp, artworkFilterIds } from '../shared'
+import { clamp01, lerp, artworkFilterIds } from '../shared'
 import { ArtworkFilters } from '../ArtworkFilters'
 
 /**
- * Relationship Building — intertwined climbing vines.
+ * Relationship Building — two trees with intertwined branches.
  *
- * Why: relationships are sustained growth that climbs together. Two
- * vines wind around each other, gaining height together — neither
- * grows alone. Leaves emerge from each as the relationship deepens.
+ * Why: relationships are sustained, parallel growth. Two trees, one
+ * on each side, with their canopies growing toward each other over
+ * time until their branches and leaves merge in the middle.
  *
- * Depth: each vine has its own bark gradient; drop shadows give the
- * twist real Z-order (front vine occludes back vine at crossings);
- * leaves drop-shadow forward; ground gets a cast shadow at the base.
+ * Composition stages (continuous):
+ *   g 0.00–0.25  two saplings, leaning slightly toward each other
+ *   g 0.25–0.55  short trees with separate canopies
+ *   g 0.55–0.85  canopies reach toward each other
+ *   g 0.85–1.00  canopies overlap; branches intertwine; mixed leaves
+ *
+ * Depth: each tree's trunk has a bark gradient (light/shadow side);
+ * each canopy uses radial gradient form modeling; the overlap zone
+ * has a small bloom indicating shared flowering; ground gets a cast
+ * shadow uniting them.
  */
-export function RelationshipBuildingVisual({ growth, density, palette, seed, animate = true }: ArchetypeProps) {
-  const rand = seededRandom(seed)
+export function RelationshipBuildingVisual({ growth, palette, seed, animate = true }: ArchetypeProps) {
   const fid = artworkFilterIds(seed)
   const g = clamp01(growth)
 
-  const baseY = 142
-  const cx = 80
-  const climbH = lerp(40, 100, g)
-  const twistAmp = 10
-  // Number of full twists scales with growth
-  const twists = Math.max(2, Math.round(lerp(2, 4, g)))
+  const baseY = 138
+  // Tree 1 — left
+  const t1Base = 45
+  const t1H = lerp(28, 75, g)
+  const t1Lean = lerp(0, 6, g) // leans right toward the other tree
+  const t1Top = baseY - t1H
 
-  // Sample points along each vine. Vines mirror each other around
-  // the center axis, twisting in sinusoidal opposition.
-  const steps = 30
-  const samples = Array.from({ length: steps + 1 }, (_, i) => {
-    const t = i / steps
-    const y = baseY - climbH * t
-    const phase = t * twists * Math.PI
-    const offsetA = Math.sin(phase) * twistAmp
-    const offsetB = -offsetA
-    return { y, t, a: cx + offsetA, b: cx + offsetB }
-  })
+  // Tree 2 — right
+  const t2Base = 115
+  const t2H = lerp(28, 75, g)
+  const t2Lean = lerp(0, -6, g) // leans left
+  const t2Top = baseY - t2H
 
-  // Leaf positions — emerge at sample points where the vine is at
-  // its outermost (sin = ±1 → twist peaks)
-  const leafCount = Math.floor(lerp(2, 8, g)) + Math.floor(density * 2)
-  const leaves = Array.from({ length: leafCount }, (_, i) => {
-    const t = (i + 1) / (leafCount + 1)
-    const phase = t * twists * Math.PI
-    const onA = Math.sin(phase) > 0
-    const sign = onA ? 1 : -1
-    const y = baseY - climbH * t
-    const x = cx + Math.sin(phase) * twistAmp + sign * 4
-    return { x, y, side: sign, size: lerp(2.5, 4, rand()) }
-  })
+  // Canopy sizes
+  const canopyR1 = lerp(10, 22, g)
+  const canopyR2 = lerp(10, 22, g)
+  // Canopy x positions — converge with growth
+  const cnp1X = t1Base + t1Lean
+  const cnp2X = t2Base + t2Lean
 
-  // Build each vine path
-  const vineAPath = samples.map((s, i) => `${i === 0 ? 'M' : 'L'} ${s.a} ${s.y}`).join(' ')
-  const vineBPath = samples.map((s, i) => `${i === 0 ? 'M' : 'L'} ${s.b} ${s.y}`).join(' ')
+  const overlapping = g > 0.55
+  const bloomOpacity = fadeIn(g, 0.85, 1)
 
   return (
     <svg viewBox="0 0 160 160" className="w-full h-full" aria-hidden="true">
       <defs>
         <ArtworkFilters seed={seed} />
-        <linearGradient id={`rb-vineA-${seed}`} x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor={palette.mid} stopOpacity="0.95" />
-          <stop offset="100%" stopColor={palette.dark} stopOpacity="0.95" />
+        <linearGradient id={`rb-trunk-${seed}`} x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0%" stopColor="#5a3920" />
+          <stop offset="50%" stopColor="#7d5230" />
+          <stop offset="100%" stopColor="#3a2412" />
         </linearGradient>
-        <linearGradient id={`rb-vineB-${seed}`} x1="0" x2="0" y1="0" y2="1">
+        <radialGradient id={`rb-canopy1-${seed}`} cx="35%" cy="35%" r="65%">
           <stop offset="0%" stopColor={palette.accent} stopOpacity="0.95" />
-          <stop offset="100%" stopColor={palette.dark} stopOpacity="0.95" />
-        </linearGradient>
+          <stop offset="60%" stopColor={palette.mid} stopOpacity="0.9" />
+          <stop offset="100%" stopColor={palette.dark} stopOpacity="0.7" />
+        </radialGradient>
+        <radialGradient id={`rb-canopy2-${seed}`} cx="35%" cy="35%" r="65%">
+          <stop offset="0%" stopColor="white" stopOpacity="0.4" />
+          <stop offset="40%" stopColor={palette.accent} stopOpacity="0.95" />
+          <stop offset="100%" stopColor={palette.dark} stopOpacity="0.75" />
+        </radialGradient>
+        <radialGradient id={`rb-bloom-${seed}`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="white" stopOpacity="0.95" />
+          <stop offset="50%" stopColor={palette.accent} stopOpacity="0.85" />
+          <stop offset="100%" stopColor={palette.accent} stopOpacity="0" />
+        </radialGradient>
       </defs>
 
-      {/* Ground shadow */}
-      <ellipse cx={cx} cy={baseY + 4} rx="22" ry="5" fill={`url(#${fid.ground})`} />
+      {/* Cast shadow uniting both trees */}
+      <ellipse cx="80" cy={baseY + 5} rx={lerp(40, 65, g)} ry="6" fill={`url(#${fid.ground})`} />
 
-      {/* Vines — draw alternating segments so they appear to weave.
-          A is "behind" on first half-twist, "front" on next. We
-          fake this by drawing both, then over-drawing front-segments
-          in their natural color. */}
-      <g filter={`url(#${fid.drop})`}>
-        {/* Both vines, full length */}
-        <path d={vineAPath} stroke={`url(#rb-vineA-${seed})`} strokeWidth="3" fill="none" strokeLinecap="round" />
-        <path d={vineBPath} stroke={`url(#rb-vineB-${seed})`} strokeWidth="3" fill="none" strokeLinecap="round" />
-      </g>
-
-      {/* Highlight strokes for depth */}
-      <path
-        d={vineAPath}
-        stroke="white"
-        strokeOpacity="0.3"
-        strokeWidth="0.7"
-        fill="none"
-        strokeLinecap="round"
-      />
-      <path
-        d={vineBPath}
-        stroke="white"
-        strokeOpacity="0.3"
-        strokeWidth="0.7"
-        fill="none"
-        strokeLinecap="round"
-      />
-
-      {/* Leaves */}
-      <g filter={`url(#${fid.drop})`}>
-        {leaves.map((l, i) => (
-          <ellipse
-            key={i}
-            cx={l.x}
-            cy={l.y}
-            rx={l.size}
-            ry={l.size * 0.5}
-            fill={i % 2 === 0 ? palette.accent : palette.mid}
-            transform={`rotate(${l.side * 35} ${l.x} ${l.y})`}
-          />
-        ))}
-      </g>
-
-      {/* Top buds — paired flowers at the peak when grown */}
-      {g > 0.4 && (
-        <g filter={`url(#${fid.drop})`}>
-          <circle cx={samples[samples.length - 1].a} cy={samples[samples.length - 1].y - 2} r={lerp(2, 3.5, g)} fill={palette.accent} />
-          <circle cx={samples[samples.length - 1].b} cy={samples[samples.length - 1].y - 2} r={lerp(2, 3.5, g)} fill={palette.mid} />
-        </g>
-      )}
-
-      {/* Gentle sway of the upper half */}
-      {animate && (
-        <g>
+      {/* Trunk 1 + branches */}
+      <g style={{ transformOrigin: `${t1Base}px ${baseY}px` }}>
+        {animate && (
           <animateTransform
             attributeName="transform"
             type="rotate"
-            values={`-0.8 ${cx} ${baseY};0.8 ${cx} ${baseY};-0.8 ${cx} ${baseY}`}
-            dur="7s"
+            values={`-0.6 ${t1Base} ${baseY};0.6 ${t1Base} ${baseY};-0.6 ${t1Base} ${baseY}`}
+            dur="6s"
             repeatCount="indefinite"
+          />
+        )}
+        <g filter={`url(#${fid.drop})`}>
+          <path
+            d={`M ${t1Base} ${baseY} Q ${t1Base + t1Lean * 0.4} ${(baseY + t1Top) / 2}, ${cnp1X} ${t1Top}`}
+            stroke={`url(#rb-trunk-${seed})`}
+            strokeWidth={lerp(3, 4.5, g)}
+            fill="none"
+            strokeLinecap="round"
+          />
+          {/* Side branch reaching toward the other tree */}
+          {g > 0.45 && (
+            <path
+              d={`M ${cnp1X} ${t1Top + 8} Q ${cnp1X + 8} ${t1Top + 4}, ${cnp1X + 14} ${t1Top + 6}`}
+              stroke={`url(#rb-trunk-${seed})`}
+              strokeWidth="1.8"
+              fill="none"
+              strokeLinecap="round"
+              opacity={fadeIn(g, 0.45, 0.7)}
+            />
+          )}
+        </g>
+      </g>
+
+      {/* Trunk 2 + branches — mirror */}
+      <g style={{ transformOrigin: `${t2Base}px ${baseY}px` }}>
+        {animate && (
+          <animateTransform
+            attributeName="transform"
+            type="rotate"
+            values={`0.6 ${t2Base} ${baseY};-0.6 ${t2Base} ${baseY};0.6 ${t2Base} ${baseY}`}
+            dur="6s"
+            repeatCount="indefinite"
+          />
+        )}
+        <g filter={`url(#${fid.drop})`}>
+          <path
+            d={`M ${t2Base} ${baseY} Q ${t2Base + t2Lean * 0.4} ${(baseY + t2Top) / 2}, ${cnp2X} ${t2Top}`}
+            stroke={`url(#rb-trunk-${seed})`}
+            strokeWidth={lerp(3, 4.5, g)}
+            fill="none"
+            strokeLinecap="round"
+          />
+          {g > 0.45 && (
+            <path
+              d={`M ${cnp2X} ${t2Top + 8} Q ${cnp2X - 8} ${t2Top + 4}, ${cnp2X - 14} ${t2Top + 6}`}
+              stroke={`url(#rb-trunk-${seed})`}
+              strokeWidth="1.8"
+              fill="none"
+              strokeLinecap="round"
+              opacity={fadeIn(g, 0.45, 0.7)}
+            />
+          )}
+        </g>
+      </g>
+
+      {/* Canopy 1 (back) */}
+      <g filter={`url(#${fid.drop})`}>
+        <circle cx={cnp1X} cy={t1Top} r={canopyR1} fill={`url(#rb-canopy1-${seed})`} />
+        <circle cx={cnp1X - canopyR1 * 0.4} cy={t1Top - canopyR1 * 0.3} r={canopyR1 * 0.55} fill={palette.accent} opacity="0.65" />
+        <circle cx={cnp1X + canopyR1 * 0.45} cy={t1Top + canopyR1 * 0.2} r={canopyR1 * 0.5} fill={palette.mid} opacity="0.85" />
+        {/* Specular */}
+        <circle cx={cnp1X - canopyR1 * 0.45} cy={t1Top - canopyR1 * 0.45} r={canopyR1 * 0.22} fill="white" opacity="0.45" />
+      </g>
+
+      {/* Canopy 2 — overlapping when grown */}
+      <g filter={`url(#${fid.drop})`}>
+        <circle cx={cnp2X} cy={t2Top} r={canopyR2} fill={`url(#rb-canopy2-${seed})`} />
+        <circle cx={cnp2X - canopyR2 * 0.4} cy={t2Top - canopyR2 * 0.3} r={canopyR2 * 0.5} fill={palette.accent} opacity="0.65" />
+        <circle cx={cnp2X + canopyR2 * 0.45} cy={t2Top + canopyR2 * 0.2} r={canopyR2 * 0.5} fill={palette.mid} opacity="0.85" />
+        <circle cx={cnp2X - canopyR2 * 0.45} cy={t2Top - canopyR2 * 0.45} r={canopyR2 * 0.22} fill="white" opacity="0.4" />
+      </g>
+
+      {/* Overlap zone — small mixed leaves where canopies meet */}
+      {overlapping && (
+        <g opacity={fadeIn(g, 0.55, 0.85)}>
+          <circle
+            cx={(cnp1X + cnp2X) / 2}
+            cy={(t1Top + t2Top) / 2}
+            r={lerp(6, 10, g)}
+            fill={palette.mid}
+            opacity="0.7"
+          />
+          <circle
+            cx={(cnp1X + cnp2X) / 2 + 2}
+            cy={(t1Top + t2Top) / 2 - 2}
+            r={lerp(4, 7, g)}
+            fill={palette.accent}
+            opacity="0.55"
+          />
+        </g>
+      )}
+
+      {/* Shared bloom in the overlap — appears at full growth */}
+      {bloomOpacity > 0.01 && (
+        <g
+          opacity={bloomOpacity}
+          filter={`url(#${fid.glow})`}
+          style={{ transformOrigin: `${(cnp1X + cnp2X) / 2}px ${(t1Top + t2Top) / 2}px` }}
+        >
+          {animate && (
+            <animate
+              attributeName="opacity"
+              values={`${bloomOpacity * 0.7};${bloomOpacity};${bloomOpacity * 0.7}`}
+              dur="2.5s"
+              repeatCount="indefinite"
+            />
+          )}
+          <circle
+            cx={(cnp1X + cnp2X) / 2}
+            cy={(t1Top + t2Top) / 2}
+            r="5.5"
+            fill={`url(#rb-bloom-${seed})`}
+          />
+          <circle
+            cx={(cnp1X + cnp2X) / 2}
+            cy={(t1Top + t2Top) / 2}
+            r="2"
+            fill="white"
+            opacity="0.9"
           />
         </g>
       )}
     </svg>
   )
+}
+
+function fadeIn(g: number, start: number, end: number): number {
+  if (g <= start) return 0
+  if (g >= end) return 1
+  const t = (g - start) / (end - start)
+  return t * t * (3 - 2 * t)
 }

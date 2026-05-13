@@ -1,197 +1,288 @@
 'use client'
 
 import type { ArchetypeProps } from '../shared'
-import { seededRandom, clamp01, lerp, artworkFilterIds } from '../shared'
+import { clamp01, lerp, artworkFilterIds } from '../shared'
 import { ArtworkFilters } from '../ArtworkFilters'
 
 /**
- * Resilience — a bent-but-growing trunk.
+ * Resilience — stones becoming a fortress.
  *
- * Why: resilience isn't smoothness, it's surviving disruption and
- * continuing to grow. A trunk that visibly bends partway up (a "scar"
- * from past stress) then continues vertically — with fresh growth
- * emerging above the bend. Maturity adds more recovered growth, not
- * a straighter trunk.
+ * Why: resilience is what hardens through trial. The artwork starts
+ * as a humble cairn of stones and grows into a fortified keep —
+ * walls, battlements, towers, a flag. Each conversation is another
+ * stone in the wall.
  *
- * Depth treatment: trunk uses a vertical bark gradient (light highlight
- * on the upper face, darker shadow side), canopy circles get a drop
- * shadow + radial-gradient form modeling, ground gets a cast shadow
- * radial gradient.
+ * Composition stages (continuous):
+ *   g 0.00–0.20  scattered foundation stones
+ *   g 0.20–0.50  short wall begins to form
+ *   g 0.50–0.75  wall with battlements + central tower
+ *   g 0.75–1.00  full castle — flanking towers, gate, flag
  *
- * Animation: very gentle sway on the upper trunk segment only — like
- * a young branch adapting to wind while the established trunk holds
- * firm.
+ * Depth: stones use a radial gradient (light/shadow side); the
+ * castle silhouette gets a drop shadow as a whole; the flag has
+ * gentle sway.
  */
-export function ResilienceVisual({ growth, density, palette, seed, animate = true }: ArchetypeProps) {
-  const rand = seededRandom(seed)
+export function ResilienceVisual({ growth, palette, seed, animate = true }: ArchetypeProps) {
   const fid = artworkFilterIds(seed)
   const g = clamp01(growth)
 
-  const bendX = 80
-  const bendY = 90
-  const bendOffset = -10
+  const cx = 80
+  const baseY = 138
 
-  const newGrowthH = lerp(8, 55, g)
-  const topX = bendX - bendOffset + (rand() - 0.5) * 4
-  const topY = bendY - newGrowthH
+  // Wall dimensions
+  const wallW = 64
+  const wallH = lerp(6, 32, g)
+  const wallX = cx - wallW / 2
+  const wallY = baseY - wallH
 
-  const canopyR = lerp(6, 18, g) + density * 4
-  const shootCount = Math.floor(density * 5)
+  // Center tower extends above the wall
+  const towerW = 18
+  const towerH = wallH + lerp(0, 28, fadeIn(g, 0.5, 0.85))
+  const towerX = cx - towerW / 2
+  const towerY = baseY - towerH
 
-  const swayDur = animate ? '5s' : '0s'
+  // Flanking towers — narrower, on each end of the wall
+  const sideTowerW = 12
+  const sideTowerH = wallH + lerp(0, 14, fadeIn(g, 0.6, 0.9))
+
+  // Element visibility
+  const foundationOpacity = fadeOut(g, 0.5, 0.7) // foundation stones visible early
+  const wallOpacity = fadeIn(g, 0.15, 0.4)
+  const battlementsOpacity = fadeIn(g, 0.45, 0.65)
+  const centerTowerOpacity = fadeIn(g, 0.45, 0.7)
+  const sideTowersOpacity = fadeIn(g, 0.6, 0.85)
+  const gateOpacity = fadeIn(g, 0.5, 0.75)
+  const flagOpacity = fadeIn(g, 0.7, 0.95)
 
   return (
     <svg viewBox="0 0 160 160" className="w-full h-full" aria-hidden="true">
       <defs>
         <ArtworkFilters seed={seed} />
-        {/* Trunk bark gradient: darker side / lighter side */}
-        <linearGradient id={`res-bark-${seed}`} x1="0" x2="1" y1="0" y2="0">
-          <stop offset="0%" stopColor={palette.dark} stopOpacity="1" />
-          <stop offset="55%" stopColor={palette.dark} stopOpacity="0.92" />
-          <stop offset="100%" stopColor="white" stopOpacity="0.18" />
+        {/* Stone face gradient — light-from-upper-left convention */}
+        <linearGradient id={`res-stone-${seed}`} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="#a8a29e" />
+          <stop offset="60%" stopColor="#78716c" />
+          <stop offset="100%" stopColor="#44403c" />
         </linearGradient>
-        {/* Canopy form-model gradient: bright center → darker edge */}
-        <radialGradient id={`res-canopy-${seed}`} cx="35%" cy="35%" r="65%">
-          <stop offset="0%" stopColor={palette.accent} stopOpacity="0.95" />
-          <stop offset="55%" stopColor={palette.mid} stopOpacity="0.9" />
-          <stop offset="100%" stopColor={palette.dark} stopOpacity="0.65" />
+        <linearGradient id={`res-tower-${seed}`} x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0%" stopColor="#a8a29e" />
+          <stop offset="40%" stopColor="#78716c" />
+          <stop offset="100%" stopColor="#3f3a36" />
+        </linearGradient>
+        <radialGradient id={`res-rock-${seed}`} cx="40%" cy="35%" r="65%">
+          <stop offset="0%" stopColor="#a8a29e" />
+          <stop offset="100%" stopColor="#44403c" />
         </radialGradient>
+        <linearGradient id={`res-flag-${seed}`} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor={palette.accent} />
+          <stop offset="100%" stopColor={palette.dark} />
+        </linearGradient>
       </defs>
 
-      {/* Cast shadow on ground */}
-      <ellipse cx={bendX} cy="143" rx="32" ry="6" fill={`url(#${fid.ground})`} />
+      {/* Cast ground shadow */}
+      <ellipse cx={cx} cy={baseY + 5} rx={lerp(20, 40, g)} ry="5" fill={`url(#${fid.ground})`} />
 
-      {/* Lower trunk — pre-bend, always there */}
+      {/* Foundation stones — visible early, fade as the wall rises over them */}
+      {foundationOpacity > 0.01 && (
+        <g opacity={foundationOpacity} filter={`url(#${fid.drop})`}>
+          <ellipse cx={cx - 18} cy={baseY - 3} rx="9" ry="4" fill={`url(#res-rock-${seed})`} />
+          <ellipse cx={cx - 4} cy={baseY - 4} rx="10" ry="4.5" fill={`url(#res-rock-${seed})`} />
+          <ellipse cx={cx + 12} cy={baseY - 3} rx="8" ry="4" fill={`url(#res-rock-${seed})`} />
+          <ellipse cx={cx + 22} cy={baseY - 2} rx="6" ry="3" fill={`url(#res-rock-${seed})`} />
+        </g>
+      )}
+
       <g filter={`url(#${fid.drop})`}>
-        <path
-          d={`M ${bendX} 142 Q ${bendX - 2} 120 ${bendX + bendOffset} ${bendY}`}
-          stroke={`url(#res-bark-${seed})`}
-          strokeWidth="6.5"
-          fill="none"
-          strokeLinecap="round"
-        />
-        {/* Bark highlight stroke — runs along the light side */}
-        <path
-          d={`M ${bendX + 1.5} 142 Q ${bendX - 0.5} 120 ${bendX + bendOffset + 1.5} ${bendY}`}
-          stroke="white"
-          strokeOpacity="0.25"
-          strokeWidth="1.2"
-          fill="none"
-          strokeLinecap="round"
-        />
-      </g>
-
-      {/* Scar knot at the bend */}
-      <g filter={`url(#${fid.drop})`}>
-        <circle
-          cx={bendX + bendOffset}
-          cy={bendY}
-          r="4"
-          fill={palette.dark}
-          opacity="0.92"
-        />
-        <circle
-          cx={bendX + bendOffset - 1}
-          cy={bendY - 1}
-          r="1.5"
-          fill="white"
-          opacity="0.3"
-        />
-      </g>
-      <path
-        d={`M ${bendX + bendOffset - 4} ${bendY - 1} Q ${bendX + bendOffset} ${bendY + 2} ${bendX + bendOffset + 4} ${bendY - 1}`}
-        stroke={palette.accent}
-        strokeWidth="1.2"
-        fill="none"
-        strokeLinecap="round"
-        opacity="0.7"
-      />
-
-      {/* Upper trunk + canopy — swaying group */}
-      <g style={{ transformOrigin: `${bendX + bendOffset}px ${bendY}px` }}>
-        {animate && (
-          <animateTransform
-            attributeName="transform"
-            type="rotate"
-            values={`-1.5 ${bendX + bendOffset} ${bendY};1.5 ${bendX + bendOffset} ${bendY};-1.5 ${bendX + bendOffset} ${bendY}`}
-            dur={swayDur}
-            repeatCount="indefinite"
-          />
+        {/* Main wall */}
+        {wallOpacity > 0.01 && (
+          <g opacity={wallOpacity}>
+            <rect x={wallX} y={wallY} width={wallW} height={wallH} fill={`url(#res-stone-${seed})`} />
+            {/* Stone block joints — vertical lines */}
+            {wallH > 8 &&
+              Array.from({ length: 6 }, (_, i) => {
+                const x = wallX + (wallW / 6) * (i + 0.5)
+                return (
+                  <line
+                    key={i}
+                    x1={x}
+                    y1={wallY + 2}
+                    x2={x}
+                    y2={baseY - 2}
+                    stroke="#3f3a36"
+                    strokeWidth="0.6"
+                    opacity="0.6"
+                  />
+                )
+              })}
+            {/* Horizontal joint */}
+            {wallH > 14 && (
+              <line
+                x1={wallX + 1}
+                y1={wallY + wallH / 2}
+                x2={wallX + wallW - 1}
+                y2={wallY + wallH / 2}
+                stroke="#3f3a36"
+                strokeWidth="0.6"
+                opacity="0.55"
+              />
+            )}
+          </g>
         )}
-        <g filter={`url(#${fid.drop})`}>
-          <path
-            d={`M ${bendX + bendOffset} ${bendY} Q ${bendX + bendOffset + 3} ${(bendY + topY) / 2} ${topX} ${topY}`}
-            stroke={`url(#res-bark-${seed})`}
-            strokeWidth={lerp(5, 6.8, g)}
-            fill="none"
-            strokeLinecap="round"
-          />
-        </g>
 
-        {/* Recovery shoots */}
-        {Array.from({ length: shootCount }, (_, i) => {
-          const t = (i + 0.5) / shootCount
-          const sx = bendX + bendOffset + (topX - (bendX + bendOffset)) * t
-          const sy = bendY + (topY - bendY) * t
-          const dir = i % 2 === 0 ? -1 : 1
-          const len = lerp(6, 14, rand())
-          const ex = sx + dir * len
-          const ey = sy - 2
-          return (
-            <g key={i} filter={`url(#${fid.drop})`}>
-              <path
-                d={`M ${sx} ${sy} Q ${sx + dir * 4} ${sy - 4} ${ex} ${ey}`}
-                stroke={palette.mid}
-                strokeWidth="1.8"
-                fill="none"
-                strokeLinecap="round"
-              />
-              <ellipse
-                cx={ex}
-                cy={ey}
-                rx="3.2"
-                ry="1.8"
-                fill={palette.accent}
-                transform={`rotate(${dir * 30} ${ex} ${ey})`}
-              />
-            </g>
-          )
-        })}
+        {/* Battlements (crenellations) on top of wall */}
+        {battlementsOpacity > 0.01 && (
+          <g opacity={battlementsOpacity}>
+            {Array.from({ length: 6 }, (_, i) => {
+              const slotW = wallW / 6
+              const x = wallX + slotW * i + 1
+              return (
+                <rect
+                  key={i}
+                  x={x}
+                  y={wallY - 4}
+                  width={slotW * 0.55}
+                  height="4"
+                  fill={`url(#res-stone-${seed})`}
+                />
+              )
+            })}
+          </g>
+        )}
 
-        {/* Canopy — form-modeled with radial gradient */}
-        <g filter={`url(#${fid.drop})`}>
-          <circle cx={topX} cy={topY} r={canopyR} fill={`url(#res-canopy-${seed})`} />
-          <circle
-            cx={topX - canopyR * 0.5}
-            cy={topY - canopyR * 0.4}
-            r={canopyR * 0.65}
-            fill={palette.accent}
-            opacity="0.55"
-          />
-          <circle
-            cx={topX + canopyR * 0.45}
-            cy={topY + canopyR * 0.15}
-            r={canopyR * 0.55}
-            fill={palette.mid}
-            opacity="0.85"
-          />
-          {/* Specular highlight */}
-          <circle
-            cx={topX - canopyR * 0.45}
-            cy={topY - canopyR * 0.45}
-            r={canopyR * 0.25}
-            fill="white"
-            opacity="0.35"
-          />
-          {/* Top-of-canopy new shoots — the "I came back" signal */}
-          {g > 0.25 && (
-            <g>
-              <circle cx={topX - 3} cy={topY - canopyR - 2} r="2.2" fill={palette.accent} />
-              <circle cx={topX + 4} cy={topY - canopyR + 1} r="1.7" fill={palette.accent} opacity="0.9" />
-            </g>
-          )}
-        </g>
+        {/* Center tower (rises taller than wall) */}
+        {centerTowerOpacity > 0.01 && (
+          <g opacity={centerTowerOpacity}>
+            <rect x={towerX} y={towerY} width={towerW} height={towerH} fill={`url(#res-tower-${seed})`} />
+            {/* Tower battlements */}
+            {Array.from({ length: 3 }, (_, i) => (
+              <rect
+                key={i}
+                x={towerX + 0.5 + (towerW / 3) * i}
+                y={towerY - 4}
+                width={(towerW / 3) * 0.6}
+                height="4"
+                fill={`url(#res-tower-${seed})`}
+              />
+            ))}
+            {/* Arrow slit / window */}
+            {towerH > 22 && (
+              <rect
+                x={cx - 1}
+                y={towerY + 6}
+                width="2"
+                height="6"
+                fill="#1a1410"
+                opacity="0.9"
+              />
+            )}
+            {/* Horizontal joint */}
+            {towerH > 20 && (
+              <line
+                x1={towerX + 1}
+                y1={towerY + towerH * 0.55}
+                x2={towerX + towerW - 1}
+                y2={towerY + towerH * 0.55}
+                stroke="#3f3a36"
+                strokeWidth="0.6"
+                opacity="0.55"
+              />
+            )}
+          </g>
+        )}
+
+        {/* Flanking towers (left + right) */}
+        {sideTowersOpacity > 0.01 && (
+          <g opacity={sideTowersOpacity}>
+            {/* Left flanking tower */}
+            <rect
+              x={wallX - sideTowerW / 2}
+              y={baseY - sideTowerH}
+              width={sideTowerW}
+              height={sideTowerH}
+              fill={`url(#res-tower-${seed})`}
+            />
+            {/* Cone roof */}
+            <polygon
+              points={`${wallX - sideTowerW / 2 - 2},${baseY - sideTowerH} ${wallX + sideTowerW / 2 + 2},${baseY - sideTowerH} ${wallX},${baseY - sideTowerH - 8}`}
+              fill={palette.dark}
+            />
+            {/* Right flanking tower */}
+            <rect
+              x={wallX + wallW - sideTowerW / 2}
+              y={baseY - sideTowerH}
+              width={sideTowerW}
+              height={sideTowerH}
+              fill={`url(#res-tower-${seed})`}
+            />
+            <polygon
+              points={`${wallX + wallW - sideTowerW / 2 - 2},${baseY - sideTowerH} ${wallX + wallW + sideTowerW / 2 + 2},${baseY - sideTowerH} ${wallX + wallW},${baseY - sideTowerH - 8}`}
+              fill={palette.dark}
+            />
+          </g>
+        )}
+
+        {/* Gate door — arched opening in the wall, in front of center tower */}
+        {gateOpacity > 0.01 && wallH > 14 && (
+          <g opacity={gateOpacity}>
+            <path
+              d={`
+                M ${cx - 5} ${baseY}
+                L ${cx - 5} ${baseY - 8}
+                Q ${cx - 5} ${baseY - 11} ${cx} ${baseY - 11}
+                Q ${cx + 5} ${baseY - 11} ${cx + 5} ${baseY - 8}
+                L ${cx + 5} ${baseY}
+                Z
+              `}
+              fill="#1a1410"
+            />
+            {/* Door planks suggestion */}
+            <line x1={cx} y1={baseY - 10} x2={cx} y2={baseY - 1} stroke="#3f3a36" strokeWidth="0.6" opacity="0.7" />
+          </g>
+        )}
       </g>
+
+      {/* Flag on top of center tower */}
+      {flagOpacity > 0.01 && (
+        <g opacity={flagOpacity}>
+          {/* Pole */}
+          <line
+            x1={cx}
+            y1={towerY - 4}
+            x2={cx}
+            y2={towerY - 18}
+            stroke="#44403c"
+            strokeWidth="1.2"
+          />
+          {/* Flag — swaying triangle pennant */}
+          <g style={{ transformOrigin: `${cx}px ${towerY - 16}px` }}>
+            {animate && (
+              <animateTransform
+                attributeName="transform"
+                type="rotate"
+                values={`-3 ${cx} ${towerY - 16};3 ${cx} ${towerY - 16};-3 ${cx} ${towerY - 16}`}
+                dur="2.4s"
+                repeatCount="indefinite"
+              />
+            )}
+            <polygon
+              points={`${cx},${towerY - 17} ${cx + 12},${towerY - 14} ${cx},${towerY - 11}`}
+              fill={`url(#res-flag-${seed})`}
+            />
+          </g>
+          {/* Pole top knob */}
+          <circle cx={cx} cy={towerY - 18.5} r="1.3" fill={palette.accent} />
+        </g>
+      )}
     </svg>
   )
+}
+
+function fadeIn(g: number, start: number, end: number): number {
+  if (g <= start) return 0
+  if (g >= end) return 1
+  const t = (g - start) / (end - start)
+  return t * t * (3 - 2 * t)
+}
+function fadeOut(g: number, start: number, end: number): number {
+  return 1 - fadeIn(g, start, end)
 }

@@ -20,33 +20,31 @@ import { SocialAwarenessVisual } from './archetypes/SocialAwareness'
 /**
  * SkillVisual — dispatcher that picks the right archetype per skill.
  *
- * Each skill has its own bespoke artwork (a lattice for Critical
- * Thinking, a bent-trunk for Resilience, …). Skills without dedicated
- * artwork fall back to `SaplingVisual` which is still procedural and
- * deterministically varied by skill id.
+ * Each skill has its own bespoke artwork (a crystal for Critical
+ * Thinking, a campfire for Initiative, a castle for Resilience, …).
+ * Skills without dedicated artwork fall back to `SaplingVisual`.
  *
- * The mapping lives in `ARCHETYPE_BY_SKILL_ID` below. To add a new
- * archetype: drop a new component under `./archetypes/`, import it
- * here, register it in the map.
+ * Animation model:
  *
- * Hover/focus animation: when `hovering` is true (parent tracks it),
- * the dispatcher drives a sinusoidal loop of growth & density values
- * so the artwork visibly cycles from "seedling" to "fully mature" and
- * back. Each archetype is parameterized off these two numbers, so the
- * loop renders a tiny "trailer" of what growth in this skill looks
- * like — without each archetype having to wire its own animation.
- * When `hovering` flips back off, growth/density snap to the
- * student's actual current values.
+ * **Idle (no hover)**: artwork is static. Renders at the student's
+ * current growth/density values; no SVG `<animate>` tags play. The
+ * `animate` prop passed to each archetype is `false`, so flickers,
+ * sways, pulses are all frozen.
+ *
+ * **Hover (or focus)**: a linear ramp drives growth 0 → 1 over
+ * HOVER_PERIOD seconds, then snaps back to 0 and replays. This reads
+ * as a clear "watch it grow from seedling" trailer, NOT a breathing
+ * oscillation. `animate={true}` is passed down so the archetype's
+ * own idle motions (flicker, sway, sweep) also play during the
+ * trailer.
+ *
+ * When hover ends, both the growth value and idle motion snap back
+ * to static.
  */
 
 interface SkillVisualProps {
   plant: GardenPlant
-  /** Idle micro-animations baked into the archetype (sway, shimmer). */
-  animate?: boolean
-  /**
-   * Whether the parent is currently hovering / focusing this skill.
-   * Drives the cycle animation through the growth spectrum.
-   */
+  /** Whether the parent is currently hovering / focusing this skill. */
   hovering?: boolean
 }
 
@@ -69,14 +67,12 @@ const ARCHETYPE_BY_SKILL_ID: Record<string, Renderer> = {
   skill_networking: NetworkingVisual,
   skill_relationship_building: RelationshipBuildingVisual,
   skill_social_awareness: SocialAwarenessVisual,
-  // Legacy / not currently rendered — falls through to SaplingVisual:
-  //   skill_self_directed_learning
 }
 
-/** Period (seconds) of one full 0 → 1 → 0 cycle on hover. */
-const HOVER_PERIOD = 4.5
+/** Seconds for the hover trailer to ramp 0 → 1. Then snaps and replays. */
+const HOVER_PERIOD = 3.5
 
-export function SkillVisual({ plant, animate = true, hovering = false }: SkillVisualProps) {
+export function SkillVisual({ plant, hovering = false }: SkillVisualProps) {
   const base = signalFromPlant(plant)
   const palette = paletteForPillar(plant.pillarName)
   const Renderer = ARCHETYPE_BY_SKILL_ID[plant.skillId] ?? SaplingVisual
@@ -84,8 +80,6 @@ export function SkillVisual({ plant, animate = true, hovering = false }: SkillVi
   const [signal, setSignal] = useState<{ growth: number; density: number }>(base)
   const rafRef = useRef<number | null>(null)
 
-  // Drive the hover cycle. Uses requestAnimationFrame so the rate
-  // matches the display refresh; cancels on unhover or unmount.
   useEffect(() => {
     if (!hovering) {
       setSignal(base)
@@ -94,17 +88,17 @@ export function SkillVisual({ plant, animate = true, hovering = false }: SkillVi
     const startTs = performance.now()
     const tick = (now: number) => {
       const elapsed = (now - startTs) / 1000
-      // Smooth sinusoidal 0 → 1 → 0 loop. Cosine-based so the curve
-      // is gentle at the endpoints (the artwork dwells briefly at
-      // seed-state and full-grown rather than blowing past them).
-      const phase = (2 * Math.PI * elapsed) / HOVER_PERIOD
-      const g = (1 - Math.cos(phase)) / 2
-      // Offset density by a quarter-cycle so leaves don't pulse
-      // perfectly in lockstep with the main growth — feels more
-      // like a living system, less like a slider.
-      const dPhase = phase + Math.PI / 2
-      const d = (1 - Math.cos(dPhase)) / 2
-      setSignal({ growth: g, density: d })
+      // Linear ramp 0 → 1, then modulo back to 0 and replay. The
+      // discontinuity at 1 → 0 is deliberate: feels like the trailer
+      // restarting, not a smooth breath.
+      const t = (elapsed % HOVER_PERIOD) / HOVER_PERIOD
+      // Gentle ease-in so growth doesn't feel mechanical at the start
+      const eased = t * t * (3 - 2 * t) // smoothstep
+      // Density tracks slightly ahead of growth so leaves/sparks/etc
+      // hit their peaks just before the main form does — gives a
+      // subtle anticipation feel.
+      const d = Math.min(1, eased * 1.15)
+      setSignal({ growth: eased, density: d })
       rafRef.current = requestAnimationFrame(tick)
     }
     rafRef.current = requestAnimationFrame(tick)
@@ -112,9 +106,8 @@ export function SkillVisual({ plant, animate = true, hovering = false }: SkillVi
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
       rafRef.current = null
     }
-    // We intentionally don't depend on base.* — when hover toggles
-    // off the early-return branch resets to base, and when it
-    // toggles on we restart the loop from t=0 regardless of base.
+    // Intentional: don't re-run on base changes, the early-return
+    // branch handles that.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hovering])
 
@@ -124,7 +117,7 @@ export function SkillVisual({ plant, animate = true, hovering = false }: SkillVi
       density={signal.density}
       palette={palette}
       seed={plant.skillId}
-      animate={animate}
+      animate={hovering}
     />
   )
 }
