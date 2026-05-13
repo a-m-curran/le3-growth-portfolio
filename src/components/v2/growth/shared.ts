@@ -102,6 +102,27 @@ export function clamp01(t: number): number {
 }
 
 /**
+ * Filter ids each archetype can reference (after including
+ * `<ArtworkFilters seed={seed} />` inside its `<defs>`):
+ *
+ *   `drop-${seed}`    — soft drop shadow, gives shapes physicality
+ *   `inset-${seed}`   — subtle inner shadow, for "cupped" forms
+ *   `glow-${seed}`    — soft outer glow, for light sources / blooms
+ *   `ground-${seed}`  — radial gradient for the ground-contact shadow
+ *
+ * The filter ids are scoped by `seed` so two archetypes rendered on
+ * the same page can't collide (SVG filter ids are document-global).
+ */
+export function artworkFilterIds(seed: string) {
+  return {
+    drop: `drop-${seed}`,
+    inset: `inset-${seed}`,
+    glow: `glow-${seed}`,
+    ground: `ground-${seed}`,
+  }
+}
+
+/**
  * Default palette by pillar name. Pulled out of constants.ts colors
  * but tuned for the growth canvas (the constants tend to be too pale
  * to read as the *primary* color of an artwork).

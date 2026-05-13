@@ -1,7 +1,8 @@
 'use client'
 
 import type { ArchetypeProps } from '../shared'
-import { seededRandom, clamp01, lerp } from '../shared'
+import { seededRandom, clamp01, lerp, artworkFilterIds } from '../shared'
+import { ArtworkFilters } from '../ArtworkFilters'
 
 /**
  * Sapling — the generic fallback archetype.
@@ -9,32 +10,27 @@ import { seededRandom, clamp01, lerp } from '../shared'
  * Used for any skill that hasn't been given its own bespoke artwork
  * yet. Still procedural / continuous (not the v1 five-discrete-stages
  * approach) and seeded off skill id so two skills sharing this
- * fallback look distinct from each other. Each "sapling" gets:
- *   - a unique tilt angle
- *   - a hash-determined leaf count and arrangement
- *   - a small bloom that appears past the midpoint of growth
+ * fallback look distinct from each other.
+ *
+ * Depth treatment: drop shadow on the swaying body, radial-gradient
+ * cast shadow on the ground, form-modeled bloom at the top.
  *
  * Long-term goal: every skill graduates to its own archetype and this
- * fallback only renders for newly-added skills before they get
- * dedicated artwork.
+ * fallback only renders for newly-added skills.
  */
 export function SaplingVisual({ growth, density, palette, seed, animate = true }: ArchetypeProps) {
   const rand = seededRandom(seed)
+  const fid = artworkFilterIds(seed)
   const g = clamp01(growth)
 
-  // Tilt: -10 to +10 degrees, deterministic per skill
   const tilt = (rand() - 0.5) * 20
-  // Stem height scales with growth
   const stemH = lerp(20, 75, g)
-  // Leaf count grows with conversations
   const leafCount = Math.floor(lerp(2, 8, g)) + Math.floor(density * 3)
-  // Bloom appears past 0.5 growth
   const hasBloom = g > 0.5
 
   const cx = 80
   const baseY = 138
 
-  // Pre-compute leaf positions along the stem
   const leaves = Array.from({ length: leafCount }, (_, i) => {
     const t = (i + 1) / (leafCount + 1)
     const side = i % 2 === 0 ? -1 : 1
@@ -48,8 +44,17 @@ export function SaplingVisual({ growth, density, palette, seed, animate = true }
 
   return (
     <svg viewBox="0 0 160 160" className="w-full h-full" aria-hidden="true">
-      {/* Soft ground */}
-      <ellipse cx={cx} cy={baseY + 4} rx="28" ry="4" fill={palette.dark} opacity="0.15" />
+      <defs>
+        <ArtworkFilters seed={seed} />
+        <radialGradient id={`sap-bloom-${seed}`} cx="35%" cy="35%" r="65%">
+          <stop offset="0%" stopColor="white" stopOpacity="0.7" />
+          <stop offset="40%" stopColor={palette.accent} stopOpacity="0.95" />
+          <stop offset="100%" stopColor={palette.dark} stopOpacity="0.8" />
+        </radialGradient>
+      </defs>
+
+      {/* Cast shadow */}
+      <ellipse cx={cx} cy={baseY + 4} rx="26" ry="5" fill={`url(#${fid.ground})`} />
 
       <g transform={`rotate(${tilt} ${cx} ${baseY})`}>
         {animate && (
@@ -61,34 +66,54 @@ export function SaplingVisual({ growth, density, palette, seed, animate = true }
             repeatCount="indefinite"
           />
         )}
-        {/* Stem */}
-        <path
-          d={`M ${cx} ${baseY} Q ${cx + (rand() - 0.5) * 4} ${baseY - stemH / 2} ${cx} ${baseY - stemH}`}
-          stroke={palette.dark}
-          strokeWidth={lerp(2, 3.5, g)}
-          fill="none"
-          strokeLinecap="round"
-        />
-
-        {/* Leaves */}
-        {leaves.map((l, i) => (
-          <ellipse
-            key={i}
-            cx={l.x}
-            cy={l.y}
-            rx={l.size}
-            ry={l.size * 0.5}
-            fill={i % 3 === 0 ? palette.accent : palette.mid}
-            opacity={0.85}
-            transform={`rotate(${l.rot} ${l.x} ${l.y})`}
+        <g filter={`url(#${fid.drop})`}>
+          <path
+            d={`M ${cx} ${baseY} Q ${cx + (rand() - 0.5) * 4} ${baseY - stemH / 2} ${cx} ${baseY - stemH}`}
+            stroke={palette.dark}
+            strokeWidth={lerp(2, 3.5, g)}
+            fill="none"
+            strokeLinecap="round"
           />
-        ))}
+          {leaves.map((l, i) => (
+            <g key={i}>
+              <ellipse
+                cx={l.x}
+                cy={l.y}
+                rx={l.size}
+                ry={l.size * 0.5}
+                fill={i % 3 === 0 ? palette.accent : palette.mid}
+                opacity={0.92}
+                transform={`rotate(${l.rot} ${l.x} ${l.y})`}
+              />
+              {/* Subtle highlight on each leaf */}
+              <ellipse
+                cx={l.x - l.size * 0.2}
+                cy={l.y - l.size * 0.2}
+                rx={l.size * 0.4}
+                ry={l.size * 0.2}
+                fill="white"
+                opacity="0.35"
+                transform={`rotate(${l.rot} ${l.x} ${l.y})`}
+              />
+            </g>
+          ))}
+        </g>
 
-        {/* Bloom at the top if grown enough */}
         {hasBloom && (
-          <g>
-            <circle cx={cx} cy={baseY - stemH - 2} r={lerp(3, 6, g)} fill={palette.accent} opacity="0.95" />
-            <circle cx={cx} cy={baseY - stemH - 2} r={lerp(1.5, 2.5, g)} fill={palette.dark} opacity="0.7" />
+          <g filter={`url(#${fid.drop})`}>
+            <circle
+              cx={cx}
+              cy={baseY - stemH - 2}
+              r={lerp(3, 6, g)}
+              fill={`url(#sap-bloom-${seed})`}
+            />
+            <circle
+              cx={cx}
+              cy={baseY - stemH - 2}
+              r={lerp(1.5, 2.5, g)}
+              fill={palette.dark}
+              opacity="0.7"
+            />
           </g>
         )}
       </g>

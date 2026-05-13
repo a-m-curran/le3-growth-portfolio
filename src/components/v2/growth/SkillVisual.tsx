@@ -6,6 +6,16 @@ import { signalFromPlant, paletteForPillar } from './shared'
 import { CriticalThinkingVisual } from './archetypes/CriticalThinking'
 import { ResilienceVisual } from './archetypes/Resilience'
 import { SaplingVisual } from './archetypes/Sapling'
+import { CreativeProblemSolvingVisual } from './archetypes/CreativeProblemSolving'
+import { CuriosityVisual } from './archetypes/Curiosity'
+import { InitiativeVisual } from './archetypes/Initiative'
+import { EmpathyVisual } from './archetypes/Empathy'
+import { CommunicationVisual } from './archetypes/Communication'
+import { AdaptabilityVisual } from './archetypes/Adaptability'
+import { CollaborationVisual } from './archetypes/Collaboration'
+import { NetworkingVisual } from './archetypes/Networking'
+import { RelationshipBuildingVisual } from './archetypes/RelationshipBuilding'
+import { SocialAwarenessVisual } from './archetypes/SocialAwareness'
 
 /**
  * SkillVisual — dispatcher that picks the right archetype per skill.
@@ -43,11 +53,24 @@ interface SkillVisualProps {
 type Renderer = (typeof CriticalThinkingVisual)
 
 const ARCHETYPE_BY_SKILL_ID: Record<string, Renderer> = {
+  // Creative & Curious Thinkers
+  skill_creative_problem_solving: CreativeProblemSolvingVisual,
   skill_critical_thinking: CriticalThinkingVisual,
+  skill_curiosity: CuriosityVisual,
+  // Leaders with Purpose & Agency
+  skill_initiative: InitiativeVisual,
+  skill_empathy: EmpathyVisual,
+  skill_communication: CommunicationVisual,
+  // Thrivers in Change
+  skill_adaptability: AdaptabilityVisual,
   skill_resilience: ResilienceVisual,
-  // The remaining 10 skills will get bespoke archetypes; for now they
-  // fall through to SaplingVisual which still seeds off skill id so
-  // each looks distinct.
+  // Network Builders
+  skill_collaboration: CollaborationVisual,
+  skill_networking: NetworkingVisual,
+  skill_relationship_building: RelationshipBuildingVisual,
+  skill_social_awareness: SocialAwarenessVisual,
+  // Legacy / not currently rendered — falls through to SaplingVisual:
+  //   skill_self_directed_learning
 }
 
 /** Period (seconds) of one full 0 → 1 → 0 cycle on hover. */
