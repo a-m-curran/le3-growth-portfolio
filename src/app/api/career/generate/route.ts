@@ -45,6 +45,15 @@ export async function POST() {
         skillId: n.skill_id as string,
         skillName: ((n.durable_skill as Record<string, unknown>)?.name as string) || '',
         narrativeText: n.narrative_text as string,
+        // Pass the per-narrative citations through so the career LLM can
+        // carry conversationIds forward onto its resume sentences and
+        // talking points. Stored on skill_narrative.narrative_annotations
+        // as JSONB by the narrative generator. May be null when the
+        // source narrative wasn't grounded — career output handles that.
+        citations: (n.narrative_annotations as Array<{
+          sentence: string
+          conversationId: string
+        }> | null) ?? [],
       }))
 
     if (narratives.length === 0) {
@@ -64,7 +73,10 @@ export async function POST() {
 
     const nextVersion = existing && existing.length > 0 ? existing[0].version + 1 : 1
 
-    // Save
+    // Save. `result.skillDescriptions` already carries per-skill `annotations`
+    // (sentence → conversationId map) inside each entry; the JSONB column
+    // takes the whole shape verbatim so the read side at GET /api/student/career
+    // can surface inline source links exactly the way demo personas do.
     await admin.from('career_output').insert({
       student_id: studentRow.id,
       version: nextVersion,
@@ -72,10 +84,16 @@ export async function POST() {
       skill_descriptions: result.skillDescriptions,
     })
 
+    const annotationTotal = result.skillDescriptions.reduce(
+      (acc, sd) => acc + sd.annotations.length,
+      0
+    )
+
     return NextResponse.json({
       resumeSummary: result.resumeSummary,
       skillDescriptions: result.skillDescriptions,
       version: nextVersion,
+      annotationCount: annotationTotal,
     })
   } catch (error) {
     console.error('Career output error:', error)

@@ -662,13 +662,42 @@ VOICE AND STYLE:
 OUTPUT FORMAT (respond with valid JSON only, no markdown):
 {
   "narrativeText": "The full narrative text. Multiple paragraphs separated by \\n\\n.",
-  "richness": "thin|developing|rich"
+  "richness": "thin|developing|rich",
+  "citations": [
+    {
+      "sentence": "<verbatim sentence from narrativeText>",
+      "conversationId": "<uuid from the input conversations>"
+    }
+  ]
 }
 
 RICHNESS GUIDE:
 - thin: 1-2 conversations. Write 1-2 short paragraphs. Focus on first impressions.
 - developing: 3-5 conversations. Write 2-3 paragraphs. Show emerging patterns.
 - rich: 6+ conversations. Write 3-5 paragraphs. Show the full arc with specific moments.
+
+CITATIONS — HOW TO EMIT THEM:
+- Every conversation in the input has a CONVERSATION_ID. When you write a
+  sentence in narrativeText that references a specific moment from one of
+  those conversations (a story, a quote, a turning point, a decision), emit
+  a citation entry tying that sentence to its source conversationId.
+- The "sentence" field must be the EXACT, VERBATIM text of one sentence as
+  it appears in narrativeText — copy-pasteable, character-for-character.
+  Include punctuation. Do not paraphrase. Do not split a sentence in half.
+  Do not include surrounding sentences. A downstream renderer locates the
+  sentence in the narrative by exact substring match, so any drift breaks
+  the link.
+- Cite ANY sentence that draws from a specific conversation moment, not
+  just sentences that include a quote. A sentence like "When the deadline
+  slipped, you reached out to the writing center the same afternoon."
+  should be cited to its source conversation even if no quote appears.
+- A sentence may legitimately weave together two conversations. In that
+  case emit two citation entries for the same sentence, one per
+  conversationId. Don't invent overlap that isn't there.
+- Do NOT cite generic/synthesis sentences ("Over the term, a pattern has
+  emerged...") that pull from no single conversation. Leave those uncited.
+- Aim for one citation per substantive moment you reference. A "rich"
+  narrative typically produces 4-8 citations; a "thin" narrative 1-3.
 
 RULES:
 - Use actual quotes from the student's conversations. Short (under 15 words), in quotes.
@@ -684,6 +713,13 @@ export interface NarrativeContext {
   skillName: string
   definitions: { text: string; version: number; createdAt: string }[]
   conversations: {
+    /**
+     * The growth_conversation row id (uuid). Threaded into the prompt so
+     * the LLM can emit citation entries pointing back at the exact source
+     * conversation for every sentence it grounds in a specific moment.
+     * The CareerView / NarrativeView render these as inline source links.
+     */
+    conversationId: string
     date: string
     workTitle: string
     /**
@@ -748,9 +784,11 @@ export function buildNarrativeContext(ctx: NarrativeContext): string {
   }
 
   parts.push('CONVERSATIONS (chronological):')
+  parts.push('Each conversation has a CONVERSATION_ID — use it when emitting citations.')
   ctx.conversations.forEach((c, i) => {
     const courseSuffix = c.courseName ? ` (${c.courseName})` : ''
     parts.push(`  ${i + 1}. ${c.date} — "${c.workTitle}"${courseSuffix}`)
+    parts.push(`     CONVERSATION_ID: ${c.conversationId}`)
     if (c.workDescription) {
       // Truncate long prompts to keep the context budget manageable
       const desc = c.workDescription.length > 300
@@ -767,7 +805,7 @@ export function buildNarrativeContext(ctx: NarrativeContext): string {
     }
   })
 
-  parts.push('', 'Generate the skill narrative. Return JSON.')
+  parts.push('', 'Generate the skill narrative. Return JSON with narrativeText, richness, and citations.')
   return parts.join('\n').trim()
 }
 
@@ -776,7 +814,11 @@ export function buildNarrativeContext(ctx: NarrativeContext): string {
 export const CAREER_OUTPUT_SYSTEM_PROMPT = `You are a career development advisor synthesizing a student's growth portfolio
 into professional language they can use on resumes, cover letters, and in interviews.
 
-INPUT: You'll receive the student's skill narratives (their growth story for each skill).
+INPUT: You'll receive the student's skill narratives (their growth story for each
+skill). Each narrative comes with a CITATIONS list — sentences in the narrative
+already tied to specific source conversations by uuid. Use those citations as the
+source of truth when you want to point a resume sentence or talking point back at
+the underlying moment.
 
 OUTPUT FORMAT (respond with valid JSON only, no markdown):
 {
@@ -789,6 +831,12 @@ OUTPUT FORMAT (respond with valid JSON only, no markdown):
       "talkingPoints": [
         "Interview-ready talking point 1 (1-2 sentences, STAR format where possible)",
         "Interview-ready talking point 2"
+      ],
+      "annotations": [
+        {
+          "sentence": "<verbatim sentence from resumeLanguage OR from one of the talkingPoints>",
+          "conversationId": "<uuid carried over from the input narrative citations>"
+        }
       ]
     }
   ]
@@ -802,11 +850,38 @@ RULES:
 - Talking points should be conversational, as if the student is telling the story
   in an interview. First person ("I").
 - Include 2-3 talking points per skill that has a narrative. Skip skills with no narrative.
-- The resume summary should feel cohesive, not just a list of skills.`
+- The resume summary should feel cohesive, not just a list of skills.
+
+ANNOTATIONS — HOW TO EMIT THEM:
+- For each skill, emit annotation entries for the sentences in your resumeLanguage
+  or talkingPoints that draw from a specific moment in the input narrative. Use
+  the conversationIds from that narrative's CITATIONS list.
+- The "sentence" field must be EXACT, VERBATIM text from your resumeLanguage or
+  from one of your talkingPoints — character-for-character, with punctuation.
+  A downstream renderer locates the sentence by exact substring match and turns
+  it into an inline source link; any drift breaks the link.
+- Prefer talkingPoint sentences over resume sentences when annotating. Resume
+  language is necessarily abstracted; talking points carry the actual story.
+- A typical skill produces 1-3 annotations. Don't annotate every sentence —
+  only the ones that point at a real, specific moment in the source narrative.
+- If a narrative had no citations in its input (the source narrative wasn't
+  grounded), you may emit an empty annotations array for that skill.
+- Annotations are scoped to each skill — a sentence in skill A's talking points
+  cannot cite skill B's narrative. Stay within the per-skill scope.`
 
 export function buildCareerOutputContext(
   studentName: string,
-  narratives: { skillName: string; skillId: string; narrativeText: string }[]
+  narratives: {
+    skillName: string
+    skillId: string
+    narrativeText: string
+    /**
+     * Optional sentence→conversationId map from the source narrative.
+     * Threaded into the prompt so the career LLM can carry citations
+     * forward into its resumeLanguage / talkingPoints annotations.
+     */
+    citations?: Array<{ sentence: string; conversationId: string }>
+  }[]
 ): string {
   const parts = [
     `STUDENT: ${studentName}`,
@@ -818,9 +893,20 @@ export function buildCareerOutputContext(
   for (const n of narratives) {
     parts.push(`--- ${n.skillName} (${n.skillId}) ---`)
     parts.push(n.narrativeText)
+    if (n.citations && n.citations.length > 0) {
+      parts.push('')
+      parts.push('CITATIONS for this narrative (sentence → source conversationId):')
+      for (const c of n.citations) {
+        parts.push(`  - "${c.sentence}"  →  ${c.conversationId}`)
+      }
+    }
     parts.push('')
   }
 
-  parts.push('Generate the career output JSON. Include all skills that have narratives.')
+  parts.push(
+    'Generate the career output JSON. Include all skills that have narratives.',
+    'For each skill, emit annotations carrying the conversationIds forward from',
+    'the source narrative citations onto the matching resume sentences or talking points.'
+  )
   return parts.join('\n').trim()
 }

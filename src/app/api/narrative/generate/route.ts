@@ -76,6 +76,11 @@ export async function POST(request: Request) {
     const conversations = (convoResult.data || []).map((c: Record<string, unknown>) => {
       const work = c.student_work as Record<string, unknown> | null
       return {
+        // The growth_conversation uuid — surfaced to the LLM so it can emit
+        // citations that point back at the exact source conversation for
+        // every sentence it grounds in a specific moment. The renderer uses
+        // this id to wire up inline source-link buttons on the narrative view.
+        conversationId: c.id as string,
         date: c.started_at as string,
         // Prefer the actual assignment title from student_work; fall back to
         // the conversation's work_context framing or "Reflection" for
@@ -156,7 +161,15 @@ export async function POST(request: Request) {
 
     const nextVersion = existing && existing.length > 0 ? existing[0].version + 1 : 1
 
-    // Save narrative
+    // Save narrative. The citations the LLM emitted alongside narrativeText
+    // are persisted to `narrative_annotations` so the v2 narrative view can
+    // render inline source links — same shape the demo personas use, but
+    // sourced from the model rather than hand-annotated. Stored as null
+    // (not []) when there are zero citations so the column read is
+    // unambiguous and the UI's nullish-coalesce works cleanly.
+    const annotationsToStore =
+      result.citations.length > 0 ? result.citations : null
+
     const { data: narrative, error: insertError } = await admin
       .from('skill_narrative')
       .insert({
@@ -165,11 +178,13 @@ export async function POST(request: Request) {
         version: nextVersion,
         narrative_text: result.narrativeText,
         narrative_richness: result.richness,
+        narrative_annotations: annotationsToStore,
         data_sources_used: {
           conversationCount: conversations.length,
           assignmentCount: 0,
           hasC2aData: outputs.length > 0,
           hasDefinitions: (defResult.data || []).length > 0,
+          citationCount: result.citations.length,
         },
       })
       .select('id')
@@ -186,6 +201,7 @@ export async function POST(request: Request) {
       richness: result.richness,
       version: nextVersion,
       conversationCount: conversations.length,
+      citationCount: result.citations.length,
     })
   } catch (error) {
     console.error('Narrative generation error:', error)

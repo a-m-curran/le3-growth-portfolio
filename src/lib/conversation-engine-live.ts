@@ -246,31 +246,136 @@ export async function generateConversationOutput(
 
 export async function generateCareerOutput(
   studentName: string,
-  narratives: { skillName: string; skillId: string; narrativeText: string }[]
-): Promise<{ resumeSummary: string; skillDescriptions: { skillId: string; skillName: string; resumeLanguage: string; talkingPoints: string[] }[] }> {
+  narratives: {
+    skillName: string
+    skillId: string
+    narrativeText: string
+    /**
+     * Per-narrative citations carried forward from skill_narrative.
+     * Threaded into the prompt so the career LLM can annotate its
+     * resume sentences and talking points with the same conversationIds.
+     */
+    citations?: Array<{ sentence: string; conversationId: string }>
+  }[]
+): Promise<{
+  resumeSummary: string
+  skillDescriptions: {
+    skillId: string
+    skillName: string
+    resumeLanguage: string
+    talkingPoints: string[]
+    /**
+     * Sentence→conversationId map for inline source links on the v2
+     * career view. Each entry's `sentence` is a verbatim slice of either
+     * resumeLanguage or one of the talkingPoints for the same skill.
+     * Scoped per-skill — cross-skill annotations are dropped.
+     */
+    annotations: Array<{ sentence: string; conversationId: string }>
+  }[]
+}> {
   const text = await llm().generate(
     CAREER_OUTPUT_SYSTEM_PROMPT,
     buildCareerOutputContext(studentName, narratives),
     { temperature: 0.4, maxTokens: 2000 }
   )
-  return parseJsonFromLLM<{ resumeSummary: string; skillDescriptions: { skillId: string; skillName: string; resumeLanguage: string; talkingPoints: string[] }[] }>(
-    text,
-    { resumeSummary: text, skillDescriptions: [] }
-  )
+  const parsed = parseJsonFromLLM<{
+    resumeSummary: string
+    skillDescriptions: Array<{
+      skillId: string
+      skillName: string
+      resumeLanguage: string
+      talkingPoints: string[]
+      annotations?: Array<{ sentence: string; conversationId: string }>
+    }>
+  }>(text, { resumeSummary: text, skillDescriptions: [] })
+
+  // Build the per-skill set of valid conversationIds (the ones we passed
+  // INTO the prompt) so we can drop hallucinated ids the model might emit.
+  const allowedConvoIdsBySkill = new Map<string, Set<string>>()
+  for (const n of narratives) {
+    allowedConvoIdsBySkill.set(
+      n.skillId,
+      new Set((n.citations ?? []).map(c => c.conversationId))
+    )
+  }
+
+  // Validate each skill's annotations: sentence must appear verbatim in
+  // resumeLanguage or one of the talkingPoints for THAT skill, and the
+  // conversationId must be one of the citations we passed in for that
+  // same skill. Anything else gets silently dropped — the UI's nullish
+  // fallback handles a missing/empty annotations list cleanly.
+  const skillDescriptions = parsed.skillDescriptions.map(sd => {
+    const allowedHaystack = [sd.resumeLanguage, ...(sd.talkingPoints ?? [])]
+      .filter(Boolean)
+      .join('\n')
+    const allowedIds = allowedConvoIdsBySkill.get(sd.skillId) ?? new Set<string>()
+    const validAnnotations = (sd.annotations ?? []).filter(
+      a =>
+        typeof a.sentence === 'string' &&
+        typeof a.conversationId === 'string' &&
+        a.sentence.length > 0 &&
+        allowedIds.has(a.conversationId) &&
+        allowedHaystack.includes(a.sentence)
+    )
+    return {
+      skillId: sd.skillId,
+      skillName: sd.skillName,
+      resumeLanguage: sd.resumeLanguage,
+      talkingPoints: sd.talkingPoints ?? [],
+      annotations: validAnnotations,
+    }
+  })
+
+  return {
+    resumeSummary: parsed.resumeSummary,
+    skillDescriptions,
+  }
 }
 
 export async function generateSkillNarrative(
   ctx: NarrativeContext
-): Promise<{ narrativeText: string; richness: 'thin' | 'developing' | 'rich' }> {
+): Promise<{
+  narrativeText: string
+  richness: 'thin' | 'developing' | 'rich'
+  /**
+   * Sentence → conversationId map emitted alongside narrativeText. Each
+   * entry's `sentence` is a verbatim slice of narrativeText; the renderer
+   * locates it via substring match to render an inline source link. May
+   * be empty if the model produced no groundable sentences, or if the
+   * surface couldn't parse it cleanly.
+   */
+  citations: Array<{ sentence: string; conversationId: string }>
+}> {
   const text = await llm().generate(
     NARRATIVE_GENERATION_SYSTEM_PROMPT,
     buildNarrativeContext(ctx),
     { temperature: 0.5, maxTokens: 2000 }
   )
-  return parseJsonFromLLM<{ narrativeText: string; richness: 'thin' | 'developing' | 'rich' }>(
-    text,
-    { narrativeText: text, richness: 'thin' }
+  const parsed = parseJsonFromLLM<{
+    narrativeText: string
+    richness: 'thin' | 'developing' | 'rich'
+    citations?: Array<{ sentence: string; conversationId: string }>
+  }>(text, { narrativeText: text, richness: 'thin', citations: [] })
+
+  // Validate every citation: sentence must be findable in narrativeText AND
+  // conversationId must be one we provided in the context. Drop any that
+  // fail either check — the model occasionally paraphrases or hallucinates
+  // a uuid, and bad annotations would render as broken inline links.
+  const allowedConvoIds = new Set(ctx.conversations.map(c => c.conversationId))
+  const validCitations = (parsed.citations ?? []).filter(
+    c =>
+      typeof c.sentence === 'string' &&
+      typeof c.conversationId === 'string' &&
+      c.sentence.length > 0 &&
+      allowedConvoIds.has(c.conversationId) &&
+      parsed.narrativeText.includes(c.sentence)
   )
+
+  return {
+    narrativeText: parsed.narrativeText,
+    richness: parsed.richness,
+    citations: validCitations,
+  }
 }
 
 export async function generateReflectionPhase1Question(
