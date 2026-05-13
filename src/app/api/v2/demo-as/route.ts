@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { PERSONA_COOKIE } from '@/lib/v2-auth'
 
@@ -62,8 +61,14 @@ export async function GET(req: Request) {
   // Where to land after setting the persona
   const target = student ? '/v2/today' : '/v2/coach'
 
-  const cookieStore = cookies()
-  cookieStore.set({
+  // IMPORTANT: set the cookie on the response object, not via
+  // cookies() from next/headers. In a route handler, cookies().set
+  // attaches to the request-scoped store — a NextResponse.redirect
+  // returns a *new* response and doesn't inherit those mutations,
+  // so the Set-Cookie header never makes it to the browser and the
+  // persona never persists. Setting via response.cookies works.
+  const response = NextResponse.redirect(new URL(target, req.url), 302)
+  response.cookies.set({
     name: PERSONA_COOKIE,
     value: persona,
     path: '/',
@@ -72,6 +77,5 @@ export async function GET(req: Request) {
     secure: process.env.NODE_ENV === 'production',
     maxAge: 60 * 60 * 24, // 1 day — session-scoped marker
   })
-
-  return NextResponse.redirect(new URL(target, req.url), 302)
+  return response
 }
