@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { pillarStripeStyle } from '@/components/v2/PillarStripe'
 
 /**
  * Student-side Today view.
@@ -32,12 +33,21 @@ interface TodayResponse {
      * card routes to the /v2/reflect/start stub instead.
      */
     conversationId?: string | null
+    /**
+     * Canonical pillar name (e.g. "Creative & Curious Thinkers") of
+     * the dominant skill tag on this item's reflection, when one
+     * exists. Drives the pillar-color stripe on the card. Null in
+     * real mode for unreflected work — no conversation, no tag.
+     */
+    primaryPillar?: string | null
   }>
   recentJournal: Array<{
     id: string
     startedAt: string
     description: string | null
     synthesisExcerpt: string | null
+    /** Canonical pillar name from the entry's dominant skill tag. */
+    primaryPillar?: string | null
   }>
   weekStats: {
     conversationsCompleted: number
@@ -199,7 +209,8 @@ function FeaturedWorkSection({
             <button
               type="button"
               onClick={() => onSelect(w)}
-              className="w-full text-left flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors"
+              className="w-full text-left flex items-center gap-3 pl-3 pr-3 py-3 rounded-lg hover:bg-gray-50 transition-colors"
+              style={pillarStripeStyle(w.primaryPillar)}
             >
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">{w.title}</p>
@@ -247,7 +258,8 @@ function RecentJournalSection({
             <button
               type="button"
               onClick={() => onOpen(j.id)}
-              className="w-full text-left p-3 rounded-lg hover:bg-gray-50 transition-colors"
+              className="w-full text-left pl-3 pr-3 py-3 rounded-lg hover:bg-gray-50 transition-colors"
+              style={pillarStripeStyle(j.primaryPillar)}
             >
               <p className="text-sm text-gray-700 line-clamp-1">
                 {j.description || 'Reflection'}

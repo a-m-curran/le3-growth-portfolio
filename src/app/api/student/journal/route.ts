@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { conversations as staticConversations } from '@/data'
+import { primaryPillarFromTags } from '@/lib/pillar-resolution'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -35,6 +36,7 @@ export async function GET() {
         startedAt: c.startedAt,
         description: c.workContext ?? null,
         currentPhase: derivePhase(c),
+        primaryPillar: primaryPillarFromTags(c.skillTags),
       })),
       completed: completed.map(c => ({
         id: c.id,
@@ -44,6 +46,7 @@ export async function GET() {
         synthesisExcerpt: c.synthesisText
           ? c.synthesisText.slice(0, 160) + (c.synthesisText.length > 160 ? '…' : '')
           : null,
+        primaryPillar: primaryPillarFromTags(c.skillTags),
       })),
     })
   }
@@ -86,7 +89,8 @@ export async function GET() {
     .select(
       'id, status, started_at, completed_at, work_context, ' +
         'response_phase_1, response_phase_2, prompt_phase_2, prompt_phase_3, ' +
-        'synthesis_text'
+        'synthesis_text, ' +
+        'conversation_skill_tag(skill_id, confidence, student_confirmed)'
     )
     .eq('student_id', student.id)
     .eq('conversation_type', 'open_reflection')
@@ -104,8 +108,21 @@ export async function GET() {
     prompt_phase_2: string | null
     prompt_phase_3: string | null
     synthesis_text: string | null
+    conversation_skill_tag: Array<{
+      skill_id: string
+      confidence: number
+      student_confirmed: boolean
+    }> | null
   }
   const convos = (convoRows ?? []) as unknown as ConvoRow[]
+
+  function tagsForConvo(c: ConvoRow) {
+    return (c.conversation_skill_tag ?? []).map(t => ({
+      skillId: t.skill_id,
+      confidence: t.confidence,
+      studentConfirmed: t.student_confirmed,
+    }))
+  }
 
   const inProgress = convos
     .filter(c => c.status === 'in_progress')
@@ -114,6 +131,7 @@ export async function GET() {
       startedAt: c.started_at,
       description: c.work_context,
       currentPhase: deriveDbPhase(c),
+      primaryPillar: primaryPillarFromTags(tagsForConvo(c)),
     }))
 
   const completed = convos
@@ -126,6 +144,7 @@ export async function GET() {
       synthesisExcerpt: c.synthesis_text
         ? c.synthesis_text.slice(0, 160) + (c.synthesis_text.length > 160 ? '…' : '')
         : null,
+      primaryPillar: primaryPillarFromTags(tagsForConvo(c)),
     }))
 
   return NextResponse.json({ inProgress, completed })

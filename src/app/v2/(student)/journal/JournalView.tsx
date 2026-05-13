@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { AnimatePresence } from 'framer-motion'
 import { ConversationPanel } from '@/components/panels/ConversationPanel'
 import { ReflectForm } from '@/app/reflect/ReflectForm'
+import { pillarStripeStyle } from '@/components/v2/PillarStripe'
 
 /**
  * v2 Journal view — open standalone reflections.
@@ -24,6 +25,7 @@ interface JournalResponse {
     startedAt: string
     description: string | null
     currentPhase: 1 | 2 | 3
+    primaryPillar?: string | null
   }>
   completed: Array<{
     id: string
@@ -31,6 +33,7 @@ interface JournalResponse {
     completedAt: string | null
     description: string | null
     synthesisExcerpt: string | null
+    primaryPillar?: string | null
   }>
 }
 
@@ -86,7 +89,8 @@ export function JournalView() {
                     <button
                       type="button"
                       onClick={() => setOpenConversationId(c.id)}
-                      className="w-full text-left p-3 rounded-lg bg-amber-50/50 border border-amber-100 hover:border-amber-300 hover:bg-amber-50 transition-colors"
+                      className="w-full text-left pl-3 pr-3 py-3 rounded-lg bg-amber-50/50 hover:bg-amber-50 transition-colors"
+                      style={pillarStripeStyle(c.primaryPillar)}
                     >
                       <p className="text-sm text-gray-900 line-clamp-2">
                         {c.description || 'Reflection'}
@@ -114,7 +118,8 @@ export function JournalView() {
                     <button
                       type="button"
                       onClick={() => router.push(`/v2/conversation/${c.id}`)}
-                      className="w-full text-left p-3 rounded-lg bg-gray-50 border border-gray-100 hover:border-green-300 hover:bg-white transition-colors"
+                      className="w-full text-left pl-3 pr-3 py-3 rounded-lg bg-gray-50 hover:bg-white hover:shadow-sm transition-all"
+                      style={pillarStripeStyle(c.primaryPillar)}
                     >
                       <div className="flex items-center gap-2 mb-1">
                         <p className="text-sm font-medium text-gray-900 line-clamp-1 flex-1">

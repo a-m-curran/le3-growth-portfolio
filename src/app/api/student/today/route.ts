@@ -6,6 +6,7 @@ import {
   conversations as staticConversations,
   studentWork as staticWork,
 } from '@/data'
+import { primaryPillarFromTags } from '@/lib/pillar-resolution'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -72,14 +73,23 @@ export async function GET() {
       .filter(w => w.studentId === demoStudentId && completedByWork.has(w.id))
       .slice(-3)
       .reverse()
-      .map(w => ({
-        id: w.id,
-        title: w.title,
-        courseName: w.courseName ?? null,
-        submittedAt: w.submittedAt ?? null,
-        workType: w.workType ?? null,
-        conversationId: completedByWork.get(w.id) ?? null,
-      }))
+      .map(w => {
+        // Pillar tint for the work card derives from the linked
+        // conversation's dominant skill tag. Featured-with-conversation
+        // is the demo's convention; in real mode "featured" means
+        // unreflected (no conversation), so pillar is null.
+        const convId = completedByWork.get(w.id) ?? null
+        const conv = convId ? staticConversations.find(c => c.id === convId) : null
+        return {
+          id: w.id,
+          title: w.title,
+          courseName: w.courseName ?? null,
+          submittedAt: w.submittedAt ?? null,
+          workType: w.workType ?? null,
+          conversationId: convId,
+          primaryPillar: conv ? primaryPillarFromTags(conv.skillTags) : null,
+        }
+      })
 
     // Recent journal entries from the demo seed (open_reflection)
     const journalConvos = staticConversations
@@ -102,6 +112,7 @@ export async function GET() {
           ? c.synthesisText.slice(0, 140) +
             (c.synthesisText.length > 140 ? '…' : '')
           : null,
+        primaryPillar: primaryPillarFromTags(c.skillTags),
       })),
       weekStats: {
         conversationsCompleted: 2,
@@ -197,12 +208,21 @@ export async function GET() {
       courseName: w.course_name,
       submittedAt: w.submitted_at,
       workType: w.work_type,
+      // Featured work in real mode is unreflected by definition, so
+      // there's no conversation to derive a primary pillar from.
+      // Leave null; the UI renders a transparent stripe.
+      primaryPillar: null as string | null,
     }))
 
   // ─── Recent journal (open_reflection) ───────
+  // Pull skill-tag rows in the same query so we can resolve each
+  // entry's dominant pillar without a second round-trip.
   const { data: journalRows } = await admin
     .from('growth_conversation')
-    .select('id, started_at, work_context, synthesis_text')
+    .select(`
+      id, started_at, work_context, synthesis_text,
+      conversation_skill_tag (skill_id, confidence, student_confirmed)
+    `)
     .eq('student_id', student.id)
     .eq('conversation_type', 'open_reflection')
     .eq('status', 'completed')
@@ -214,16 +234,29 @@ export async function GET() {
     started_at: string
     work_context: string | null
     synthesis_text: string | null
+    conversation_skill_tag: Array<{
+      skill_id: string
+      confidence: number
+      student_confirmed: boolean
+    }> | null
   }
   const journal = (journalRows ?? []) as unknown as JournalRow[]
-  const recentJournal = journal.map(j => ({
-    id: j.id,
-    startedAt: j.started_at,
-    description: j.work_context,
-    synthesisExcerpt: j.synthesis_text
-      ? j.synthesis_text.slice(0, 140) + (j.synthesis_text.length > 140 ? '…' : '')
-      : null,
-  }))
+  const recentJournal = journal.map(j => {
+    const tags = (j.conversation_skill_tag ?? []).map(t => ({
+      skillId: t.skill_id,
+      confidence: t.confidence,
+      studentConfirmed: t.student_confirmed,
+    }))
+    return {
+      id: j.id,
+      startedAt: j.started_at,
+      description: j.work_context,
+      synthesisExcerpt: j.synthesis_text
+        ? j.synthesis_text.slice(0, 140) + (j.synthesis_text.length > 140 ? '…' : '')
+        : null,
+      primaryPillar: primaryPillarFromTags(tags),
+    }
+  })
 
   // ─── Week stats ─────────────────────────────
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()

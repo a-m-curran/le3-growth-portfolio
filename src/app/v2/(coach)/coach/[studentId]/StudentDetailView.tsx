@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { ConversationPanel } from '@/components/panels/ConversationPanel'
 import { GrowthGrid } from '@/components/v2/growth/GrowthGrid'
+import { pillarStripeStyle } from '@/components/v2/PillarStripe'
+import { primaryPillarFromTags } from '@/lib/pillar-resolution'
 import type { CoachNote, GardenData, SessionPrepData } from '@/lib/types'
 
 /**
@@ -188,12 +190,18 @@ function PrepTab({
                 month: 'short',
                 day: 'numeric',
               })
+              // Resolve pillar stripe from this conversation's skill
+              // tags — gives coaches an at-a-glance sense of which
+              // pillar each recent reflection belongs to before they
+              // even open it.
+              const primaryPillar = primaryPillarFromTags(c.skillTags)
               return (
                 <li key={c.id}>
                   <button
                     type="button"
                     onClick={() => onOpenConversation(c.id)}
-                    className="w-full text-left p-3 rounded-lg bg-gray-50 border border-gray-100 hover:border-green-400 hover:bg-white hover:shadow-sm transition-colors"
+                    className="w-full text-left pl-3 pr-3 py-3 rounded-lg bg-gray-50 hover:bg-white hover:shadow-sm transition-all"
+                    style={pillarStripeStyle(primaryPillar)}
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-sm">📝</span>

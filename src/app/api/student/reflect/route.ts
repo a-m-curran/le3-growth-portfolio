@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { conversations as staticConversations, studentWork as staticWork } from '@/data'
+import { primaryPillarFromTags } from '@/lib/pillar-resolution'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -63,6 +64,7 @@ export async function GET() {
           : null,
         startedAt: c.startedAt,
         currentPhase: derivePhase(c),
+        primaryPillar: primaryPillarFromTags(c.skillTags),
       })),
       completed: completedWorkBased.map(c => ({
         id: c.id,
@@ -75,6 +77,7 @@ export async function GET() {
           ? c.synthesisText.slice(0, 140) + (c.synthesisText.length > 140 ? '…' : '')
           : null,
         skillTagCount: c.skillTags?.length ?? 0,
+        primaryPillar: primaryPillarFromTags(c.skillTags),
       })),
       featuredWork,
     })
@@ -120,6 +123,9 @@ export async function GET() {
   }
 
   // Fetch all conversations + work for this student in two queries.
+  // Include skill_id/confidence/student_confirmed on the skill_tag join
+  // so we can resolve each conversation's primary pillar without a
+  // second round-trip.
   const [{ data: convoRows }, { data: workRows }] = await Promise.all([
     admin
       .from('growth_conversation')
@@ -129,7 +135,7 @@ export async function GET() {
           'prompt_phase_2, prompt_phase_3, ' +
           'synthesis_text, conversation_type, ' +
           'student_work(title), ' +
-          'conversation_skill_tag(id)'
+          'conversation_skill_tag(skill_id, confidence, student_confirmed)'
       )
       .eq('student_id', student.id)
       .order('started_at', { ascending: false })
@@ -156,7 +162,11 @@ export async function GET() {
     synthesis_text: string | null
     conversation_type: string | null
     student_work: { title: string } | null
-    conversation_skill_tag: Array<{ id: string }> | null
+    conversation_skill_tag: Array<{
+      skill_id: string
+      confidence: number
+      student_confirmed: boolean
+    }> | null
   }
   interface WorkRow {
     id: string
@@ -168,6 +178,14 @@ export async function GET() {
   const convos = (convoRows ?? []) as unknown as ConvoRow[]
   const work = (workRows ?? []) as unknown as WorkRow[]
 
+  function tagsForConvo(c: ConvoRow) {
+    return (c.conversation_skill_tag ?? []).map(t => ({
+      skillId: t.skill_id,
+      confidence: t.confidence,
+      studentConfirmed: t.student_confirmed,
+    }))
+  }
+
   const inProgress = convos
     .filter(c => c.status === 'in_progress')
     .map(c => ({
@@ -176,6 +194,7 @@ export async function GET() {
       workTitle: c.student_work?.title ?? null,
       startedAt: c.started_at,
       currentPhase: deriveDbPhase(c),
+      primaryPillar: primaryPillarFromTags(tagsForConvo(c)),
     }))
 
   const completed = convos
@@ -191,6 +210,7 @@ export async function GET() {
         ? c.synthesis_text.slice(0, 140) + (c.synthesis_text.length > 140 ? '…' : '')
         : null,
       skillTagCount: c.conversation_skill_tag?.length ?? 0,
+      primaryPillar: primaryPillarFromTags(tagsForConvo(c)),
     }))
 
   const reflectedWorkIds = new Set(
