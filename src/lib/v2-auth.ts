@@ -68,9 +68,20 @@ export async function getV2Identity(): Promise<V2Identity | null> {
           return cookieStore.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
+          // Supabase's getUser() can trigger a token refresh which
+          // wants to write fresh cookies via this callback. In a
+          // server component (which is where getV2Identity is
+          // called from layouts/pages), `cookieStore.set` throws —
+          // server components can't mutate cookies. Swallow the
+          // error per the standard Supabase pattern; middleware /
+          // route handlers will set the refreshed cookies later.
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            )
+          } catch {
+            // no-op: called from a server component
+          }
         },
       },
     }
