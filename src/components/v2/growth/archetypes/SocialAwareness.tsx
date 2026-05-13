@@ -5,121 +5,193 @@ import { clamp01, lerp, artworkFilterIds } from '../shared'
 import { ArtworkFilters } from '../ArtworkFilters'
 
 /**
- * Social Awareness — a lighthouse beam.
+ * Social Awareness — you in a room, sensing what's around you.
  *
- * Why: social awareness is paying attention to the room. A lighthouse
- * sweeps a beam across the dark — illuminating what's there, even
- * when nothing's calling attention to itself. Growth widens the beam
- * (more peripheral vision) and brightens it (more attention).
+ * Why: social awareness is *peripheral perception* — picking up on
+ * the mood of people nearby without them telling you. We render a
+ * central figure (you) with surrounding figures whose emotional
+ * states are visible as small colored auras around their heads. As
+ * awareness grows, more surrounding figures become visible, their
+ * auras brighten, and concentric "perception rings" pulse outward
+ * from you.
  *
- * Depth: lighthouse tower has form-modeled gradient (light side / dark
- * side); beam is a clipped conic gradient that fades with distance;
- * ground gets the warm light of the beam reflecting back; sea-level
- * background suggests a horizon (depth perception).
+ * Distinct from Empathy (two figures, one heart between them) by
+ * the *many* surrounding figures and the *attention flowing
+ * outward* rather than inward.
+ *
+ * Composition stages (continuous):
+ *   g 0.00–0.20  central figure alone
+ *   g 0.20–0.50  first surrounding figures appear (faint)
+ *   g 0.50–0.80  more figures + mood auras visible
+ *   g 0.80–1.00  full ring of figures + perception rings emanating
  */
-export function SocialAwarenessVisual({ growth, palette, seed, animate = true }: ArchetypeProps) {
+export function SocialAwarenessVisual({ growth, density, palette, seed, animate = true }: ArchetypeProps) {
   const fid = artworkFilterIds(seed)
   const g = clamp01(growth)
 
-  const towerX = 80
-  const towerBase = 138
-  const towerH = 50
-  const towerTop = towerBase - towerH
-  const beamLength = lerp(40, 90, g)
-  const beamWidth = lerp(25, 60, g) // arc width in degrees
+  const cx = 80
+  const centerY = 88
 
-  // The beam is a polygon — apex at lantern, two outer points at
-  // beamLength radius offset by ±beamWidth/2
-  const apexX = towerX
-  const apexY = towerTop - 2
+  // Surrounding figures — fixed positions in a rough circle. They
+  // come into view as growth increases.
+  const positions = [
+    { x: 28, y: 60, mood: 'accent' as const },
+    { x: 132, y: 65, mood: 'mid' as const },
+    { x: 24, y: 110, mood: 'mid' as const },
+    { x: 136, y: 115, mood: 'accent' as const },
+    { x: 60, y: 38, mood: 'mid' as const },
+    { x: 110, y: 42, mood: 'accent' as const },
+  ]
+  // Number of figures visible scales with growth
+  const figuresVisible = Math.floor(lerp(0, positions.length, fadeIn(g, 0.15, 0.85)))
+
+  // Perception rings — concentric pulsing rings from the center
+  const ringCount = Math.max(0, Math.floor(lerp(0, 3, fadeIn(g, 0.4, 0.95))))
 
   return (
     <svg viewBox="0 0 160 160" className="w-full h-full" aria-hidden="true">
       <defs>
         <ArtworkFilters seed={seed} />
-        <linearGradient id={`sa-tower-${seed}`} x1="0" x2="1" y1="0" y2="0">
-          <stop offset="0%" stopColor="white" stopOpacity="0.25" />
-          <stop offset="40%" stopColor={palette.dark} stopOpacity="0.95" />
-          <stop offset="100%" stopColor={palette.dark} stopOpacity="1" />
+        <linearGradient id={`sa-you-${seed}`} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor={palette.accent} />
+          <stop offset="100%" stopColor={palette.dark} />
         </linearGradient>
-        <radialGradient id={`sa-lantern-${seed}`} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="white" stopOpacity="1" />
-          <stop offset="40%" stopColor={palette.accent} stopOpacity="0.95" />
+        <linearGradient id={`sa-other-${seed}`} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor={palette.mid} />
+          <stop offset="100%" stopColor={palette.dark} />
+        </linearGradient>
+        <radialGradient id={`sa-aura-warm-${seed}`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor={palette.accent} stopOpacity="0.7" />
           <stop offset="100%" stopColor={palette.accent} stopOpacity="0" />
         </radialGradient>
-        <linearGradient id={`sa-beam-${seed}`} x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor="white" stopOpacity="0.65" />
-          <stop offset="50%" stopColor={palette.accent} stopOpacity="0.35" />
-          <stop offset="100%" stopColor={palette.accent} stopOpacity="0" />
-        </linearGradient>
-        <radialGradient id={`sa-horizon-${seed}`} cx="50%" cy="100%" r="100%">
-          <stop offset="0%" stopColor={palette.dark} stopOpacity="0.18" />
-          <stop offset="100%" stopColor={palette.dark} stopOpacity="0" />
+        <radialGradient id={`sa-aura-cool-${seed}`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor={palette.mid} stopOpacity="0.7" />
+          <stop offset="100%" stopColor={palette.mid} stopOpacity="0" />
         </radialGradient>
       </defs>
 
-      {/* Horizon backing — gives depth */}
-      <rect x="0" y="0" width="160" height="160" fill={`url(#sa-horizon-${seed})`} />
+      {/* Ground shadow under the whole scene */}
+      <ellipse cx={cx} cy="145" rx="65" ry="6" fill={`url(#${fid.ground})`} />
 
-      {/* Beam — rotating sector swept from the lantern */}
-      <g style={{ transformOrigin: `${apexX}px ${apexY}px` }}>
-        {animate && (
-          <animateTransform
-            attributeName="transform"
-            type="rotate"
-            values={`-30 ${apexX} ${apexY};30 ${apexX} ${apexY};-30 ${apexX} ${apexY}`}
-            dur="6s"
-            repeatCount="indefinite"
+      {/* Perception rings — concentric pulses out from center figure */}
+      {Array.from({ length: ringCount }, (_, i) => {
+        const baseR = 18 + i * 14
+        return (
+          <circle
+            key={i}
+            cx={cx}
+            cy={centerY}
+            r={baseR}
+            fill="none"
+            stroke={palette.accent}
+            strokeWidth="1.2"
+            opacity={0.45 - i * 0.1}
+          >
+            {animate && (
+              <>
+                <animate
+                  attributeName="r"
+                  values={`${baseR - 4};${baseR + 6};${baseR - 4}`}
+                  dur="3s"
+                  begin={`${i * 0.6}s`}
+                  repeatCount="indefinite"
+                />
+                <animate
+                  attributeName="opacity"
+                  values="0.1;0.5;0.1"
+                  dur="3s"
+                  begin={`${i * 0.6}s`}
+                  repeatCount="indefinite"
+                />
+              </>
+            )}
+          </circle>
+        )
+      })}
+
+      {/* Surrounding figures — drawn back-first */}
+      {positions.slice(0, figuresVisible).map((p, i) => {
+        const auraColor = p.mood === 'accent' ? `url(#sa-aura-warm-${seed})` : `url(#sa-aura-cool-${seed})`
+        const auraOpacity = density > 0.2 ? clamp01(density + 0.3) : 0.4
+        return (
+          <g key={i} opacity={fadeIn(g, 0.15 + i * 0.1, 0.4 + i * 0.1)}>
+            {/* Mood aura */}
+            <circle cx={p.x} cy={p.y - 2} r="12" fill={auraColor} opacity={auraOpacity} />
+            {/* Small person — drop shadow + silhouette */}
+            <g filter={`url(#${fid.drop})`}>
+              <SmallPerson cx={p.x} cy={p.y} fill={`url(#sa-other-${seed})`} />
+            </g>
+          </g>
+        )
+      })}
+
+      {/* Central figure — you */}
+      <g filter={`url(#${fid.drop})`}>
+        <CenterPerson cx={cx} cy={centerY} fill={`url(#sa-you-${seed})`} />
+        {/* Subtle "alert" highlight on the central figure when grown */}
+        {g > 0.3 && (
+          <circle
+            cx={cx + 3}
+            cy={centerY - 14}
+            r="1.5"
+            fill="white"
+            opacity={lerp(0.3, 0.85, g)}
           />
         )}
-        <path
-          d={`
-            M ${apexX} ${apexY}
-            L ${apexX - Math.sin((beamWidth * Math.PI) / 360) * beamLength} ${apexY - Math.cos((beamWidth * Math.PI) / 360) * beamLength}
-            A ${beamLength} ${beamLength} 0 0 1 ${apexX + Math.sin((beamWidth * Math.PI) / 360) * beamLength} ${apexY - Math.cos((beamWidth * Math.PI) / 360) * beamLength}
-            Z
-          `}
-          fill={`url(#sa-beam-${seed})`}
-        />
       </g>
-
-      {/* Tower body */}
-      <g filter={`url(#${fid.drop})`}>
-        {/* Trapezoid tower */}
-        <path
-          d={`M ${towerX - 5} ${towerBase} L ${towerX + 5} ${towerBase} L ${towerX + 3.5} ${towerTop + 6} L ${towerX - 3.5} ${towerTop + 6} Z`}
-          fill={`url(#sa-tower-${seed})`}
-        />
-        {/* Stripes — the classic lighthouse band */}
-        <rect x={towerX - 4.5} y={towerBase - 30} width="9" height="6" fill={palette.accent} opacity="0.85" />
-        <rect x={towerX - 4} y={towerBase - 14} width="8" height="5" fill={palette.accent} opacity="0.85" />
-        {/* Lantern housing */}
-        <rect x={towerX - 5} y={towerTop} width="10" height="6" fill={palette.dark} rx="1" />
-      </g>
-
-      {/* Lantern glow — fixed, doesn't rotate with the beam */}
-      <g filter={`url(#${fid.glow})`}>
-        <circle cx={apexX} cy={apexY} r="4.5" fill={`url(#sa-lantern-${seed})`} />
-        <circle cx={apexX} cy={apexY} r="1.8" fill="white">
-          {animate && (
-            <animate
-              attributeName="opacity"
-              values="1;0.7;1"
-              dur="1.6s"
-              repeatCount="indefinite"
-            />
-          )}
-        </circle>
-      </g>
-
-      {/* Ground / sea — warm reflected glow */}
-      <ellipse
-        cx={towerX}
-        cy={towerBase + 4}
-        rx={lerp(20, 35, g)}
-        ry="5"
-        fill={`url(#${fid.ground})`}
-      />
     </svg>
   )
+}
+
+/** Central "you" figure — head + shoulders, slightly bigger than others. */
+function CenterPerson({ cx, cy, fill }: { cx: number; cy: number; fill: string }) {
+  return (
+    <g>
+      {/* Head */}
+      <circle cx={cx} cy={cy - 10} r="9" fill={fill} />
+      {/* Shoulders / body */}
+      <path
+        d={`
+          M ${cx - 14} ${cy + 16}
+          Q ${cx - 14} ${cy + 6} ${cx - 7} ${cy + 2}
+          L ${cx - 4} ${cy - 1}
+          L ${cx + 4} ${cy - 1}
+          L ${cx + 7} ${cy + 2}
+          Q ${cx + 14} ${cy + 6} ${cx + 14} ${cy + 16}
+          Z
+        `}
+        fill={fill}
+      />
+      {/* Highlight on top of head */}
+      <ellipse cx={cx - 3} cy={cy - 14} rx="2.5" ry="2" fill="white" opacity="0.35" />
+    </g>
+  )
+}
+
+/** Surrounding small person — smaller silhouette. */
+function SmallPerson({ cx, cy, fill }: { cx: number; cy: number; fill: string }) {
+  return (
+    <g>
+      {/* Head */}
+      <circle cx={cx} cy={cy - 5} r="5" fill={fill} />
+      {/* Body */}
+      <path
+        d={`
+          M ${cx - 8} ${cy + 10}
+          Q ${cx - 8} ${cy + 3} ${cx - 4} ${cy + 1}
+          L ${cx + 4} ${cy + 1}
+          Q ${cx + 8} ${cy + 3} ${cx + 8} ${cy + 10}
+          Z
+        `}
+        fill={fill}
+      />
+    </g>
+  )
+}
+
+function fadeIn(g: number, start: number, end: number): number {
+  if (g <= start) return 0
+  if (g >= end) return 1
+  const t = (g - start) / (end - start)
+  return t * t * (3 - 2 * t)
 }
