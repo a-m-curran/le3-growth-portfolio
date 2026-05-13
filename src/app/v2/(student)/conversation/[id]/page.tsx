@@ -1,20 +1,16 @@
-import { ConversationReplay } from './ConversationReplay'
+import { ConversationView } from './ConversationView'
 
 /**
- * v2 Conversation Replay — phase-by-phase walkthrough of a conversation
- * with the v1 demo's typewriter effect. Demo-only for now (the real
- * v2 conversation flow isn't built yet); the page fetches the
- * conversation through /api/conversations/[id], which has its own
- * demo short-circuit returning static seed data.
- *
- * Sits in the (student) group so the shell shows the student sidebar
- * and bottom tab bar — appropriate since the replay is the student
- * experience of going through a reflection.
+ * v2 Conversation page — dispatches between the replay view (for
+ * completed conversations) and the interactive flow view (for
+ * in-progress conversations) based on the status returned by
+ * /api/conversations/[id]. The dispatch is done client-side in
+ * ConversationView; this server component is just the route shim.
  */
-export default function V2ConversationReplayPage({
+export default function V2ConversationPage({
   params,
 }: {
   params: { id: string }
 }) {
-  return <ConversationReplay conversationId={params.id} />
+  return <ConversationView conversationId={params.id} />
 }
