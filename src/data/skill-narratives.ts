@@ -62,4 +62,104 @@ The edge you identified yourself is real: you apply this lens more naturally whe
     narrativeRichness: 'developing',
     version: 1,
   },
+
+  // ─── AJA WILLIAMS — CURIOSITY ───────────────────
+  {
+    studentId: 'stu_aja',
+    skillId: 'skill_curiosity',
+    narrativeText: `You ask questions that other people skip over. Not because you're trying to impress anyone, but because you genuinely want to understand how things work beneath the surface.
+
+It started showing up in small ways — asking "why" in class when everyone else was writing down the answer. But it's become something bigger. You dig into topics that aren't on the test, you follow threads that interest you even when they don't "count," and you've started bringing questions from one class into another.
+
+The momentum is there. You're not just curious about the material anymore — you're curious about your own curiosity.`,
+    narrativeRichness: 'developing',
+    version: 1,
+  },
+
+  // ─── AJA WILLIAMS — EMPATHY ─────────────────────
+  {
+    studentId: 'stu_aja',
+    skillId: 'skill_empathy',
+    narrativeText: `You've always cared about people. But there's a difference between caring and understanding, and you're starting to see it.
+
+In group work, you've moved from just being "nice" to actually trying to understand where your teammates are coming from. When someone pushes back on an idea, you pause now instead of getting defensive. That pause is new, and it matters.
+
+You're building the kind of empathy that doesn't just feel — it listens.`,
+    narrativeRichness: 'developing',
+    version: 1,
+  },
+
+  // ─── AJA WILLIAMS — COMMUNICATION ───────────────
+  {
+    studentId: 'stu_aja',
+    skillId: 'skill_communication',
+    narrativeText: `The way you express yourself has shifted. Not louder — clearer.
+
+Early on, you wrote to fill the page. Now your writing has a point, and you make it without hedging. In presentations, you've gone from reading slides to actually talking to the room.
+
+You're starting to adjust how you communicate based on who you're talking to. That's a real skill, and it's one you're developing faster than you probably realize.`,
+    narrativeRichness: 'developing',
+    version: 1,
+  },
+
+  // ─── AJA WILLIAMS — ADAPTABILITY ────────────────
+  {
+    studentId: 'stu_aja',
+    skillId: 'skill_adaptability',
+    narrativeText: `Plans change. You used to fight that. Now you work with it.
+
+When childcare fell through before your midterm, you didn't spiral — you called your professor before class and made a plan. When your group project data was unusable, you were the one who suggested pivoting. These aren't small things.
+
+You're learning that flexibility isn't about giving up on what you want. It's about finding another way to get there.`,
+    narrativeRichness: 'developing',
+    version: 1,
+  },
+
+  // ─── AJA WILLIAMS — COLLABORATION ───────────────
+  {
+    studentId: 'stu_aja',
+    skillId: 'skill_collaboration',
+    narrativeText: `Working with other people used to stress you out. Not because you didn't want to — but because you didn't trust the process.
+
+That's changing. You organized a study group when nobody else would. You stayed in a group project when it would have been easier to go solo. You're starting to see that the friction of collaboration is part of the learning.
+
+You're not just participating anymore. You're contributing.`,
+    narrativeRichness: 'developing',
+    version: 1,
+  },
+
+  // ─── AJA WILLIAMS — NETWORKING ──────────────────
+  {
+    studentId: 'stu_aja',
+    skillId: 'skill_networking',
+    narrativeText: `You're starting to see connections as more than just contacts. The relationships you're building — with your professor at office hours, with the peer you're mentoring, with your supervisor at work — they're becoming part of how you navigate.
+
+You don't just know people. You know how to show up for them.`,
+    narrativeRichness: 'thin',
+    version: 1,
+  },
+
+  // ─── AJA WILLIAMS — RELATIONSHIP BUILDING ────────
+  {
+    studentId: 'stu_aja',
+    skillId: 'skill_relationship_building',
+    narrativeText: `Trust takes time. You know that now because you've lived it.
+
+The study group you organized, the shift swap you negotiated, the mentoring you've done — these aren't transactions. They're relationships you've invested in. And they've invested back.
+
+You're building a network that will hold you up when things get hard.`,
+    narrativeRichness: 'developing',
+    version: 1,
+  },
+
+  // ─── AJA WILLIAMS — SOCIAL AWARENESS ────────────
+  {
+    studentId: 'stu_aja',
+    skillId: 'skill_social_awareness',
+    narrativeText: `You notice things other people don't. The person who went quiet in the group meeting. The tension between the two people who aren't saying what they really think.
+
+You're reading rooms better than you used to. And more importantly, you're using what you notice — not just observing, but responding. That awareness is becoming a strength.`,
+    narrativeRichness: 'developing',
+    version: 1,
+  },
 ]

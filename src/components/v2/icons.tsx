@@ -98,3 +98,24 @@ export function ChevronDownIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function NarrativeIcon({ className }: IconProps) {
+  // Open book — a story unfolding. Two facing pages with a spine.
+  return (
+    <svg {...baseProps(className)}>
+      <path d="M3 5.5a1.5 1.5 0 0 1 1.5-1.5H10a2 2 0 0 1 2 2v13a2 2 0 0 0-2-2H4.5A1.5 1.5 0 0 1 3 15.5z" />
+      <path d="M21 5.5a1.5 1.5 0 0 0-1.5-1.5H14a2 2 0 0 0-2 2v13a2 2 0 0 1 2-2h5.5a1.5 1.5 0 0 0 1.5-1.5z" />
+    </svg>
+  )
+}
+
+export function CareerIcon({ className }: IconProps) {
+  // Briefcase — concrete and unambiguous "professional/career"
+  return (
+    <svg {...baseProps(className)}>
+      <rect x="3" y="7" width="18" height="13" rx="2" />
+      <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <path d="M3 13h18" />
+    </svg>
+  )
+}

@@ -4,6 +4,8 @@ import {
   GrowthIcon,
   ReflectIcon,
   JournalIcon,
+  NarrativeIcon,
+  CareerIcon,
   MeIcon,
   CaseloadIcon,
   ToolsIcon,
@@ -34,6 +36,8 @@ export const STUDENT_NAV: NavItem[] = [
   { key: 'growth', label: 'Growth', href: '/v2/growth', icon: GrowthIcon },
   { key: 'reflect', label: 'Reflect', href: '/v2/reflect', icon: ReflectIcon },
   { key: 'journal', label: 'Journal', href: '/v2/journal', icon: JournalIcon },
+  { key: 'narrative', label: 'Narrative', href: '/v2/narrative', icon: NarrativeIcon },
+  { key: 'career', label: 'Career', href: '/v2/career', icon: CareerIcon },
   { key: 'me', label: 'Me', href: '/v2/me', icon: MeIcon },
 ]
 
