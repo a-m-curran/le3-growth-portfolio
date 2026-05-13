@@ -2,7 +2,13 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase-admin'
-import { skills, pillars, getSkillNarrative } from '@/data'
+import {
+  skills,
+  pillars,
+  getSkillNarrative,
+  getConversationsForSkill,
+  getStudentWork,
+} from '@/data'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -34,6 +40,25 @@ export async function GET() {
     const narratives = activeSkills.map(skill => {
       const pillar = pillars.find(p => p.id === skill.pillarId)
       const seed = getSkillNarrative(demoStudentId, skill.id)
+
+      // Source list: every conversation tagged with this skill,
+      // sorted oldest-first so the timeline reads chronologically
+      // when the Sources disclosure is expanded.
+      const sourceConvos = getConversationsForSkill(demoStudentId, skill.id)
+        .slice()
+        .sort(
+          (a, b) =>
+            new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime()
+        )
+        .map(c => {
+          const work = c.workId ? getStudentWork(c.workId) : null
+          return {
+            id: c.id,
+            workTitle: work?.title ?? c.workContext ?? 'Reflection',
+            date: c.startedAt,
+          }
+        })
+
       return {
         skillId: skill.id,
         skillName: skill.name,
@@ -43,6 +68,8 @@ export async function GET() {
         narrativeRichness: seed?.narrativeRichness ?? null,
         version: seed?.version ?? 0,
         generatedAt: null as string | null,
+        annotations: seed?.annotations ?? [],
+        sources: sourceConvos,
       }
     })
 
@@ -95,9 +122,16 @@ export async function GET() {
   const activeSkills = skills.filter(s => s.isActive)
 
   // Pull all narrative rows for this student, latest version first.
+  // `narrative_annotations` is a planned JSON column carrying the
+  // sentence → conversation_id mapping produced by a post-processing
+  // LLM pass at generation time. The column may not exist yet on
+  // the live schema, in which case the select silently returns the
+  // rows without it and the cast below leaves annotations empty.
   const { data: narrativeRows } = await admin
     .from('skill_narrative')
-    .select('skill_id, narrative_text, narrative_richness, version, generated_at')
+    .select(
+      'skill_id, narrative_text, narrative_richness, version, generated_at, narrative_annotations'
+    )
     .eq('student_id', student.id)
     .order('version', { ascending: false })
 
@@ -107,12 +141,52 @@ export async function GET() {
     narrative_richness: string | null
     version: number | null
     generated_at: string | null
+    narrative_annotations: Array<{ sentence: string; conversationId: string }> | null
   }
   const rows = (narrativeRows ?? []) as unknown as NarrativeRow[]
   const latestBySkill = new Map<string, NarrativeRow>()
   for (const r of rows) {
     if (!latestBySkill.has(r.skill_id)) latestBySkill.set(r.skill_id, r)
   }
+
+  // Pull all skill-tagged conversations for this student in one
+  // round-trip so we can construct each narrative's `sources` list
+  // without a per-skill query.
+  const { data: tagRows } = await admin
+    .from('conversation_skill_tag')
+    .select(
+      'skill_id, growth_conversation!inner(id, started_at, student_id, student_work(title))'
+    )
+    .eq('growth_conversation.student_id', student.id)
+
+  interface TagRow {
+    skill_id: string
+    growth_conversation: {
+      id: string
+      started_at: string
+      student_id: string
+      student_work: { title: string } | null
+    }
+  }
+  const tags = (tagRows ?? []) as unknown as TagRow[]
+  const sourcesBySkill = new Map<
+    string,
+    Array<{ id: string; workTitle: string; date: string }>
+  >()
+  for (const t of tags) {
+    if (!t.growth_conversation) continue
+    const entry = {
+      id: t.growth_conversation.id,
+      workTitle: t.growth_conversation.student_work?.title ?? 'Reflection',
+      date: t.growth_conversation.started_at,
+    }
+    const arr = sourcesBySkill.get(t.skill_id) ?? []
+    if (!arr.some(e => e.id === entry.id)) arr.push(entry)
+    sourcesBySkill.set(t.skill_id, arr)
+  }
+  sourcesBySkill.forEach(arr => {
+    arr.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  })
 
   const narratives = activeSkills.map(skill => {
     const pillar = pillars.find(p => p.id === skill.pillarId)
@@ -126,6 +200,8 @@ export async function GET() {
       narrativeRichness: row?.narrative_richness ?? null,
       version: row?.version ?? 0,
       generatedAt: row?.generated_at ?? null,
+      annotations: row?.narrative_annotations ?? [],
+      sources: sourcesBySkill.get(skill.id) ?? [],
     }
   })
 

@@ -4,8 +4,30 @@ export interface DemoSkillNarrative {
   narrativeText: string
   narrativeRichness: 'thin' | 'developing' | 'rich'
   version: number
+  /**
+   * Optional sentence-to-conversation mapping for demo narratives.
+   * Each entry's `sentence` must appear verbatim in `narrativeText`
+   * (the renderer uses indexOf). Sentences here become inline links
+   * to the source conversation in the v2 narrative view.
+   */
+  annotations?: Array<{ sentence: string; conversationId: string }>
 }
 
+/**
+ * Each narrative's `annotations` array hand-maps specific sentences
+ * in the prose to the conversation they were drawn from. The
+ * v2 narrative view post-processes the narrative text, locating
+ * each annotated sentence and rendering it as an inline button
+ * that opens the source conversation in the ConversationPanel.
+ *
+ * For demo data we hand-annotate. In real mode, generating this
+ * mapping is a post-processing LLM step that runs after the main
+ * narrative generation and stores its output in the skill_narrative
+ * row.
+ *
+ * Constraint: each `sentence` must be an exact substring of the
+ * narrative text — the renderer uses indexOf to find and wrap it.
+ */
 export const skillNarratives: DemoSkillNarrative[] = [
   // ─── AJA WILLIAMS — RESILIENCE ────────────────────
   {
@@ -20,6 +42,13 @@ That phone call didn't come out of nowhere. It came after the writing center in 
 By the time you wrote your quarter synthesis, you had a new definition: resilience is knowing when to push through, when to ask for help, and how to learn from the times things don't go the way you planned. It's not about being tough. It's about being honest with yourself about what you need. You earned every word of that.`,
     narrativeRichness: 'rich',
     version: 1,
+    annotations: [
+      { sentence: "You came to NLU with a definition of resilience that was all about toughness.", conversationId: 'conv_aja_01' },
+      { sentence: "The turning point was the morning your childcare fell through.", conversationId: 'conv_aja_06' },
+      { sentence: "It came after the writing center in October, when you chose help over dropping the class.", conversationId: 'conv_aja_02' },
+      { sentence: "It came after organizing the study group in January, when you texted Keisha first because you needed one person to say yes before you could put yourself out there.", conversationId: 'conv_aja_05' },
+      { sentence: "By the time you wrote your quarter synthesis, you had a new definition: resilience is knowing when to push through, when to ask for help, and how to learn from the times things don't go the way you planned.", conversationId: 'conv_aja_09' },
+    ],
   },
 
   // ─── AJA WILLIAMS — INITIATIVE ────────────────────
@@ -33,6 +62,11 @@ In January you organized a study group for MTH 150. You saw that everyone in cla
 There's a trajectory here you noticed yourself: from needing your mom's words to walk into the writing center, to needing one text back from Keisha, to just doing it on your own at midnight after your daughter went to bed. The amount of courage you need keeps getting smaller. Not because the things are easier, but because you trust yourself more now. You said it plainly: "I know I can figure stuff out if I try." That's initiative — not waiting to be told, not waiting for permission. Just starting.`,
     narrativeRichness: 'rich',
     version: 1,
+    annotations: [
+      { sentence: "In January you organized a study group for MTH 150.", conversationId: 'conv_aja_05' },
+      { sentence: "By the time you taught yourself Excel from YouTube and built an inventory system your manager never asked for, you didn't need permission at all.", conversationId: 'conv_aja_11' },
+      { sentence: `You said it plainly: "I know I can figure stuff out if I try."`, conversationId: 'conv_aja_11' },
+    ],
   },
 
   // ─── AJA WILLIAMS — CREATIVE PROBLEM SOLVING ─────
@@ -46,6 +80,10 @@ The shift swap during midterms is a good example. You were sitting in the break 
 But the moment that really showed this skill was the community survey redesign for SOC 155. An older woman at the community center said she didn't read well, and you immediately connected that to your grandmother leaving voice messages instead of texts. You proposed voice memos instead of written surveys. Your group pushed back — "that's not how surveys work" — and you stood your ground. You said the point of the survey is to hear what people need, not to follow a format. The data from the first voice memo was richer than anything the written surveys had produced. You are learning to question the way things are "supposed" to be done, and to trust your own observations about what actually works.`,
     narrativeRichness: 'rich',
     version: 1,
+    annotations: [
+      { sentence: "The shift swap during midterms is a good example.", conversationId: 'conv_aja_04' },
+      { sentence: "But the moment that really showed this skill was the community survey redesign for SOC 155.", conversationId: 'conv_aja_09' },
+    ],
   },
 
   // ─── AJA WILLIAMS — CRITICAL THINKING ────────────
@@ -61,6 +99,10 @@ You also showed this skill in your reflective essay, where your professor praise
 The edge you identified yourself is real: you apply this lens more naturally when the topic is personal. The next step is learning to turn it on even when it doesn't feel personal yet. You already know you can do it. The question is whether you will.`,
     narrativeRichness: 'developing',
     version: 1,
+    annotations: [
+      { sentence: "You caught yourself scrolling at lunch, about to share a news article about childcare costs with unverified statistics.", conversationId: 'conv_aja_10' },
+      { sentence: "You also showed this skill in your reflective essay, where your professor praised your self-awareness.", conversationId: 'conv_aja_07' },
+    ],
   },
 
   // ─── AJA WILLIAMS — CURIOSITY ───────────────────
