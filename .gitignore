@@ -20,6 +20,9 @@
 .DS_Store
 *.pem
 
+# trigger.dev build artifacts
+/.trigger
+
 # Word/Office lock files (temporary files created while docs are open)
 ~$*.docx
 ~$*.doc
