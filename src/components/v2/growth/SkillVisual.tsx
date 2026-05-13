@@ -50,23 +50,30 @@ interface SkillVisualProps {
 
 type Renderer = (typeof CriticalThinkingVisual)
 
-const ARCHETYPE_BY_SKILL_ID: Record<string, Renderer> = {
+/**
+ * Dispatcher keyed on the skill's canonical NAME. The static seed
+ * used to use slug ids ('skill_critical_thinking') but those don't
+ * exist in the DB — skill rows have UUID primary keys, so a plant's
+ * `skillId` is a UUID at runtime. Looking up by name is stable
+ * across both worlds (the names are identical in seed and DB).
+ */
+const ARCHETYPE_BY_SKILL_NAME: Record<string, Renderer> = {
   // Creative & Curious Thinkers
-  skill_creative_problem_solving: CreativeProblemSolvingVisual,
-  skill_critical_thinking: CriticalThinkingVisual,
-  skill_curiosity: CuriosityVisual,
+  'Creative Problem Solving': CreativeProblemSolvingVisual,
+  'Critical Thinking': CriticalThinkingVisual,
+  'Curiosity': CuriosityVisual,
   // Leaders with Purpose & Agency
-  skill_initiative: InitiativeVisual,
-  skill_empathy: EmpathyVisual,
-  skill_communication: CommunicationVisual,
+  'Initiative': InitiativeVisual,
+  'Empathy': EmpathyVisual,
+  'Communication': CommunicationVisual,
   // Thrivers in Change
-  skill_adaptability: AdaptabilityVisual,
-  skill_resilience: ResilienceVisual,
+  'Adaptability': AdaptabilityVisual,
+  'Resilience': ResilienceVisual,
   // Network Builders
-  skill_collaboration: CollaborationVisual,
-  skill_networking: NetworkingVisual,
-  skill_relationship_building: RelationshipBuildingVisual,
-  skill_social_awareness: SocialAwarenessVisual,
+  'Collaboration': CollaborationVisual,
+  'Networking': NetworkingVisual,
+  'Relationship Building': RelationshipBuildingVisual,
+  'Social Awareness': SocialAwarenessVisual,
 }
 
 /** Seconds for the hover trailer to ramp 0 → 1. After this, growth
@@ -76,7 +83,7 @@ const HOVER_RAMP_S = 2.8
 export function SkillVisual({ plant, hovering = false }: SkillVisualProps) {
   const base = signalFromPlant(plant)
   const palette = paletteForPillar(plant.pillarName)
-  const Renderer = ARCHETYPE_BY_SKILL_ID[plant.skillId] ?? SaplingVisual
+  const Renderer = ARCHETYPE_BY_SKILL_NAME[plant.skillName] ?? SaplingVisual
 
   const [signal, setSignal] = useState<{ growth: number; density: number }>(base)
   const rafRef = useRef<number | null>(null)

@@ -17,14 +17,17 @@ interface AppShellProps {
 }
 
 /**
- * Top-level shell for the v2 IA exploration. Composes:
- *   - BrandBar (sticky top across all surfaces)
- *   - Sidebar (desktop ≥ md)
- *   - BottomTabBar (mobile < md)
+ * Top-level shell for the v2 IA. Composes:
+ *   - Sidebar (desktop ≥ md): sticky, full-height, holds brand + user
+ *     + nav. Replaces the previous separate top brand bar so the
+ *     content area gets the full viewport width minus the sidebar.
+ *   - BottomTabBar (mobile < md): brand stays at the top of the page
+ *     on mobile (rendered inside the sidebar's mobile branch) but
+ *     primary nav lives at the bottom for thumb reach.
  *   - Coach-only StudentPicker slotted into the sidebar
  *
  * Role determines which nav set renders. The shell itself doesn't
- * fetch data — the parent layout passes user info as props.
+ * fetch data — parent layout passes user info as props.
  */
 export function AppShell({
   role,
@@ -36,8 +39,9 @@ export function AppShell({
   const items = role === 'coach' ? COACH_NAV : STUDENT_NAV
 
   return (
-    <div className="min-h-screen flex bg-gray-50 text-gray-900 antialiased">
+    <div className="min-h-screen bg-gray-50 text-gray-900 antialiased md:flex">
       <Sidebar
+        role={role}
         userName={userName}
         userSubLabel={userSubLabel}
         items={items}
@@ -45,47 +49,31 @@ export function AppShell({
         belowUser={role === 'coach' ? <StudentPicker /> : null}
       />
 
-      <main className="flex-1 min-w-0 pb-16 md:pb-0 flex flex-col">
-        <BrandBar role={role} />
-        <div className="flex-1 min-w-0">
-          {/* pb-16 reserves space for the bottom tab bar on mobile so
-              the last item in a scrolling list isn't hidden behind it */}
-          {children}
+      <main className="flex-1 min-w-0 pb-16 md:pb-0">
+        {/* Mobile-only brand strip — sidebar holds the brand on desktop.
+            Sticky so it stays put on scroll, mirroring the sidebar's
+            behavior. md:hidden because the sidebar already shows the
+            brand on wider screens. */}
+        <div className="md:hidden sticky top-0 z-30 bg-white/85 backdrop-blur-sm border-b border-gray-200">
+          <Link
+            href={role === 'coach' ? '/v2/coach' : '/v2/today'}
+            className="flex items-center justify-between gap-3 px-4 py-2"
+          >
+            <span className="text-sm font-semibold text-green-900">
+              LE3 Growth Portfolio
+            </span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/nlu-logo.svg"
+              alt="National Louis University"
+              className="h-5 w-auto opacity-80"
+            />
+          </Link>
         </div>
+        {children}
       </main>
 
       <BottomTabBar items={items} showAdmin={showAdmin} />
-    </div>
-  )
-}
-
-/**
- * Subtle sticky brand strip across the top of every v2 surface.
- * Keeps the app identity present without competing with sidebar /
- * tab nav. Click navigates home (/v2).
- *
- * NLU logo is an SVG loaded directly via <img>. SVG renders sharply
- * at any size, doesn't need Next.js Image optimization, and is small
- * enough (~10KB) that the perf overhead is negligible.
- */
-function BrandBar({ role }: { role: 'student' | 'coach' }) {
-  return (
-    <div className="sticky top-0 z-30 bg-white/85 backdrop-blur-sm border-b border-gray-200">
-      <div className="flex items-center justify-between gap-3 px-6 py-2">
-        <Link
-          href={role === 'coach' ? '/v2/coach' : '/v2/today'}
-          className="flex items-center gap-2 text-sm font-semibold text-green-900 hover:text-green-700 transition-colors"
-        >
-          <span aria-hidden="true">🌱</span>
-          <span>LE3 Growth Portfolio</span>
-        </Link>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/nlu-logo.svg"
-          alt="National Louis University"
-          className="h-6 w-auto opacity-80"
-        />
-      </div>
     </div>
   )
 }

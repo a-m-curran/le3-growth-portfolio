@@ -5,31 +5,43 @@ import { usePathname } from 'next/navigation'
 import { activeNavKey, type NavItem } from './nav-config'
 
 interface SidebarProps {
-  /** Display name shown at the top */
+  /** Used to pick the brand link target (/v2/coach vs /v2/today). */
+  role: 'student' | 'coach'
+  /** Display name shown below the brand block. */
   userName: string
-  /** Sub-label under the name (cohort, role, etc.) */
+  /** Sub-label under the name (cohort, role, etc.). */
   userSubLabel?: string | null
-  /** Items to render */
+  /** Nav items to render. */
   items: NavItem[]
-  /** Whether the current viewer is allowed to see admin-flagged items */
+  /** Whether the current viewer is allowed to see admin-flagged items. */
   showAdmin?: boolean
-  /** Optional slot rendered between user info and nav (e.g. student picker for coach) */
+  /** Optional slot rendered between user info and nav (coach student picker). */
   belowUser?: React.ReactNode
 }
 
 /**
- * Desktop left sidebar. Fixed width, full height, single source of
- * navigation truth on desktop (≥768px).
+ * Desktop left sidebar. Single source of navigation truth on desktop
+ * (≥768px). Hidden on mobile in favor of the bottom tab bar.
  *
- * Visually:
- *   - white bg, subtle right border
- *   - user info up top (name + sub-label + avatar circle)
- *   - optional `belowUser` slot (coach uses this for student picker)
- *   - nav list (active item highlighted green)
+ * Layout:
+ *   sticky position, full viewport height, so it stays put as the
+ *   content area scrolls. Internal column flexes so the nav scrolls
+ *   independently if it ever overflows.
  *
- * No collapse/expand toggle in Phase 0 — that's a Phase 1 polish.
+ *   ┌─────────────────────┐
+ *   │ Brand               │ ← NLU logo + product name (link to home)
+ *   ├─────────────────────┤
+ *   │ User block          │ ← avatar + name + sub-label
+ *   ├─────────────────────┤
+ *   │ Below-user slot     │ ← coach: student picker
+ *   ├─────────────────────┤
+ *   │ Nav (scrolls)       │ ← Today, Growth, Reflect, ...
+ *   ├─────────────────────┤
+ *   │ Sign out            │
+ *   └─────────────────────┘
  */
 export function Sidebar({
+  role,
   userName,
   userSubLabel,
   items,
@@ -41,9 +53,29 @@ export function Sidebar({
   const visibleItems = items.filter(i => !i.admin || showAdmin)
 
   return (
-    <aside className="hidden md:flex md:flex-col md:w-60 md:shrink-0 md:border-r md:border-gray-200 md:bg-white">
+    <aside
+      className="hidden md:flex md:flex-col md:w-60 md:shrink-0 md:border-r md:border-gray-200 md:bg-white md:sticky md:top-0 md:h-screen md:self-start"
+    >
+      {/* Brand block — NLU logo + product name. Click → role-appropriate home. */}
+      <Link
+        href={role === 'coach' ? '/v2/coach' : '/v2/today'}
+        className="block px-4 py-4 border-b border-gray-100 hover:bg-gray-50 transition-colors"
+      >
+        <div className="flex items-center gap-2.5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/nlu-logo.svg"
+            alt="National Louis University"
+            className="h-7 w-auto opacity-80 shrink-0"
+          />
+        </div>
+        <div className="mt-2 text-[13px] font-semibold text-green-900 leading-tight">
+          LE3 Growth Portfolio
+        </div>
+      </Link>
+
       {/* User block */}
-      <div className="px-4 py-5 border-b border-gray-100">
+      <div className="px-4 py-4 border-b border-gray-100">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-full bg-green-100 text-green-800 flex items-center justify-center text-sm font-semibold">
             {initials(userName)}
@@ -65,7 +97,7 @@ export function Sidebar({
       )}
 
       {/* Nav */}
-      <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 min-h-0 px-2 py-3 space-y-0.5 overflow-y-auto">
         {visibleItems.map(item => {
           const isActive = item.key === activeKey
           const Icon = item.icon
@@ -90,7 +122,7 @@ export function Sidebar({
         })}
       </nav>
 
-      {/* Footer slot (sign out etc. — Phase 1) */}
+      {/* Footer slot */}
       <div className="px-3 py-3 border-t border-gray-100">
         <Link
           href="/login"
