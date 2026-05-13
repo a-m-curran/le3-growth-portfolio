@@ -1,4 +1,5 @@
 import { SDT_LEVEL_MAP } from './constants'
+import { createAdminClient } from './supabase-admin'
 import type {
   Student,
   Coach,
@@ -17,10 +18,28 @@ import type {
 
 // ─── SUPABASE HELPERS ──────────────────────────────
 
+/**
+ * User-session-aware client. Use ONLY in functions that fall back
+ * to `auth.getUser()` (getCurrentStudent / getCurrentCoach in their
+ * "no id provided" branch). RLS will gate what these can see based
+ * on the real authenticated user — fine for real auth, blocks
+ * everything for demo personas (which don't have a real session).
+ */
 async function getSupabase() {
-  // Dynamic import to avoid issues when supabase env vars aren't set (demo mode)
   const { createServerClient } = await import('./supabase-server')
   return createServerClient()
+}
+
+/**
+ * Admin client (service role, bypasses RLS). Use for queries that
+ * take an explicit id — caller is responsible for authorization
+ * upstream (typically via getV2StudentId / getV2CoachId in v2 routes
+ * or the appropriate caseload check). Required for the demo-persona
+ * path since demo personas have no real auth session and RLS would
+ * otherwise block their queries.
+ */
+function getAdmin() {
+  return createAdminClient()
 }
 
 function snakeToCamel(obj: Record<string, unknown>): Record<string, unknown> {
@@ -35,8 +54,8 @@ function snakeToCamel(obj: Record<string, unknown>): Record<string, unknown> {
 // ─── STUDENT QUERIES ────────────────────────────────
 
 export async function getStudent(studentId: string): Promise<Student | null> {
-  const supabase = await getSupabase()
-  const { data } = await supabase
+  const admin = getAdmin()
+  const { data } = await admin
     .from('student')
     .select('*')
     .eq('id', studentId)
@@ -45,10 +64,10 @@ export async function getStudent(studentId: string): Promise<Student | null> {
 }
 
 export async function getCurrentStudent(studentId?: string): Promise<Student | null> {
-  const supabase = await getSupabase()
+  const admin = getAdmin()
 
   if (studentId) {
-    const { data } = await supabase
+    const { data } = await admin
       .from('student')
       .select('*')
       .eq('id', studentId)
@@ -56,11 +75,14 @@ export async function getCurrentStudent(studentId?: string): Promise<Student | n
     return data ? snakeToCamel(data) as unknown as Student : null
   }
 
-  // Get from auth session
+  // Fall back to real Supabase auth session — read the auth_user_id
+  // from the session (user-session client), then look up the student
+  // row via admin so it works regardless of RLS.
+  const supabase = await getSupabase()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const { data } = await supabase
+  const { data } = await admin
     .from('student')
     .select('*')
     .eq('auth_user_id', user.id)
@@ -69,22 +91,22 @@ export async function getCurrentStudent(studentId?: string): Promise<Student | n
 }
 
 export async function getAllStudents(): Promise<Student[]> {
-  const supabase = await getSupabase()
-  const { data } = await supabase.from('student').select('*')
+  const admin = getAdmin()
+  const { data } = await admin.from('student').select('*').eq('is_demo', false)
   return (data || []).map(s => snakeToCamel(s) as unknown as Student)
 }
 
 export async function getAllCoaches(): Promise<Coach[]> {
-  const supabase = await getSupabase()
-  const { data } = await supabase.from('coach').select('*')
+  const admin = getAdmin()
+  const { data } = await admin.from('coach').select('*').eq('is_demo', false)
   return (data || []).map(c => snakeToCamel(c) as unknown as Coach)
 }
 
 export async function getCurrentCoach(coachId?: string): Promise<Coach | null> {
-  const supabase = await getSupabase()
+  const admin = getAdmin()
 
   if (coachId) {
-    const { data } = await supabase
+    const { data } = await admin
       .from('coach')
       .select('*')
       .eq('id', coachId)
@@ -92,11 +114,12 @@ export async function getCurrentCoach(coachId?: string): Promise<Coach | null> {
     return data ? snakeToCamel(data) as unknown as Coach : null
   }
 
-  // Get from auth session
+  // Fall back to real Supabase auth — same shape as getCurrentStudent.
+  const supabase = await getSupabase()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const { data } = await supabase
+  const { data } = await admin
     .from('coach')
     .select('*')
     .eq('auth_user_id', user.id)
@@ -107,7 +130,13 @@ export async function getCurrentCoach(coachId?: string): Promise<Coach | null> {
 // ─── GARDEN DATA ────────────────────────────────────
 
 export async function getGardenData(studentId: string): Promise<GardenData> {
-  const supabase = await getSupabase()
+  // Admin client bypasses RLS. Authorization for who can see whose
+  // garden data happens at the route layer (via getV2StudentId or
+  // getCurrentCoach + their caseload check) — by the time we get
+  // here we've already decided this caller can see this studentId.
+  // Using the user-session client would fail for demo personas (no
+  // real auth) and for cross-student access by coaches.
+  const supabase = createAdminClient()
 
   // Fetch student
   const { data: studentRow } = await supabase
@@ -226,7 +255,7 @@ function extractPullQuote(conversation: GrowthConversation): string {
 
 export async function getConversation(id: string): Promise<GrowthConversation | null> {
 
-  const supabase = await getSupabase()
+  const supabase = getAdmin()
   const { data } = await supabase
     .from('growth_conversation')
     .select('*, conversation_skill_tag(*)')
@@ -244,7 +273,7 @@ export async function getConversation(id: string): Promise<GrowthConversation | 
 
 export async function getStudentConversations(studentId: string): Promise<GrowthConversation[]> {
 
-  const supabase = await getSupabase()
+  const supabase = getAdmin()
   const { data } = await supabase
     .from('growth_conversation')
     .select('*, conversation_skill_tag(*)')
@@ -266,7 +295,7 @@ export async function getConversationsForSkill(
   skillId: string
 ): Promise<GrowthConversation[]> {
 
-  const supabase = await getSupabase()
+  const supabase = getAdmin()
   const { data } = await supabase
     .from('growth_conversation')
     .select('*, conversation_skill_tag!inner(*)')
@@ -286,7 +315,7 @@ export async function getConversationsForSkill(
 
 export async function getAllStudentConversations(studentId: string): Promise<GrowthConversation[]> {
 
-  const supabase = await getSupabase()
+  const supabase = getAdmin()
   const { data } = await supabase
     .from('growth_conversation')
     .select('*, conversation_skill_tag(*), student_work(title)')
@@ -310,7 +339,7 @@ export async function getAllStudentConversations(studentId: string): Promise<Gro
 // ─── SKILL COVERAGE ─────────────────────────────────
 
 export async function getSkillCoverage(studentId: string): Promise<import('./types').SkillCoverageData[]> {
-  const supabase = await getSupabase()
+  const supabase = getAdmin()
 
   // Get all active skills with pillars
   const { data: skillRows } = await supabase
@@ -362,7 +391,7 @@ export async function getSkillCoverage(studentId: string): Promise<import('./typ
 // ─── WORK WITH SKILL TAGS ───────────────────────────
 
 export async function getAvailableWorkWithTags(studentId: string): Promise<(import('./types').StudentWork & { skillTags: { skillId: string; skillName: string }[] })[]> {
-  const supabase = await getSupabase()
+  const supabase = getAdmin()
 
   const { data: allWork } = await supabase
     .from('student_work')
@@ -394,7 +423,7 @@ export async function getAvailableWorkWithTags(studentId: string): Promise<(impo
 
 export async function getAvailableWork(studentId: string): Promise<StudentWork[]> {
 
-  const supabase = await getSupabase()
+  const supabase = getAdmin()
 
   // Get all work for student
   const { data: allWork } = await supabase
@@ -421,7 +450,7 @@ export async function getAvailableWork(studentId: string): Promise<StudentWork[]
 
 export async function getCoachDashboard(coachId: string): Promise<CoachDashboardData> {
 
-  const supabase = await getSupabase()
+  const supabase = getAdmin()
 
   // Get coach
   const { data: coachRow } = await supabase
@@ -523,7 +552,7 @@ export async function getSessionPrep(
   studentId: string
 ): Promise<SessionPrepData> {
 
-  const supabase = await getSupabase()
+  const supabase = getAdmin()
 
   const { data: studentRow } = await supabase
     .from('student')
@@ -615,7 +644,7 @@ export async function getSessionPrep(
  */
 export async function getRecentSyncRuns(limit: number = 5): Promise<SyncRun[]> {
 
-  const supabase = await getSupabase()
+  const supabase = getAdmin()
   const { data, error } = await supabase
     .from('sync_run')
     .select('*')
@@ -638,7 +667,7 @@ export async function getRecentSyncRuns(limit: number = 5): Promise<SyncRun[]> {
  */
 export async function getLastSuccessfulSyncRun(): Promise<SyncRun | null> {
 
-  const supabase = await getSupabase()
+  const supabase = getAdmin()
   const { data } = await supabase
     .from('sync_run')
     .select('*')
