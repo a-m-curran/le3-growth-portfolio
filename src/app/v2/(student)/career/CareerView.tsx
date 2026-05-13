@@ -1,19 +1,23 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { getPillarPalette } from '@/lib/constants'
 
 /**
  * Client view for /v2/career.
  *
- * Renders the latest career_output for the current student:
- *   - Hero card: Professional Summary, with a copy-to-clipboard
- *   - Per-skill cards: resume language + interview talking points,
- *     each tinted by its pillar
+ * Intentionally a thin v1-parity port — plain neutral cards, no
+ * pillar tints, no extra polish. A more comprehensive Career
+ * module is on the roadmap; this page exists so the v2 IA has the
+ * surface, not to be where the design lives.
  *
- * When no output exists yet, shows a CTA to generate it. The
- * generation hits the existing /api/career/generate endpoint which
- * already handles both demo (synthetic delay) and real (LLM) flows.
+ * Behavior:
+ *   - Fetches the latest career_output via /api/student/career
+ *   - Empty state: single "Generate career output" CTA
+ *   - Populated state: Professional Summary card with copy-to-clipboard,
+ *     per-skill cards (resume language + interview talking points),
+ *     and a Regenerate link at the bottom
+ *   - Generate / Regenerate posts to the existing /api/career/generate
+ *     endpoint (unchanged from v1) and refetches our wrapper
  */
 
 interface SkillDescription {
@@ -21,7 +25,6 @@ interface SkillDescription {
   skillName: string
   resumeLanguage: string
   talkingPoints: string[]
-  pillarName: string | null
 }
 
 interface CareerOutput {
@@ -81,9 +84,6 @@ export function CareerView() {
         setGenerating(false)
         return
       }
-      // Refetch to pick up the freshly stored output (with pillar
-      // enrichment from our API wrapper) rather than trying to
-      // reshape /api/career/generate's payload here.
       const refreshed = await fetch('/api/student/career', { cache: 'no-store' })
       const refreshedJson = (await refreshed.json()) as CareerResponse
       setOutput(refreshedJson.output)
@@ -113,36 +113,33 @@ export function CareerView() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="h-32 rounded-2xl bg-white border border-gray-200 animate-pulse" />
-        <div className="h-40 rounded-2xl bg-white border border-gray-200 animate-pulse" />
+        <div className="h-32 rounded-xl bg-white border border-gray-200 animate-pulse" />
+        <div className="h-40 rounded-xl bg-white border border-gray-200 animate-pulse" />
       </div>
     )
   }
 
-  // Empty state — no career output generated yet
+  // Empty state
   if (!output) {
     return (
-      <div className="rounded-2xl bg-white border border-gray-200 p-10 text-center">
-        <p className="text-gray-600 mb-2">
-          Translate your growth into resume-ready language.
+      <div className="text-center py-12">
+        <p className="text-gray-500 mb-4">
+          Generate resume-ready language from your skill narratives.
         </p>
-        <p className="text-xs text-gray-400 mb-5 max-w-md mx-auto">
-          We&rsquo;ll synthesize your skill narratives into a professional summary, per-skill resume bullets, and interview talking points.
-        </p>
+        {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
         {generating ? (
-          <div className="animate-pulse text-sm text-green-700">
+          <div className="animate-pulse text-green-700 text-sm">
             Synthesizing your narratives…
           </div>
         ) : (
           <button
             type="button"
             onClick={handleGenerate}
-            className="px-5 py-2.5 bg-green-700 text-white rounded-lg text-sm font-medium hover:bg-green-800 transition-colors"
+            className="px-6 py-3 bg-green-700 text-white rounded-lg text-sm font-medium hover:bg-green-800 transition-colors"
           >
-            Generate career output
+            Generate Career Output
           </button>
         )}
-        {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
       </div>
     )
   }
@@ -151,87 +148,57 @@ export function CareerView() {
     <div className="space-y-8">
       {/* Professional Summary */}
       <section>
-        <h2 className="text-xs uppercase tracking-wider font-semibold text-gray-500 mb-3">
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
           Professional Summary
         </h2>
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-          <p className="text-sm text-gray-800 leading-relaxed">{output.resumeSummary}</p>
-          <div className="flex items-center gap-3 mt-4">
-            <button
-              type="button"
-              onClick={handleCopy}
-              className="text-xs font-medium px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
-            >
-              {copied ? 'Copied ✓' : 'Copy to clipboard'}
-            </button>
-            <span className="text-[11px] text-gray-400">v{output.version}</span>
-          </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <p className="text-sm text-gray-700 leading-relaxed">{output.resumeSummary}</p>
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="mt-3 text-xs text-green-700 hover:underline"
+          >
+            {copied ? 'Copied' : 'Copy to clipboard'}
+          </button>
         </div>
       </section>
 
-      {/* Skill Descriptions */}
+      {/* Per-skill descriptions */}
       <section>
-        <h2 className="text-xs uppercase tracking-wider font-semibold text-gray-500 mb-3">
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
           Skill Descriptions
         </h2>
-        <div className="space-y-3">
+        <div className="space-y-4">
           {output.skillDescriptions.map(sd => (
-            <SkillCard key={sd.skillId} sd={sd} />
+            <div key={sd.skillId} className="bg-white rounded-xl border border-gray-200 p-5">
+              <h3 className="font-semibold text-gray-900 mb-2">{sd.skillName}</h3>
+              <p className="text-sm text-gray-700 mb-3">{sd.resumeLanguage}</p>
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-1.5">Interview Talking Points:</p>
+                <ul className="space-y-1.5">
+                  {sd.talkingPoints.map((tp, i) => (
+                    <li key={i} className="text-sm text-gray-600 pl-3 border-l-2 border-green-200">
+                      {tp}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
           ))}
         </div>
       </section>
 
       {/* Regenerate */}
-      <div className="text-center pt-2">
+      <div className="text-center pt-4">
         <button
           type="button"
           onClick={handleGenerate}
           disabled={generating}
-          className="text-xs text-gray-500 hover:text-gray-800 underline-offset-2 hover:underline disabled:opacity-50"
+          className="text-sm text-green-700 hover:underline disabled:opacity-50"
         >
           {generating ? 'Regenerating…' : 'Regenerate with latest narratives'}
         </button>
       </div>
     </div>
-  )
-}
-
-function SkillCard({ sd }: { sd: SkillDescription }) {
-  const palette = getPillarPalette(sd.pillarName)
-  return (
-    <article
-      className="bg-white rounded-xl p-5 transition-shadow hover:shadow-sm"
-      style={{
-        borderLeftWidth: 3,
-        borderLeftStyle: 'solid',
-        borderLeftColor: palette.surfaceBorder,
-        borderTopWidth: 1,
-        borderTopStyle: 'solid',
-        borderTopColor: '#e5e7eb',
-        borderRightWidth: 1,
-        borderRightStyle: 'solid',
-        borderRightColor: '#e5e7eb',
-        borderBottomWidth: 1,
-        borderBottomStyle: 'solid',
-        borderBottomColor: '#e5e7eb',
-      }}
-    >
-      <h3 className="font-semibold text-gray-900 mb-2">{sd.skillName}</h3>
-      <p className="text-sm text-gray-700 leading-relaxed mb-4">{sd.resumeLanguage}</p>
-      <p className="text-[11px] font-medium uppercase tracking-wider text-gray-500 mb-2">
-        Interview talking points
-      </p>
-      <ul className="space-y-2">
-        {sd.talkingPoints.map((tp, i) => (
-          <li
-            key={i}
-            className="text-sm text-gray-700 leading-relaxed pl-3"
-            style={{ borderLeft: `2px solid ${palette.surfaceBorder}80` }}
-          >
-            {tp}
-          </li>
-        ))}
-      </ul>
-    </article>
   )
 }

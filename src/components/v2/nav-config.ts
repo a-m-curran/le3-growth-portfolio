@@ -5,6 +5,7 @@ import {
   ReflectIcon,
   JournalIcon,
   NarrativeIcon,
+  CareerIcon,
   MeIcon,
   CaseloadIcon,
   ToolsIcon,
@@ -36,14 +37,13 @@ export const STUDENT_NAV: NavItem[] = [
   { key: 'reflect', label: 'Reflect', href: '/v2/reflect', icon: ReflectIcon },
   { key: 'journal', label: 'Journal', href: '/v2/journal', icon: JournalIcon },
   { key: 'narrative', label: 'Narrative', href: '/v2/narrative', icon: NarrativeIcon },
+  { key: 'career', label: 'Career', href: '/v2/career', icon: CareerIcon },
   { key: 'me', label: 'Me', href: '/v2/me', icon: MeIcon },
-  // Career is intentionally held back from the v2 nav for now — a
-  // separate, more comprehensive career module is on the roadmap.
-  // The /v2/career route, its API, and the v1-compatible view are
-  // left in place (see src/app/v2/(student)/career/*) so the page
-  // is still reachable by direct URL and trivially re-linkable when
-  // the career module work begins.
 ]
+// Note: the v2 Career page is intentionally a thin v1-parity port —
+// no pillar tints, no extra polish — because a more comprehensive
+// Career module is on the roadmap. When that module lands it will
+// either replace /v2/career or live alongside it.
 
 export const COACH_NAV: NavItem[] = [
   { key: 'today', label: 'Today', href: '/v2/coach', icon: TodayIcon },
