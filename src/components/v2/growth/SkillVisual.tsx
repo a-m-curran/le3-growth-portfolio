@@ -31,15 +31,15 @@ import { SocialAwarenessVisual } from './archetypes/SocialAwareness'
  * `animate` prop passed to each archetype is `false`, so flickers,
  * sways, pulses are all frozen.
  *
- * **Hover (or focus)**: a linear ramp drives growth 0 → 1 over
- * HOVER_PERIOD seconds, then snaps back to 0 and replays. This reads
- * as a clear "watch it grow from seedling" trailer, NOT a breathing
- * oscillation. `animate={true}` is passed down so the archetype's
- * own idle motions (flicker, sway, sweep) also play during the
- * trailer.
+ * **Hover (or focus)**: growth ramps from 0 → 1 over HOVER_RAMP_S
+ * seconds and then DWELLS at 1 for as long as the cursor stays on
+ * the card. This reads as a "watch it grow, then linger at peak"
+ * trailer — once the ramp finishes, the celebration layer (sparkles,
+ * halo pulse) carries the energy while the artwork's primary motion
+ * keeps running. No looping back to 0.
  *
- * When hover ends, both the growth value and idle motion snap back
- * to static.
+ * When hover ends, both the growth value and the archetype's idle
+ * motion snap back to the student's actual current state.
  */
 
 interface SkillVisualProps {
@@ -69,8 +69,9 @@ const ARCHETYPE_BY_SKILL_ID: Record<string, Renderer> = {
   skill_social_awareness: SocialAwarenessVisual,
 }
 
-/** Seconds for the hover trailer to ramp 0 → 1. Then snaps and replays. */
-const HOVER_PERIOD = 3.5
+/** Seconds for the hover trailer to ramp 0 → 1. After this, growth
+ * stays clamped at 1 until the cursor leaves the card. */
+const HOVER_RAMP_S = 2.8
 
 export function SkillVisual({ plant, hovering = false }: SkillVisualProps) {
   const base = signalFromPlant(plant)
@@ -88,18 +89,23 @@ export function SkillVisual({ plant, hovering = false }: SkillVisualProps) {
     const startTs = performance.now()
     const tick = (now: number) => {
       const elapsed = (now - startTs) / 1000
-      // Linear ramp 0 → 1, then modulo back to 0 and replay. The
-      // discontinuity at 1 → 0 is deliberate: feels like the trailer
-      // restarting, not a smooth breath.
-      const t = (elapsed % HOVER_PERIOD) / HOVER_PERIOD
-      // Gentle ease-in so growth doesn't feel mechanical at the start
+      // Ramp 0 → 1 over HOVER_RAMP_S, then clamp at 1 and stop the
+      // rAF loop. After the ramp the artwork sits at its peak; the
+      // celebration layer (sparkles + halo pulse) handles ambient
+      // motion from there.
+      const t = Math.min(1, elapsed / HOVER_RAMP_S)
+      // Gentle ease so growth doesn't feel mechanical at the start
       const eased = t * t * (3 - 2 * t) // smoothstep
       // Density tracks slightly ahead of growth so leaves/sparks/etc
       // hit their peaks just before the main form does — gives a
-      // subtle anticipation feel.
+      // subtle anticipation feel during the ramp.
       const d = Math.min(1, eased * 1.15)
       setSignal({ growth: eased, density: d })
-      rafRef.current = requestAnimationFrame(tick)
+      if (t < 1) {
+        rafRef.current = requestAnimationFrame(tick)
+      } else {
+        rafRef.current = null
+      }
     }
     rafRef.current = requestAnimationFrame(tick)
     return () => {
