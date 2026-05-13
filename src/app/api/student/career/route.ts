@@ -29,7 +29,17 @@ export async function GET() {
   const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
   // ─── Demo mode ──────────────────────────────
+  // The demo starts with no career output so the Generate flow is
+  // visible. After the user hits /api/career/generate, that endpoint
+  // sets a cookie marking the output as "generated" for this session;
+  // subsequent reads return the populated seed. Cookie is per-browser-
+  // session, so a fresh demo tab always starts from empty.
   if (isDemoMode) {
+    const wasGenerated =
+      cookieStore.get('demo-career-generated')?.value === 'true'
+    if (!wasGenerated) {
+      return NextResponse.json({ output: null })
+    }
     const demoStudentId = 'stu_aja'
     const career = getCareerOutput(demoStudentId)
     if (!career) {

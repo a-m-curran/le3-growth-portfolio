@@ -1,12 +1,42 @@
 import { createServerClient } from '@supabase/auth-helpers-nextjs'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { generateCareerOutput } from '@/lib/conversation-engine-live'
+import { getCareerOutput } from '@/data'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
 export async function POST() {
   try {
     const cookieStore = cookies()
+
+    // ─── Demo mode ──────────────────────────────
+    // Return the static seed (with a brief synthetic delay so the
+    // loading state in the v2 UI gets a beat) and mark the demo
+    // session as "generated" via cookie so /api/student/career
+    // returns the populated state on the subsequent refetch.
+    if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
+      const demoStudentId = 'stu_aja'
+      const career = getCareerOutput(demoStudentId)
+      if (!career) {
+        return NextResponse.json(
+          { error: 'No demo career output available' },
+          { status: 404 }
+        )
+      }
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      cookieStore.set('demo-career-generated', 'true', {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 60 * 60 * 24, // 1 day; effectively a session marker
+      })
+      return NextResponse.json({
+        resumeSummary: career.resumeSummary,
+        skillDescriptions: career.skillDescriptions,
+        version: career.version,
+      })
+    }
+
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,

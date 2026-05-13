@@ -33,13 +33,29 @@ export async function GET() {
   const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
   // ─── Demo mode ──────────────────────────────
+  // Three skills start blank in the demo so the Generate flow is
+  // visible on the page. After the user clicks Generate on one,
+  // /api/narrative/generate sets a cookie marking that skill as
+  // "revealed" — this endpoint then returns the seed text for it
+  // on the next read. Cookie is session-scoped so a fresh tab
+  // always starts with the same three blank.
+  const DEMO_INITIALLY_BLANK = new Set<string>([
+    'skill_networking',
+    'skill_communication',
+    'skill_adaptability',
+  ])
+
   if (isDemoMode) {
     const demoStudentId = 'stu_aja'
     const activeSkills = skills.filter(s => s.isActive)
+    const revealedRaw = cookieStore.get('demo-narrative-revealed')?.value ?? ''
+    const revealed = new Set(revealedRaw.split(',').filter(Boolean))
 
     const narratives = activeSkills.map(skill => {
       const pillar = pillars.find(p => p.id === skill.pillarId)
       const seed = getSkillNarrative(demoStudentId, skill.id)
+      const isBlank =
+        DEMO_INITIALLY_BLANK.has(skill.id) && !revealed.has(skill.id)
 
       // Source list: every conversation tagged with this skill,
       // sorted oldest-first so the timeline reads chronologically
@@ -64,11 +80,11 @@ export async function GET() {
         skillName: skill.name,
         pillarId: skill.pillarId,
         pillarName: pillar?.name ?? null,
-        narrativeText: seed?.narrativeText ?? null,
-        narrativeRichness: seed?.narrativeRichness ?? null,
-        version: seed?.version ?? 0,
+        narrativeText: isBlank ? null : seed?.narrativeText ?? null,
+        narrativeRichness: isBlank ? null : seed?.narrativeRichness ?? null,
+        version: isBlank ? 0 : seed?.version ?? 0,
         generatedAt: null as string | null,
-        annotations: seed?.annotations ?? [],
+        annotations: isBlank ? [] : seed?.annotations ?? [],
         sources: sourceConvos,
       }
     })

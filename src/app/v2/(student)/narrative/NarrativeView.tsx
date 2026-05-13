@@ -165,19 +165,26 @@ function NarrativeCard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ skillId: item.skillId }),
       })
-      const j = await res.json()
+      const j = (await res.json()) as {
+        error?: string
+        narrativeText?: string
+        richness?: string
+        annotations?: Annotation[]
+      }
       if (!res.ok) {
         setError(j.error || 'Failed to generate')
         setLoading(false)
         return
       }
-      setText(j.narrativeText)
-      setRichness(j.richness)
-      // Real-mode regeneration doesn't return annotations yet —
-      // they'd come from a post-processing pass that isn't wired
-      // up. Clear the current ones rather than leave stale links
-      // pointing at the wrong sentences.
-      setAnnotations([])
+      setText(j.narrativeText ?? null)
+      setRichness(j.richness ?? null)
+      // Demo mode returns annotations alongside the narrative so
+      // the inline source links light up immediately after Generate.
+      // Real mode doesn't have a post-processing pass yet, so the
+      // response omits them — fall through to empty and the
+      // inline-link affordance just doesn't render until the
+      // (future) post-processor stores them on the DB row.
+      setAnnotations(j.annotations ?? [])
     } catch {
       setError('Something went wrong')
     } finally {
