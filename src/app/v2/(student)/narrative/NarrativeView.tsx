@@ -180,9 +180,35 @@ function NarrativeCard({ item }: { item: Narrative }) {
       </div>
 
       {text ? (
-        <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
-          {text}
-        </div>
+        <>
+          <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+            {text}
+          </div>
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={loading}
+              className="text-[11px] font-medium px-2.5 py-1 rounded-md transition-colors disabled:opacity-50"
+              style={{
+                backgroundColor: palette.surface,
+                color: palette.surfaceText,
+                border: `1px solid ${palette.surfaceBorder}88`,
+              }}
+              title="Regenerate this narrative from the latest conversations"
+            >
+              {loading ? 'Regenerating…' : 'Regenerate'}
+            </button>
+            {item.generatedAt && (
+              <p className="text-[11px] text-gray-400">
+                Generated {new Date(item.generatedAt).toLocaleDateString('en-US', {
+                  month: 'short', day: 'numeric', year: 'numeric',
+                })}
+              </p>
+            )}
+          </div>
+          {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
+        </>
       ) : loading ? (
         <div className="py-6 text-center">
           <div className="animate-pulse text-sm" style={{ color: palette.surfaceText }}>
@@ -211,14 +237,6 @@ function NarrativeCard({ item }: { item: Narrative }) {
           </button>
           {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
         </>
-      )}
-
-      {text && item.generatedAt && (
-        <p className="text-[11px] text-gray-400 mt-3">
-          Generated {new Date(item.generatedAt).toLocaleDateString('en-US', {
-            month: 'short', day: 'numeric', year: 'numeric',
-          })}
-        </p>
       )}
     </article>
   )
