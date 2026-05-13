@@ -1,0 +1,19 @@
+{
+  "dependencies": {
+    "import-in-the-middle": "1.11.0",
+    "mammoth": "1.12.0"
+  },
+  "devDependencies": {
+  },
+  "name": "le3-growth-portfolio",
+  "peerDependencies": {
+  },
+  "private": true,
+  "scripts": {
+  },
+  "trustedDependencies": [
+    "import-in-the-middle",
+    "mammoth"
+  ],
+  "version": "0.1.0"
+}
