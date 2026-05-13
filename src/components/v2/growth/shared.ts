@@ -12,6 +12,7 @@
  */
 
 import type { GardenPlant } from '@/lib/types'
+import { getPillarPalette } from '@/lib/constants'
 
 export interface ArchetypeProps {
   /**
@@ -123,25 +124,24 @@ export function artworkFilterIds(seed: string) {
 }
 
 /**
- * Default palette by pillar name. Pulled out of constants.ts colors
- * but tuned for the growth canvas (the constants tend to be too pale
- * to read as the *primary* color of an artwork).
+ * Pillar palette for archetype rendering. Reads from the canonical
+ * `getPillarPalette` source in `@/lib/constants` so the saturated
+ * mid/dark/accent tones used inside the SVG artworks stay coherent
+ * with the surface tints used elsewhere (section bg, tinted card
+ * borders, surface text color).
+ *
+ * The shape returned matches `ArchetypeProps['palette']`:
+ *   bg     — surface tone for the section / card
+ *   mid    — primary stroke/fill in artwork
+ *   dark   — accent/shadow in artwork
+ *   accent — highlight/bloom in artwork
  */
 export function paletteForPillar(pillarName: string | null | undefined): ArchetypeProps['palette'] {
-  switch (pillarName) {
-    case 'Creative & Curious Thinkers':
-      // Cool blues — cerebral, curious
-      return { bg: '#eff6ff', mid: '#60a5fa', dark: '#1e40af', accent: '#a855f7' }
-    case 'Leaders with Purpose & Agency':
-      // Purples — drive, intention
-      return { bg: '#faf5ff', mid: '#a78bfa', dark: '#5b21b6', accent: '#f472b6' }
-    case 'Thrivers in Change':
-      // Warm oranges — resilience, transformation
-      return { bg: '#fff7ed', mid: '#fb923c', dark: '#9a3412', accent: '#facc15' }
-    case 'Network Builders':
-      // Greens — connection, growth
-      return { bg: '#f0fdf4', mid: '#4ade80', dark: '#166534', accent: '#22d3ee' }
-    default:
-      return { bg: '#f8fafc', mid: '#94a3b8', dark: '#334155', accent: '#fbbf24' }
+  const p = getPillarPalette(pillarName)
+  return {
+    bg: p.surface,
+    mid: p.artworkMid,
+    dark: p.artworkDark,
+    accent: p.artworkAccent,
   }
 }

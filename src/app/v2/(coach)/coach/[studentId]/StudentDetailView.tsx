@@ -3,8 +3,8 @@
 import { useState } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { ConversationPanel } from '@/components/panels/ConversationPanel'
-import { SkillPanel } from '@/components/panels/SkillPanel'
-import type { CoachNote, GardenData, GardenPlant, SessionPrepData } from '@/lib/types'
+import { GrowthGrid } from '@/components/v2/growth/GrowthGrid'
+import type { CoachNote, GardenData, SessionPrepData } from '@/lib/types'
 
 /**
  * v2 Student Detail view — coach's deep view of one student.
@@ -47,7 +47,6 @@ export function StudentDetailView({
 }: StudentDetailViewProps) {
   const [tab, setTabState] = useState<Tab>(initialTab)
   const [openConversationId, setOpenConversationId] = useState<string | null>(null)
-  const [selectedPlant, setSelectedPlant] = useState<GardenPlant | null>(null)
 
   const setTab = (next: Tab) => {
     setTabState(next)
@@ -91,28 +90,17 @@ export function StudentDetailView({
           onOpenConversation={id => setOpenConversationId(id)}
         />
       )}
-      {tab === 'portfolio' && (
-        <PortfolioTab garden={garden} onSelectSkill={p => setSelectedPlant(p)} />
-      )}
+      {tab === 'portfolio' && <PortfolioTab garden={garden} />}
       {tab === 'notes' && <NotesTab notes={notes} student={student} />}
 
-      {/* Conversation panel triggered from Prep tab AND from inside
-          SkillPanel when a coach clicks into a skill's conversations */}
+      {/* Conversation panel triggered from Prep tab. (Portfolio's
+          SkillPanel handles its own conversation drill-throughs
+          internally via GrowthGrid.) */}
       <AnimatePresence>
         {openConversationId && (
           <ConversationPanel
             conversationId={openConversationId}
             onClose={() => setOpenConversationId(null)}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Skill drill-in panel triggered from Portfolio tab */}
-      <AnimatePresence>
-        {selectedPlant && (
-          <SkillPanel
-            plant={selectedPlant}
-            onClose={() => setSelectedPlant(null)}
           />
         )}
       </AnimatePresence>
@@ -264,13 +252,7 @@ function PrepTab({
   )
 }
 
-function PortfolioTab({
-  garden,
-  onSelectSkill,
-}: {
-  garden: GardenData | null
-  onSelectSkill: (plant: GardenPlant) => void
-}) {
+function PortfolioTab({ garden }: { garden: GardenData | null }) {
   if (!garden) {
     return (
       <Card>
@@ -281,66 +263,12 @@ function PortfolioTab({
       </Card>
     )
   }
-
-  // Group plants by pillar (same pattern as the v1 garden, kept inline
-  // here to keep Phase 2 contained — Phase 3 of the IA work will refactor
-  // garden into shared v2 primitives).
-  const byPillar = new Map<string, { name: string; plants: typeof garden.plants }>()
-  for (const plant of garden.plants) {
-    const group = byPillar.get(plant.pillarId)
-    if (group) {
-      group.plants.push(plant)
-    } else {
-      byPillar.set(plant.pillarId, { name: plant.pillarName, plants: [plant] })
-    }
-  }
-
-  return (
-    <Card>
-      <SectionHeader
-        title="Skills portfolio"
-        meta={`${garden.totalConversations} total conversations · ${garden.quartersActive} quarter${garden.quartersActive === 1 ? '' : 's'}`}
-      />
-      <div className="space-y-4">
-        {Array.from(byPillar.values()).map(group => (
-          <div key={group.name}>
-            <h3 className="text-xs uppercase tracking-wider font-semibold text-gray-500 mb-2">
-              {group.name}
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {group.plants.map(plant => (
-                <button
-                  key={plant.skillId}
-                  type="button"
-                  onClick={() => onSelectSkill(plant)}
-                  className="text-left p-3 rounded-lg bg-gray-50 border border-gray-100 hover:border-green-400 hover:bg-white hover:shadow-sm transition-colors"
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-gray-900">{plant.skillName}</span>
-                    <span className="text-[10px] uppercase tracking-wider font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
-                      Level {plant.sdtLevel}
-                    </span>
-                  </div>
-                  {plant.currentDefinition && (
-                    <p className="text-xs text-gray-600 italic line-clamp-2">
-                      &ldquo;{plant.currentDefinition}&rdquo;
-                    </p>
-                  )}
-                  <p className="text-[11px] text-gray-400 mt-1">
-                    {plant.conversationCount} conversation
-                    {plant.conversationCount === 1 ? '' : 's'}
-                    {plant.conversationCount > 0 && (
-                      <span className="ml-2 text-green-700">View →</span>
-                    )}
-                  </p>
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </Card>
-  )
+  // Reuse the same pillar-grouped layout as the student's own /v2/growth
+  // page. Visual coherence between "what the student sees" and "what the
+  // coach sees when looking at the same student" is the point — pillar
+  // tints, artwork-per-skill, hover trailers and skill-detail drill-in
+  // all work the same way here.
+  return <GrowthGrid data={garden} />
 }
 
 function NotesTab({
