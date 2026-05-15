@@ -23,6 +23,9 @@
 # trigger.dev build artifacts
 /.trigger
 
+# git worktrees (isolated dev workspaces)
+/.worktrees
+
 # Word/Office lock files (temporary files created while docs are open)
 ~$*.docx
 ~$*.doc
