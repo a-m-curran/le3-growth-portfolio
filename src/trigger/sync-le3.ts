@@ -40,7 +40,13 @@ export const syncLe3Task = schemaTask({
   // memory pattern is bounded per-submission (fast-follow) this can
   // come back down to medium/large-1x.
   machine: { preset: 'large-2x' },
-  maxDuration: 1800, // 30 minutes — not the bottleneck (OOM hit at ~251s)
+  // Raised 1800 → 3600 (60 min). The first real backfill walks ~15
+  // months of program history across 56 courses serially; 30 min was
+  // not enough headroom for a single-pass backfill. Resume-from-dedup
+  // means a time-kill is non-destructive, but a wider window lets the
+  // backfill finish in one run. Steady-state incremental syncs finish
+  // in minutes — this ceiling only matters for the one-time backfill.
+  maxDuration: 3600,
   retry: {
     maxAttempts: 3,
     factor: 2,
