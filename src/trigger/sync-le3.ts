@@ -31,8 +31,16 @@ export const syncLe3Task = schemaTask({
     triggeredBy: z.string().optional(),
     le3OrgUnitId: z.string().optional(),
   }),
-  machine: { preset: 'medium-1x' },
-  maxDuration: 1800, // 30 minutes — most pilot syncs should finish in under 5
+  // Bumped medium-1x (2 GB) → large-2x (16 GB) after the first real
+  // 56-course LE3 sync OOM-killed at ~251s / ~15 courses. The sync
+  // accumulates memory across courses (downloaded file buffers +
+  // mammoth/pdf-parse working set), so peak RAM scales with cohort
+  // size. 16 GB is deliberate over-provisioning to guarantee the
+  // pilot ingest completes in a single pass; once the sync-engine
+  // memory pattern is bounded per-submission (fast-follow) this can
+  // come back down to medium/large-1x.
+  machine: { preset: 'large-2x' },
+  maxDuration: 1800, // 30 minutes — not the bottleneck (OOM hit at ~251s)
   retry: {
     maxAttempts: 3,
     factor: 2,
