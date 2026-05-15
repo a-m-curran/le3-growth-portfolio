@@ -22,9 +22,21 @@ export const runtime = 'nodejs'
  * others. Response is a JSON report listing, for each probe, the HTTP
  * status, body excerpt (first 200 chars), and timing.
  *
+ * Optional query param:
+ *   ?courseOuId=229375
+ *     Overrides the course-offering OU used for the LE-namespace probes
+ *     (classlist, dropbox folders, submissions, file download, extract).
+ *     Without it, the diag auto-picks the FIRST descendant course of the
+ *     configured org unit — which under a Department OU is whatever
+ *     happens to sort first (often a non-LE3 general section). When NLU
+ *     scopes a permission to specific LE3 cohort sections, the auto-pick
+ *     can sit on a course the permission doesn't cover and report a
+ *     false 403. Pass the OU id of an actual `-LE3` course to probe the
+ *     thing you actually care about.
+ *
  * Coach-authenticated, like /api/admin/sync-le3.
  */
-export async function GET() {
+export async function GET(request: Request) {
   // ─── Auth ──────────────────────────────────────
   const cookieStore = cookies()
   const supabase = createServerClient(
@@ -230,17 +242,26 @@ export async function GET() {
   // LE supports up to v1.93 on NLU's d2ltest. The dropbox submissions
   // endpoint specifically requires v1.82+.
 
-  // Pick the first course offering as a probe target.
-  // 1. Prefer the first course extracted from the descendants probe body
-  //    (works when the configured org unit is a container with children).
-  // 2. Otherwise fall back to the configured le3OrgUnitId itself — that's
-  //    the right target when NLU scoped the OAuth app directly to a
-  //    single course rather than a parent container (sandbox / pilot
-  //    cohort setup).
-  // The old hardcoded fallback (a stale test course ID) caused 403s
-  // against any other instance.
+  // Pick the course offering to use for the LE-namespace probes.
+  // 0. An explicit ?courseOuId= override always wins. This is the escape
+  //    hatch for "probe THIS specific course" — essential when a
+  //    permission is scoped to particular LE3 cohort sections and the
+  //    auto-pick would otherwise land on an unrelated general section
+  //    and report a misleading 403.
+  // 1. Otherwise prefer the first course extracted from the descendants
+  //    probe body (works when the org unit is a container with children).
+  // 2. Otherwise fall back to the configured le3OrgUnitId itself — the
+  //    right target when NLU scoped the OAuth app directly to a single
+  //    course rather than a parent container (sandbox / pilot setup).
+  const courseOuOverride = new URL(request.url).searchParams
+    .get('courseOuId')
+    ?.trim()
   const firstCourseOuId =
-    extractFirstCourseOuId(results) ?? config.le3OrgUnitId
+    (courseOuOverride && courseOuOverride.length > 0
+      ? courseOuOverride
+      : null) ??
+    extractFirstCourseOuId(results) ??
+    config.le3OrgUnitId
 
   // Probe 9: classlist for the first course — shows us the full roster
   // including whether emails are populated. This is the critical probe
@@ -415,6 +436,12 @@ export async function GET() {
       lpVersion: config.lpVersion,
       leVersion: config.leVersion,
       le3OrgUnitId: config.le3OrgUnitId,
+      // The OU the LE-namespace probes (classlist/dropbox/etc.) actually
+      // ran against, and whether it came from the ?courseOuId= override
+      // or the auto-pick. Without this it's invisible which course the
+      // 403 is really about — the bug that cost us hours of confusion.
+      probedCourseOuId: firstCourseOuId,
+      probedCourseSource: courseOuOverride ? 'override' : 'auto-picked',
     },
     probes: results,
   })
