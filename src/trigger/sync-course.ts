@@ -19,8 +19,10 @@ export const syncCourseTask = schemaTask({
     course: z.object({
       orgUnitId: z.string(),
       name: z.string(),
-      code: z.string().nullable().optional(),
-    }).passthrough(),
+      code: z.string().nullable(),
+      active: z.boolean(),
+      instructorEmail: z.string().optional(),
+    }),
     mode: z.enum(['full', 'incremental']),
     defaultCoachId: z.string().nullable(),
   }),
@@ -42,7 +44,7 @@ export const syncCourseTask = schemaTask({
     return undefined
   },
   run: async (payload) => {
-    const course = payload.course as unknown as NormalizedCourse
+    const course: NormalizedCourse = payload.course
     metadata.parent.set(`course:${course.orgUnitId}`, 'running')
     logger.info('sync-course start', { ou: course.orgUnitId, name: course.name })
 

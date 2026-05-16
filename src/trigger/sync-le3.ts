@@ -1,9 +1,11 @@
 /**
  * LE3 data sync — Trigger.dev v4 task.
  *
- * Thin wrapper around src/lib/sync/sync-engine.ts. The sync engine is
- * framework-agnostic; this task adapts it to Trigger.dev's lifecycle,
- * metadata, and retry semantics.
+ * Enumerates all LE3 courses once, then fans out one `sync-course`
+ * child task per course via batchTriggerAndWait (checkpointed; bounded
+ * by the child's queue.concurrencyLimit so we never hammer D2L beyond
+ * SYNC_COURSE_CONCURRENCY parallel fetches). Aggregates per-course
+ * results into a single sync_run row.
  *
  * Triggering modes:
  *   - Scheduled: runs on a cron (configured below) for hands-off sync
@@ -19,7 +21,13 @@
 
 import { schemaTask, metadata, logger } from '@trigger.dev/sdk'
 import { z } from 'zod'
-import { runLe3Sync } from '@/lib/sync/sync-engine'
+import { createAdminClient } from '@/lib/supabase-admin'
+import {
+  createSyncRun, finalizeSyncRun, enumerateCourses,
+  pickDefaultCoachId, aggregateCourseResults,
+} from '@/lib/sync/sync-run'
+import { syncCourseTask } from '@/trigger/sync-course'
+import type { CourseSyncResult } from '@/lib/sync/sync-course'
 
 export const syncLe3Task = schemaTask({
   id: 'sync-le3',
@@ -54,67 +62,53 @@ export const syncLe3Task = schemaTask({
     maxTimeoutInMs: 60_000,
     randomize: true,
   },
-  run: async (payload, { ctx }) => {
-    logger.info('LE3 sync starting', {
-      mode: payload.mode,
-      source: payload.source,
-      triggeredBy: payload.triggeredBy,
-      runId: ctx.run.id,
+  run: async (payload) => {
+    const admin = createAdminClient()
+    const startedAt = Date.now()
+    const syncRunId = await createSyncRun(admin, {
+      source: payload.source, mode: payload.mode, triggeredBy: payload.triggeredBy,
     })
+    metadata.set('syncRunId', syncRunId).set('stage', 'enumerating')
 
-    metadata
-      .set('stage', 'starting')
-      .set('mode', payload.mode)
-      .set('source', payload.source)
-      .set('coursesSynced', 0)
-      .set('studentsSynced', 0)
-      .set('assignmentsSynced', 0)
-      .set('submissionsSynced', 0)
-      .set('errorsCount', 0)
+    try {
+      const courses = await enumerateCourses(payload.le3OrgUnitId)
+      const defaultCoachId = await pickDefaultCoachId(admin)
+      metadata.set('stage', 'fanning-out').set('totalCourses', courses.length)
+      logger.info('sync-le3 fan-out', { courses: courses.length, syncRunId })
 
-    const result = await runLe3Sync({
-      source: payload.source,
-      mode: payload.mode,
-      triggeredBy: payload.triggeredBy,
-      le3OrgUnitId: payload.le3OrgUnitId,
-      onProgress: async progress => {
-        metadata
-          .set('stage', progress.stage)
-          .set('coursesSynced', progress.counts.coursesSynced)
-          .set('studentsSynced', progress.counts.studentsSynced)
-          .set('assignmentsSynced', progress.counts.assignmentsSynced)
-          .set('submissionsSynced', progress.counts.submissionsSynced)
-          .set('errorsCount', progress.counts.errorsCount)
+      const handle = await syncCourseTask.batchTriggerAndWait(
+        courses.map(course => ({
+          payload: { syncRunId, course, mode: payload.mode, defaultCoachId },
+        }))
+      )
 
-        if (progress.currentCourse) {
-          metadata.set('currentCourse', progress.currentCourse)
+      const results: CourseSyncResult[] = []
+      for (const run of handle.runs) {
+        if (run.ok) {
+          results.push(run.output as CourseSyncResult)
+        } else {
+          results.push({
+            courseOuId: 'unknown', courseName: 'unknown', studentIds: [],
+            counts: { coursesSynced: 0, studentsSynced: 0, assignmentsSynced: 0,
+              submissionsSynced: 0, submissionsSkipped: 0, errorsCount: 1 },
+            errors: [{ stage: 'course_process', context: 'child-run',
+              message: `child run failed: ${String(run.error)}` }],
+          })
         }
-        if (progress.totalCourses && progress.currentCourseIndex !== undefined) {
-          const pct = (progress.currentCourseIndex / progress.totalCourses) * 100
-          metadata.set('progressPct', Math.round(pct))
-        }
-      },
-    })
+      }
 
-    logger.info('LE3 sync completed', {
-      syncRunId: result.syncRunId,
-      counts: result.counts,
-      durationMs: result.durationMs,
-      errorCount: result.errors.length,
-    })
-
-    if (result.errors.length > 0) {
-      logger.warn('LE3 sync completed with errors', {
-        errors: result.errors.slice(0, 10),
-        totalErrors: result.errors.length,
-      })
-    }
-
-    return {
-      syncRunId: result.syncRunId,
-      counts: result.counts,
-      errorCount: result.errors.length,
-      durationMs: result.durationMs,
+      const agg = aggregateCourseResults(results)
+      metadata.set('stage', 'completed').set('counts', agg.counts as unknown as Record<string, number>)
+      await finalizeSyncRun(admin, syncRunId, agg, startedAt, 'completed')
+      logger.info('sync-le3 completed', { syncRunId, counts: agg.counts })
+      return { syncRunId, counts: agg.counts, errorCount: agg.errors.length }
+    } catch (err) {
+      await finalizeSyncRun(admin, syncRunId,
+        { counts: { coursesSynced: 0, studentsSynced: 0, assignmentsSynced: 0,
+          submissionsSynced: 0, submissionsSkipped: 0, errorsCount: 1 },
+          errors: [{ stage: 'fatal', context: 'top-level', message: String(err) }] },
+        startedAt, 'failed')
+      throw err
     }
   },
 })
