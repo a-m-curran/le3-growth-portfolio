@@ -1,7 +1,8 @@
 /**
  * Integration test for the LE3 sync engine.
  *
- * Runs `runLe3Sync()` twice against a mocked Valence API (see
+ * Drives the fan-out sync composition (`runFanoutLikeSync()`, defined
+ * below) twice against a mocked Valence API (see
  * src/lib/d2l/__mocks__/mock-valence.ts) and asserts that every expected
  * row lands in Supabase, that dedup works on the second run, and that
  * the sync_run observability table records the attempt correctly.
@@ -19,9 +20,9 @@
  *   1. Loads Supabase credentials from .env.local
  *   2. Stubs the Valence env vars with harmless dummy values
  *   3. Installs the mock fetch dispatcher
- *   4. Runs runLe3Sync() (first run — full sync)
+ *   4. Runs runFanoutLikeSync() (first run — full sync)
  *   5. Asserts: courses, assignments, students, submissions all written
- *   6. Runs runLe3Sync() again (second run — incremental)
+ *   6. Runs runFanoutLikeSync() again (second run — incremental)
  *   7. Asserts: no duplicate work rows, submissions_skipped reflects dedup
  *   8. Cleans up: deletes all rows it inserted (matched by external_id
  *      prefix 'd2l:mock:', brightspace_submission_id numeric mock range,
@@ -32,50 +33,25 @@
  *     finally block so data doesn't pile up if assertions fail. Every
  *     mock row uses a prefix/marker that makes cleanup targetable.
  *   - The auto-tagger runs for real and will hit Anthropic. That's about
- *     15 LLM calls per run, roughly $0.05-$0.15 per test invocation at
+ *     15 LLM calls per run, roughly $0.05-0.15 per test invocation at
  *     current Sonnet pricing. Set DISABLE_AUTOTAG=1 to skip if you want
  *     to run the test cheap.
  */
 
-import { config as loadDotenv } from 'dotenv'
-import { resolve, dirname } from 'path'
-import { fileURLToPath } from 'url'
+import {
+  bootstrapTestEnv,
+  assertEqual,
+  assertGte,
+  section,
+  finish,
+  skipAutotag,
+  cleanupMockData,
+  MOCK_COURSE_ORG_UNIT_IDS,
+  MOCK_ASSIGNMENT_FOLDER_IDS,
+  MOCK_EMAIL_DOMAIN_PATTERN,
+} from './_sync-test-harness'
 
-// Load env vars from .env.local BEFORE importing anything that reads them.
-// Use the script's own directory to resolve the path rather than cwd(), so
-// this works regardless of where `npx tsx` was invoked from. Also use
-// override:true so we always get the full file, even if tsx's built-in
-// loader already injected some vars from it.
-const __dirname = dirname(fileURLToPath(import.meta.url))
-loadDotenv({ path: resolve(__dirname, '..', '.env.local'), override: true })
-
-// Stub the Valence-specific env vars with harmless dummies. The mock
-// fetch intercepts all HTTP calls, so these values are never actually
-// sent anywhere — they just need to exist so getValenceConfig() doesn't
-// throw before the mock can take over.
-process.env.D2L_VALENCE_INSTANCE_URL = 'https://mock.brightspace.test'
-process.env.D2L_VALENCE_CLIENT_ID = 'mock-client-id'
-process.env.D2L_VALENCE_CLIENT_SECRET = 'mock-client-secret'
-process.env.D2L_VALENCE_TOKEN_URL = 'https://auth.brightspace.test/core/connect/token'
-process.env.D2L_VALENCE_API_VERSION = '1.82'
-process.env.D2L_VALENCE_LE3_ORG_UNIT_ID = '1001'
-
-// Stub LTI env vars. getValenceToken() signs a JWT with the LTI private
-// key before hitting the token endpoint — the signature is sent to the
-// mocked token server which ignores it, but jose requires a real RSA key
-// to call SignJWT.sign(). We generate a fresh test key pair at test-script
-// write-time; the values are safe to commit because they are test-only and
-// have no access to any real system.
-process.env.LTI_TOOL_URL = 'https://mock.le3.test'
-process.env.LTI_KEY_ID = 'mock-key-2026'
-process.env.LTI_PRIVATE_KEY = '-----BEGIN PRIVATE KEY-----\nMIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQCNhjvKe89npm0k\nvGiZZCdNTY+KMpXK8q5pCySHp8ILyL281BKqRrXQ6fIoadAklfGMC0IMJzGyy2xn\nBAvewaC8HuSxX4gq+v4pKC6FAe5j1jlb5oenCSaJiefSbV/lrc/TxxHMVf5NwfWl\ni2m3KuYexpbt+qnIqlOOTdUaWx2639xOg0Yzm8NcEz3VIkm9VMCyu1J7TW6sV8cI\ngmru5RPb12bQEl0oZatakXsKdp3WLXEjbsZTMcDbvS64y0bEdYFDF8iGlt74q/8p\nWjmHjHtiYsDHz0LGXpLx8Pg3TS8ibzBdNo+cxGYacTefmpqgNGCx9e5pIDARQRLC\nQ7zrVSrPAgMBAAECggEAOH4TQu3uKilIWwgsVsKgX56sxBUSLyt1THAKum3QKyUL\n/CLJepf0PrsME269i8Ug4O6jhDdnAsBp+qsmU9qF32ITluwT7lg3eVVVUHmnX8nl\nJpacoqQn8nIOjDRluciKc7Z8l8zh0McyV80RO3EP38wU9lT/Th8TcHQIM1eYw/29\nMLXEDgmO+Ki/OmFeC880xpEb5qOAMJIXDGAfAVT8Wb3H9DdyxhU7KGz5aVlnx/9U\nrwiJXtfSNtvjXPqX21JqHEGSUcRZYueAXvl5MFgWa1lsD4RcZic4uKhoXnFKdsCB\n9ulekkL+kxrAAzCZVK+fS8PCYhNkYlzXA75gbEzo6QKBgQDDJhweojjfreuZZrdb\nX6m/3ZWCk8ijrEBQXWnYwwtn6cIpk+SaJAbf3H+s1qlZVBy1Zs+ZGpV4A8ZdisPr\nvAkeoTdbXL8e8Qu0+Exr6yx8VE3SZjZ4LeS9pDxrRg0fjxJMa9FiEkO2RU6pegQm\n0xTMCB8P7AWi2Vm24bqOk6LlBwKBgQC5p4KrY4O170ggj/AWI2k1PMyoztIJ1r0/\nYlUY1BjA8ZFjmGBJIqM253czuy88f9fIjrW1km6VpTCVyBiPgACmV9dAZS6QF4Ju\nSVz84favNra3A5sDeaFLo4tpOJJz7ZPyodQ2R0YirBXi755EHM8kXkNzRdTFFmyt\nG5WIrY2h+QKBgQC9Fto8XJebNRyKYVrdMM58WKqcAbJx1V/j/v+mxybwIzK9ss3Z\nBXubwj38LWueYMAIjXwuL/IQfifhT6oTavmzMic/YZjW1F2xlr4F+7P5LH7TlbLF\ntEJl9xOMJi5lG+5xGi+iRWxS2skjslT/gZwvLtdaSCoV52DkschginFWVQKBgQCc\n0PZZyHQPcC9vecVlHcIXOuTwTcoyj1VJPcj9cOH7z9Br3OCvxfcxQDB63MiYhLAC\n8zBfT3HjKyYvzlWYmJlz6EykUxMSmRkOCR/nZwKUm1WYnw4H0GxC1MDEPwnNrEbE\nspbqxidi0BKonpgDloYNhSXaL4j6dOeVDPCxA0/YGQKBgQCHoEQo5jTTdNrqkweN\n24QObNjw0KjEeH1kkmXpVaHQXfvdQbUMxKt/TtQBm7/wtn5d1YI3XyPAuu56gD0W\ntSuCnTWU3qmNgJHwqPbEFI2ULbXjw0ZZbYum5cJESKMqmxb4G0fjxaCJnWpDri9o\n8u2ZVBJpHn0ertpRd8Yyms5AXw==\n-----END PRIVATE KEY-----'
-process.env.LTI_PUBLIC_KEY = '-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjYY7ynvPZ6ZtJLxomWQn\nTU2PijKVyvKuaQskh6fCC8i9vNQSqka10OnyKGnQJJXxjAtCDCcxsstsZwQL3sGg\nvB7ksV+IKvr+KSguhQHuY9Y5W+aHpwkmiYnn0m1f5a3P08cRzFX+TcH1pYtptyrm\nHsaW7fqpyKpTjk3VGlsdut/cToNGM5vDXBM91SJJvVTAsrtSe01urFfHCIJq7uUT\n29dm0BJdKGWrWpF7Cnad1i1xI27GUzHA270uuMtGxHWBQxfIhpbe+Kv/KVo5h4x7\nYmLAx89Cxl6S8fD4N00vIm8wXTaPnMRmGnE3n5qaoDRgsfXuaSAwEUESwkO861Uq\nzwIDAQAB\n-----END PUBLIC KEY-----'
-
-// Optional: let users skip LLM auto-tagging for cheap test runs.
-const SKIP_AUTOTAG = process.env.DISABLE_AUTOTAG === '1'
-if (SKIP_AUTOTAG) {
-  process.env.ANTHROPIC_API_KEY = 'mock-disabled'
-}
+bootstrapTestEnv()
 
 import {
   installMockValence,
@@ -106,45 +82,9 @@ async function runFanoutLikeSync(admin: SupabaseClient, mode: 'full' | 'incremen
   return { syncRunId: runId, counts: agg.counts, errors: agg.errors, durationMs: Date.now() - started }
 }
 
-// Identifiers baked into the mock dataset. Keep these in sync with
-// src/lib/d2l/__mocks__/mock-valence.ts so assertions and cleanup can
-// target only mock-inserted rows without risking touching real data.
-const MOCK_COURSE_ORG_UNIT_IDS = ['2001', '2002']
+// Mock student d2l_user_ids — engine-only assertion data. The course /
+// folder / email-domain markers live in the shared harness.
 const MOCK_STUDENT_D2L_USER_IDS = ['5001', '5002', '5003', '5004']
-const MOCK_ASSIGNMENT_FOLDER_IDS = ['3001', '3002', '3003', '3004', '3005']
-const MOCK_EMAIL_DOMAIN_PATTERN = '%@mock.test'
-
-// ─── Assertions ─────────────────────────────────────
-
-let failed = 0
-let passed = 0
-
-function assertEqual<T>(actual: T, expected: T, label: string): void {
-  if (actual === expected) {
-    passed++
-    console.log(`  \u2713 ${label}`)
-  } else {
-    failed++
-    console.error(`  \u2717 ${label}`)
-    console.error(`    expected: ${JSON.stringify(expected)}`)
-    console.error(`    actual:   ${JSON.stringify(actual)}`)
-  }
-}
-
-function assertGte(actual: number, expected: number, label: string): void {
-  if (actual >= expected) {
-    passed++
-    console.log(`  \u2713 ${label} (${actual} >= ${expected})`)
-  } else {
-    failed++
-    console.error(`  \u2717 ${label}`)
-    console.error(`    expected >= ${expected}, got ${actual}`)
-  }
-}
-
-function section(title: string): void {
-  console.log(`\n\x1b[1;36m━━━ ${title} ━━━\x1b[0m`)
-}
 
 // ─── Main ──────────────────────────────────────────
 
@@ -320,7 +260,7 @@ async function main(): Promise<void> {
     )
 
     // Verify auto-tagging ran (unless disabled)
-    if (!SKIP_AUTOTAG) {
+    if (!skipAutotag()) {
       const { count: tagCount } = await admin
         .from('work_skill_tag')
         .select('*', { count: 'exact', head: true })
@@ -395,73 +335,7 @@ async function main(): Promise<void> {
     console.log(`  Cleanup complete`)
   }
 
-  // ═══ Summary ═══════════════════════════════════
-  section('Summary')
-  console.log(`  \x1b[1;32mPassed: ${passed}\x1b[0m`)
-  if (failed > 0) {
-    console.log(`  \x1b[1;31mFailed: ${failed}\x1b[0m`)
-    process.exit(1)
-  }
-  console.log(`  \x1b[1;32mAll assertions passed!\x1b[0m`)
-  process.exit(0)
-}
-
-// ─── Cleanup helper ──────────────────────────────
-
-async function cleanupMockData(
-  admin: ReturnType<typeof createAdminClient>,
-  ...syncRunIds: (string | null)[]
-): Promise<void> {
-  // Delete mock rows by stable columns the engine actually writes.
-  // Dependency order:
-  //   1. student_work (cascades work_skill_tag)
-  //   2. assignment (would cascade from course too, explicit for safety)
-  //   3. student_course (cascades from both student and course)
-  //   4. student
-  //   5. course
-  //   6. coach
-  //   7. sync_run (standalone)
-
-  // Look up mock student IDs so we can clean up their work items by student_id
-  const { data: mockStudents } = await admin
-    .from('student')
-    .select('id')
-    .like('email', MOCK_EMAIL_DOMAIN_PATTERN)
-  const mockStudentIds = (mockStudents || []).map(s => s.id)
-
-  if (mockStudentIds.length > 0) {
-    await admin
-      .from('student_work')
-      .delete()
-      .in('student_id', mockStudentIds)
-  }
-
-  await admin
-    .from('assignment')
-    .delete()
-    .in('brightspace_folder_id', MOCK_ASSIGNMENT_FOLDER_IDS)
-
-  await admin
-    .from('course')
-    .delete()
-    .in('brightspace_org_unit_id', MOCK_COURSE_ORG_UNIT_IDS)
-
-  await admin
-    .from('student')
-    .delete()
-    .like('email', MOCK_EMAIL_DOMAIN_PATTERN)
-
-  await admin
-    .from('coach')
-    .delete()
-    .like('email', MOCK_EMAIL_DOMAIN_PATTERN)
-
-  // sync_run rows for this test
-  for (const id of syncRunIds.filter((i): i is string => !!i)) {
-    await admin.from('sync_run').delete().eq('id', id)
-  }
-  // Safety net: nuke any sync_run row triggered by mock-harness
-  await admin.from('sync_run').delete().eq('triggered_by', 'mock-harness')
+  finish()
 }
 
 main().catch(err => {
