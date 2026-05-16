@@ -3,11 +3,13 @@
 import { useState } from 'react'
 
 /**
- * Coach-only inspector that dumps the actual DB rows produced by the
- * most recent D2L sync. Intended for debugging — lets the coach see
- * without SQL access whether rows landed correctly, whether
- * student_work.content has real text (the content_len=0 failure mode),
- * and the full error_details of recent sync runs.
+ * Coach-only DB inspector. Shows a truthful snapshot of what is
+ * actually in the DB: every headline number is a real count(*) total,
+ * while each row list is an explicitly-labelled most-recent slice (the
+ * counts are NOT derived from the visible rows — that old behaviour
+ * made healthy syncs look capped). Lets the coach confirm without SQL
+ * whether rows landed, whether student_work.content has real text (the
+ * content_len=0 failure mode), and the error_details of recent runs.
  *
  * Fetched on demand (click "Load") so it doesn't slow the dashboard
  * render when not needed.
@@ -24,6 +26,7 @@ interface InspectResponse {
     work_with_content: number
     work_empty: number
   }
+  listLimit: number
   courses: Array<{
     id: string
     name: string
@@ -252,7 +255,8 @@ function OverviewTab({ data }: { data: InspectResponse }) {
   return (
     <div className="space-y-3">
       <div>
-        <h4 className="font-semibold text-gray-900 mb-1">Courses ({data.courses.length})</h4>
+        <h4 className="font-semibold text-gray-900 mb-1">Courses ({data.counts.courses})</h4>
+        <SliceNote shown={Math.min(10, data.courses.length)} total={data.counts.courses} noun="courses" />
         <ul className="space-y-0.5 text-gray-700">
           {data.courses.slice(0, 10).map(c => (
             <li key={c.id}>
@@ -284,13 +288,14 @@ function PeopleTab({ data }: { data: InspectResponse }) {
     <div className="space-y-4">
       <section>
         <h4 className="font-semibold text-gray-900 mb-1">
-          Coaches ({data.coaches.length})
+          Coaches ({data.counts.coaches})
           <span className="text-gray-500 font-normal text-[11px] ml-2">
             LE3 program-level humans. Manually managed. Real coaches need
             auth_user_id set so they can log in.
           </span>
         </h4>
-        {data.coaches.length === 0 ? (
+        <SliceNote shown={data.coaches.length} total={data.counts.coaches} noun="coaches" />
+        {data.counts.coaches === 0 ? (
           <Empty>No coaches yet — seed at least one before sync can provision new students.</Empty>
         ) : (
           <table className="w-full border-collapse">
@@ -324,12 +329,13 @@ function PeopleTab({ data }: { data: InspectResponse }) {
 
       <section>
         <h4 className="font-semibold text-gray-900 mb-1">
-          Instructors ({data.instructors.length})
+          Instructors ({data.counts.instructors})
           <span className="text-gray-500 font-normal text-[11px] ml-2">
             Brightspace course teachers. Auto-pulled from classlist on every sync.
           </span>
         </h4>
-        {data.instructors.length === 0 ? (
+        <SliceNote shown={data.instructors.length} total={data.counts.instructors} noun="instructors" />
+        {data.counts.instructors === 0 ? (
           <Empty>No instructors synced yet.</Empty>
         ) : (
           <table className="w-full border-collapse">
@@ -359,65 +365,72 @@ function PeopleTab({ data }: { data: InspectResponse }) {
 }
 
 function StudentsTab({ data }: { data: InspectResponse }) {
-  if (data.students.length === 0) return <Empty>No students synced yet.</Empty>
+  if (data.counts.students === 0)
+    return <Empty>No real (non-demo) students in the DB yet.</Empty>
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse">
-        <thead>
-          <tr className="text-left text-gray-600">
-            <Th>Name</Th>
-            <Th>Email</Th>
-            <Th>nlu_id</Th>
-            <Th>d2l_user_id</Th>
-            <Th>Cohort</Th>
-            <Th>Status</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.students.map(s => (
-            <tr key={s.id} className="border-t border-gray-100">
-              <Td>
-                {s.first_name} {s.last_name}
-              </Td>
-              <Td className="font-mono">{s.email}</Td>
-              <Td className="font-mono">{s.nlu_id}</Td>
-              <Td className="font-mono">{s.d2l_user_id ?? '—'}</Td>
-              <Td>{s.cohort ?? '—'}</Td>
-              <Td>{s.status}</Td>
+    <div>
+      <SliceNote shown={data.students.length} total={data.counts.students} noun="students" />
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="text-left text-gray-600">
+              <Th>Name</Th>
+              <Th>Email</Th>
+              <Th>nlu_id</Th>
+              <Th>d2l_user_id</Th>
+              <Th>Cohort</Th>
+              <Th>Status</Th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {data.students.map(s => (
+              <tr key={s.id} className="border-t border-gray-100">
+                <Td>
+                  {s.first_name} {s.last_name}
+                </Td>
+                <Td className="font-mono">{s.email}</Td>
+                <Td className="font-mono">{s.nlu_id}</Td>
+                <Td className="font-mono">{s.d2l_user_id ?? '—'}</Td>
+                <Td>{s.cohort ?? '—'}</Td>
+                <Td>{s.status}</Td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
 
 function AssignmentsTab({ data }: { data: InspectResponse }) {
-  if (data.assignments.length === 0) return <Empty>No assignments synced yet.</Empty>
+  if (data.counts.assignments === 0) return <Empty>No assignments synced yet.</Empty>
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse">
-        <thead>
-          <tr className="text-left text-gray-600">
-            <Th>Title</Th>
-            <Th>Type</Th>
-            <Th>Folder</Th>
-            <Th>Due</Th>
-            <Th>Active</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.assignments.map(a => (
-            <tr key={a.id} className="border-t border-gray-100">
-              <Td>{a.title}</Td>
-              <Td>{a.work_type ?? '—'}</Td>
-              <Td className="font-mono">{a.brightspace_folder_id ?? '—'}</Td>
-              <Td>{a.due_date ? a.due_date.slice(0, 10) : '—'}</Td>
-              <Td>{a.active ? 'yes' : 'no'}</Td>
+    <div>
+      <SliceNote shown={data.assignments.length} total={data.counts.assignments} noun="assignments" />
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="text-left text-gray-600">
+              <Th>Title</Th>
+              <Th>Type</Th>
+              <Th>Folder</Th>
+              <Th>Due</Th>
+              <Th>Active</Th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {data.assignments.map(a => (
+              <tr key={a.id} className="border-t border-gray-100">
+                <Td>{a.title}</Td>
+                <Td>{a.work_type ?? '—'}</Td>
+                <Td className="font-mono">{a.brightspace_folder_id ?? '—'}</Td>
+                <Td>{a.due_date ? a.due_date.slice(0, 10) : '—'}</Td>
+                <Td>{a.active ? 'yes' : 'no'}</Td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
@@ -431,7 +444,7 @@ function WorkTab({
   onClearEmpty: () => void
   clearing: boolean
 }) {
-  if (data.work.length === 0) return <Empty>No D2L-synced student work yet.</Empty>
+  if (data.counts.work === 0) return <Empty>No D2L-synced student work yet.</Empty>
   const emptyCount = data.counts.work_empty
   return (
     <div>
@@ -451,6 +464,7 @@ function WorkTab({
           </button>
         </div>
       )}
+      <SliceNote shown={data.work.length} total={data.counts.work} noun="work rows" />
       <div className="overflow-x-auto">
       <table className="w-full border-collapse">
         <thead>
@@ -499,6 +513,9 @@ function RunsTab({ data }: { data: InspectResponse }) {
   if (data.syncRuns.length === 0) return <Empty>No sync runs yet.</Empty>
   return (
     <div className="space-y-2">
+      <p className="text-[11px] text-gray-500 italic">
+        Most recent {data.syncRuns.length} sync runs.
+      </p>
       {data.syncRuns.map(r => (
         <div key={r.id} className="p-2 rounded border border-gray-200">
           <div className="flex items-center justify-between gap-2">
@@ -551,6 +568,35 @@ function RunsTab({ data }: { data: InspectResponse }) {
 }
 
 // ─── Primitives ─────────────────────────────────
+
+/**
+ * Explicit honesty label for a bounded row list. Makes unmistakable
+ * that the COUNT above is the true DB total while the list below is
+ * only the most-recent slice — never a silent cap.
+ */
+function SliceNote({
+  shown,
+  total,
+  noun,
+}: {
+  shown: number
+  total: number
+  noun: string
+}) {
+  if (total <= shown) {
+    return (
+      <p className="mb-1 text-[11px] text-gray-500 italic">
+        All {total} {noun} shown.
+      </p>
+    )
+  }
+  return (
+    <p className="mb-1 text-[11px] text-gray-500 italic">
+      Showing {shown} most recent of {total} {noun} — the count is the full
+      DB total; this list is a recent slice, not a cap.
+    </p>
+  )
+}
 
 function Count({
   label,
