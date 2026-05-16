@@ -83,9 +83,28 @@ import {
   getMockRequestLog,
   MOCK_STATS,
 } from '@/lib/d2l/__mocks__/mock-valence'
-import { runLe3Sync } from '@/lib/sync/sync-engine'
+import {
+  enumerateCourses, pickDefaultCoachId, createSyncRun,
+  finalizeSyncRun, aggregateCourseResults,
+} from '@/lib/sync/sync-run'
+import { syncOneCourse, type CourseSyncResult } from '@/lib/sync/sync-course'
 import { clearValenceTokenCache } from '@/lib/d2l/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+async function runFanoutLikeSync(admin: SupabaseClient, mode: 'full' | 'incremental') {
+  const courses = await enumerateCourses()            // mock OU 1001 via env
+  const coachId = await pickDefaultCoachId(admin)
+  const runId = await createSyncRun(admin, { source: 'd2l_valence_manual', mode, triggeredBy: 'mock-harness' })
+  const started = Date.now()
+  const results: CourseSyncResult[] = []
+  for (const course of courses) {
+    results.push(await syncOneCourse({ syncRunId: runId, course, mode, defaultCoachId: coachId }))
+  }
+  const agg = aggregateCourseResults(results)
+  await finalizeSyncRun(admin, runId, agg, started, 'completed')
+  return { syncRunId: runId, counts: agg.counts, errors: agg.errors, durationMs: Date.now() - started }
+}
 
 // Identifiers baked into the mock dataset. Keep these in sync with
 // src/lib/d2l/__mocks__/mock-valence.ts so assertions and cleanup can
@@ -154,11 +173,7 @@ async function main(): Promise<void> {
   try {
     // ═══ FIRST RUN (full sync) ═══════════════════
     section('First run — full sync')
-    const firstRun = await runLe3Sync({
-      source: 'd2l_valence_manual',
-      mode: 'full',
-      triggeredBy: 'mock-harness',
-    })
+    const firstRun = await runFanoutLikeSync(admin, 'full')
     firstRunId = firstRun.syncRunId
 
     console.log(`  Completed in ${firstRun.durationMs}ms`)
@@ -319,11 +334,7 @@ async function main(): Promise<void> {
 
     // ═══ SECOND RUN (incremental, should dedup) ═
     section('Second run — incremental (should dedup)')
-    const secondRun = await runLe3Sync({
-      source: 'd2l_valence_manual',
-      mode: 'incremental',
-      triggeredBy: 'mock-harness',
-    })
+    const secondRun = await runFanoutLikeSync(admin, 'incremental')
     secondRunId = secondRun.syncRunId
 
     console.log(`  Completed in ${secondRun.durationMs}ms`)
