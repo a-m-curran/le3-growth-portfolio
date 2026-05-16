@@ -12,39 +12,15 @@
  *   npx tsx scripts/test-sync-run.ts
  */
 
-import { config as loadDotenv } from 'dotenv'
-import { resolve, dirname } from 'path'
-import { fileURLToPath } from 'url'
+import { bootstrapTestEnv, assertEqual, section, finish } from './_sync-test-harness'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-loadDotenv({ path: resolve(__dirname, '..', '.env.local'), override: true })
+bootstrapTestEnv()
 
 import { createAdminClient } from '@/lib/supabase-admin'
 import {
   createSyncRun, finalizeSyncRun, aggregateCourseResults,
 } from '@/lib/sync/sync-run'
 import type { CourseSyncResult } from '@/lib/sync/sync-course'
-
-// ─── Assertions ─────────────────────────────────────
-
-let failed = 0
-let passed = 0
-
-function assertEqual<T>(actual: T, expected: T, label: string): void {
-  if (actual === expected) {
-    passed++
-    console.log(`  ✓ ${label}`)
-  } else {
-    failed++
-    console.error(`  ✗ ${label}`)
-    console.error(`    expected: ${JSON.stringify(expected)}`)
-    console.error(`    actual:   ${JSON.stringify(actual)}`)
-  }
-}
-
-function section(title: string): void {
-  console.log(`\n\x1b[1;36m━━━ ${title} ━━━\x1b[0m`)
-}
 
 // ─── Helpers ────────────────────────────────────────
 
@@ -93,7 +69,6 @@ async function main(): Promise<void> {
   assertEqual(row!.students_synced, 4, 'persisted students_synced = deduped union (4)')
   await admin.from('sync_run').delete().eq('id', runId)
 
-  console.log(`\n${passed} passed, ${failed} failed`)
-  process.exit(failed > 0 ? 1 : 0)
+  finish()
 }
 main()
