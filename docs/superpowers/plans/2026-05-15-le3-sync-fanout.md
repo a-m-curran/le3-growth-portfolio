@@ -926,7 +926,7 @@ Not code — the load-bearing rollout. Execute in order.
 
 - [ ] **Step 1: Push** — `git push origin main` (Vercel picks up the route change).
 
-- [ ] **Step 2: Deploy Trigger.dev** — `npx trigger.dev@latest deploy` from repo root. **This is mandatory** — registers BOTH `sync-le3` (rewritten) and `sync-course` (new). Confirm both tasks appear in the Trigger.dev dashboard for the Production environment, and that `SYNC_COURSE_CONCURRENCY` (4) / `SYNC_COURSE_MAX_DURATION` (1200) are set there (or accept defaults).
+- [ ] **Step 2: Deploy Trigger.dev** — `npx trigger.dev@latest deploy` from repo root. **This is mandatory** — registers BOTH `sync-le3` (rewritten) and `sync-course` (new). Confirm both tasks appear in the Trigger.dev dashboard for the Production environment, and that `SYNC_COURSE_CONCURRENCY` (4) / `SYNC_COURSE_MAX_DURATION` (1200) are set there (or accept defaults). The parent's `maxDuration` is now sized off the fan-out worst case from those two vars plus `SYNC_LE3_MAX_COURSES` (64) and `SYNC_LE3_DURATION_MARGIN` (1.5) — defaults give an ≈8h parent ceiling (≥ the ≈4.7h 56-course worst case), never below the prior 3600s; raise `SYNC_LE3_MAX_COURSES`/`SYNC_LE3_DURATION_MARGIN` to widen the one-time backfill window without a redeploy (Gap A).
 
 - [ ] **Step 3: Single-course override smoke** — `POST /api/admin/sync-le3` with `{"le3OrgUnitId":"254698"}` (the sandbox). Verify via SQL: exactly one `sync_run` row, `status=completed`, the sandbox student/work present, parent metadata shows `course:254698 = completed`. Confirms the override path fans out exactly one child.
 
