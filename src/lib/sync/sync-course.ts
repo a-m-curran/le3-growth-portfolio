@@ -21,13 +21,13 @@ import {
 } from '@/lib/d2l'
 import { extractText, isSupported } from '@/lib/extract-text'
 import { autoTagWork } from '@/lib/conversation-engine-live'
-import type { WorkType, StudentWork } from '@/lib/types'
+import type { WorkType, StudentWork, SyncRunMode } from '@/lib/types'
 import type { SyncCounts, SyncError } from '@/lib/sync/sync-engine'
 
 export interface SyncOneCourseParams {
   syncRunId: string
   course: NormalizedCourse
-  mode: 'full' | 'incremental'
+  mode: SyncRunMode
   defaultCoachId: string | null
 }
 
@@ -374,10 +374,26 @@ async function upsertStudent(
     .select('id')
     .single()
 
-  if (error || !inserted) {
-    throw new Error(`Failed to insert student ${email}: ${error?.message}`)
+  if (inserted) return inserted.id as string
+
+  // 23505 = unique_violation. A concurrent child created this student
+  // (shared across courses) between our existence check and insert.
+  // Re-fetch the now-existing row by the same keys and use it. This is
+  // the same recovery pattern processSubmission uses for student_work.
+  if (error?.code === '23505') {
+    const { data: raced } = await admin
+      .from('student')
+      .select('id')
+      .or(
+        `email.eq.${email},` +
+        `nlu_id.eq.${nluId},` +
+        `d2l_user_id.eq.${student.userId}`
+      )
+      .maybeSingle()
+    if (raced) return raced.id as string
   }
-  return inserted.id as string
+
+  throw new Error(`Failed to insert student ${email}: ${error?.message}`)
 }
 
 async function upsertStudentCourse(
@@ -475,7 +491,7 @@ async function processSubmission(params: {
   courseRowId: string
   courseName: string
   courseCode: string | null
-  mode: 'full' | 'incremental'
+  mode: SyncRunMode
 }): Promise<ProcessSubmissionResult> {
   const { submission, assignment, assignmentRowId, courseName, courseCode } = params
   const admin = createAdminClient()
