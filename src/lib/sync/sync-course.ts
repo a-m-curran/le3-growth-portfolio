@@ -534,7 +534,19 @@ async function processSubmission(params: {
   // students, CSV imports, or students whose upserts failed for some
   // reason). This gives us three ways to find a student, all of which
   // should converge on the same row if the upsert ran correctly.
-  const { data: student } = await admin
+  //
+  // d2l_user_id is intentionally NON-unique (migration 012 indexes it
+  // non-uniquely): the engine back-fills it onto a pre-existing row that
+  // arrived under a different identity, so one person can legitimately
+  // own >1 student row sharing this d2l_user_id. maybeSingle() fails on
+  // >1 rows, and the caller's per-submission catch would swallow that,
+  // silently dropping a real student's work. Mirrors the upsertStudent
+  // unique-key fix — but here the lookup legitimately needs d2l_user_id,
+  // so we tolerate the multi-match instead of dropping the key: order by
+  // the primary key and take the first. id is unique (no ties), so the
+  // pick is deterministic and idempotent across re-syncs. Only a
+  // genuinely empty result means "student not found".
+  const { data: studentMatches } = await admin
     .from('student')
     .select('id')
     .or(
@@ -542,7 +554,10 @@ async function processSubmission(params: {
       `nlu_id.eq.d2l:${submission.studentUserId},` +
       `nlu_id.eq.${submission.studentUserId}`
     )
-    .maybeSingle()
+    .order('id', { ascending: true })
+    .limit(1)
+
+  const student = studentMatches?.[0] ?? null
 
   if (!student) {
     // Student wasn't in our enrollment data — skip silently rather than
