@@ -91,17 +91,12 @@ async function main() {
   // ─── Delete existing demo rows (reverse dependency order) ───
   console.log('▶ Clearing existing demo data…')
 
-  // Find demo student + coach ids first so we can use them in filters
+  // Find demo student ids first so we can use them in filters
   const { data: existingDemoStudents } = await supabase
     .from('student')
     .select('id')
     .eq('is_demo', true)
-  const { data: existingDemoCoaches } = await supabase
-    .from('coach')
-    .select('id')
-    .eq('is_demo', true)
   const demoStudentIds = (existingDemoStudents ?? []).map(r => r.id as string)
-  const demoCoachIds = (existingDemoCoaches ?? []).map(r => r.id as string)
 
   if (demoStudentIds.length > 0) {
     // Get conversation IDs so we can clean child tables
