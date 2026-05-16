@@ -381,14 +381,19 @@ async function upsertStudent(
   // Re-fetch the now-existing row by the same keys and use it. This is
   // the same recovery pattern processSubmission uses for student_work.
   if (error?.code === '23505') {
+    // Recover only via the UNIQUE keys (student_email_key,
+    // student_nlu_id_key). d2l_user_id is intentionally NON-unique — a
+    // person can have a pre-existing row under a different identity that
+    // later gets d2l_user_id back-filled — so including it here could
+    // match >1 row and make maybeSingle() throw, which would defeat the
+    // race recovery this block exists for. The insert only sets
+    // email+nlu_id, so a 23505 here is always one of those two unique
+    // constraints; both point at the same winning row in the real race.
     const { data: raced } = await admin
       .from('student')
       .select('id')
-      .or(
-        `email.eq.${email},` +
-        `nlu_id.eq.${nluId},` +
-        `d2l_user_id.eq.${student.userId}`
-      )
+      .or(`email.eq.${email},nlu_id.eq.${nluId}`)
+      .limit(1)
       .maybeSingle()
     if (raced) return raced.id as string
   }

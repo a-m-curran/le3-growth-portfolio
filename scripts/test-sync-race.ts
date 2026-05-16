@@ -78,6 +78,17 @@ function assertEqual<T>(actual: T, expected: T, label: string): void {
   }
 }
 
+function assertGte(actual: number, expected: number, label: string): void {
+  if (actual >= expected) {
+    passed++
+    console.log(`  ✓ ${label} (${actual} >= ${expected})`)
+  } else {
+    failed++
+    console.error(`  ✗ ${label}`)
+    console.error(`    expected >= ${expected}, got ${actual}`)
+  }
+}
+
 function section(title: string): void {
   console.log(`\n\x1b[1;36m━━━ ${title} ━━━\x1b[0m`)
 }
@@ -178,6 +189,20 @@ async function main(): Promise<void> {
     const { data: aja } = await admin
       .from('student').select('id').eq('d2l_user_id', '5001')
     assertEqual(aja?.length ?? 0, 1, 'shared student 5001 has exactly one row (no dup, no 23505 throw)')
+
+    const ajaId = aja?.[0]?.id
+    assertEqual(typeof ajaId === 'string', true, '5001 resolved to a single student id')
+    const { data: ajaWork } = await admin
+      .from('student_work')
+      .select('id, course_name')
+      .eq('student_id', ajaId as string)
+    const ajaCourseNames = new Set((ajaWork ?? []).map(w => w.course_name))
+    assertGte(
+      ajaCourseNames.size,
+      2,
+      '5001 has work from both courses under one student_id (children converged, not just dedup-hidden)'
+    )
+
     const { data: jordan } = await admin
       .from('student').select('id').eq('d2l_user_id', '5004')
     assertEqual(jordan?.length ?? 0, 1, 'shared student 5004 has exactly one row')
