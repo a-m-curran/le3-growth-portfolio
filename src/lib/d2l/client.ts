@@ -45,32 +45,23 @@ export async function leGetBuffer(path: string): Promise<{
   const token = await getValenceToken()
   const url = `${config.instanceUrl}/d2l/api/le/${config.leVersion}${path}`
 
-  let res: Response | undefined
-  for (let attempt = 0; attempt < 3; attempt++) {
-    res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-      redirect: 'follow',
-    })
+  const res = await fetchWithRetry(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    redirect: 'follow',
+  })
 
-    if (res.status !== 429) break
-
-    if (attempt < 2) {
-      await new Promise(resolve => setTimeout(resolve, retryAfterMs(res!, attempt)))
-    }
-  }
-
-  if (!res!.ok) {
-    const text = await res!.text().catch(() => '')
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
     throw new Error(
-      `Valence file download failed: ${res!.status} ${res!.statusText} on ${path}. ${text.substring(0, 200)}`
+      `Valence file download failed: ${res.status} ${res.statusText} on ${path}. ${text.substring(0, 200)}`
     )
   }
 
-  const arrayBuf = await res!.arrayBuffer()
-  const contentType = res!.headers.get('content-type') || 'application/octet-stream'
+  const arrayBuf = await res.arrayBuffer()
+  const contentType = res.headers.get('content-type') || 'application/octet-stream'
 
   // Parse filename from Content-Disposition header if present
-  const disposition = res!.headers.get('content-disposition') || ''
+  const disposition = res.headers.get('content-disposition') || ''
   const filenameMatch = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i)
   const filename = filenameMatch
     ? decodeURIComponent(filenameMatch[1].replace(/"/g, ''))
@@ -101,17 +92,50 @@ export async function leGetAllPaged<T>(path: string): Promise<T[]> {
 // ─── Internal helpers ─────────────────────────────
 
 /**
+ * Thrown when a Valence endpoint responds 429 after all transport-level
+ * retries are exhausted. Callers (e.g. the sync-course task) can catch
+ * this to apply a longer task-level back-off rather than immediately
+ * re-hammering a rate-limited D2L instance.
+ */
+export class ValenceRateLimitError extends Error {
+  constructor(public readonly url: string) {
+    super(`Valence rate limit (429) not cleared after retries: ${url}`)
+    this.name = 'ValenceRateLimitError'
+  }
+}
+
+/**
  * Compute the delay (ms) before a 429 retry.
- * Honors a numeric Retry-After header (seconds); otherwise exponential
- * backoff: min(2^attempt * 500ms, 30000ms).
+ * Honors a numeric Retry-After header (seconds), capped at 30s so a
+ * large value across paginated pages cannot exceed the task maxDuration.
+ * Non-numeric values (e.g. HTTP-date form per RFC 7231) intentionally
+ * fall through to exponential backoff — we only honor delta-seconds.
+ * Exponential: min(2^attempt * 500ms, 30000ms).
  */
 function retryAfterMs(res: Response, attempt: number): number {
   const header = res.headers.get('Retry-After')
   if (header) {
     const secs = Number(header)
-    if (!Number.isNaN(secs) && secs > 0) return secs * 1000
+    if (!Number.isNaN(secs) && secs > 0) return Math.min(secs * 1000, 30_000)
   }
   return Math.min(2 ** attempt * 500, 30_000)
+}
+
+/**
+ * Fetch with up to 3 attempts (0, 1, 2) on 429 responses.
+ * On non-429 responses the result is returned immediately without delay.
+ * If all attempts are exhausted and the response is still 429, throws
+ * ValenceRateLimitError so the caller can apply task-level back-off.
+ */
+async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+  let res: Response
+  for (let attempt = 0; ; attempt++) {
+    res = await fetch(url, init)
+    if (res.status !== 429 || attempt >= 2) break
+    await new Promise(resolve => setTimeout(resolve, retryAfterMs(res, attempt)))
+  }
+  if (res.status === 429) throw new ValenceRateLimitError(url)
+  return res
 }
 
 async function valenceGet<T>(namespace: 'le' | 'lp', path: string): Promise<T> {
@@ -120,31 +144,21 @@ async function valenceGet<T>(namespace: 'le' | 'lp', path: string): Promise<T> {
   const version = namespace === 'lp' ? config.lpVersion : config.leVersion
   const url = `${config.instanceUrl}/d2l/api/${namespace}/${version}${path}`
 
-  let res: Response | undefined
-  for (let attempt = 0; attempt < 3; attempt++) {
-    res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/json',
-      },
-    })
+  const res = await fetchWithRetry(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/json',
+    },
+  })
 
-    if (res.status !== 429) break
-
-    // 429 — back off and retry (up to 3 attempts total)
-    if (attempt < 2) {
-      await new Promise(resolve => setTimeout(resolve, retryAfterMs(res!, attempt)))
-    }
-  }
-
-  if (!res!.ok) {
-    const text = await res!.text().catch(() => '')
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
     throw new Error(
-      `Valence ${namespace.toUpperCase()} GET ${path} failed: ${res!.status} ${res!.statusText}. ${text.substring(0, 300)}`
+      `Valence ${namespace.toUpperCase()} GET ${path} failed: ${res.status} ${res.statusText}. ${text.substring(0, 300)}`
     )
   }
 
-  return (await res!.json()) as T
+  return (await res.json()) as T
 }
 
 async function valenceGetAllPaged<T>(

@@ -7,6 +7,7 @@ import { schemaTask, metadata, logger } from '@trigger.dev/sdk'
 import { z } from 'zod'
 import { syncOneCourse } from '@/lib/sync/sync-course'
 import type { NormalizedCourse } from '@/lib/d2l'
+import { ValenceRateLimitError } from '@/lib/d2l'
 
 const CONCURRENCY = Number(process.env.SYNC_COURSE_CONCURRENCY ?? '4')
 const MAX_DURATION = Number(process.env.SYNC_COURSE_MAX_DURATION ?? '1200')
@@ -29,6 +30,16 @@ export const syncCourseTask = schemaTask({
   retry: {
     maxAttempts: 3, factor: 2,
     minTimeoutInMs: 5_000, maxTimeoutInMs: 60_000, randomize: true,
+  },
+  catchError: async ({ error }) => {
+    // Sustained D2L rate-limiting: back the whole task off ~60s instead of
+    // immediately re-triggering and compounding transport retries (×3) with
+    // task retries (×3) against an already-rate-limited dependency.
+    if (error instanceof ValenceRateLimitError) {
+      return { retryAt: new Date(Date.now() + 60_000) }
+    }
+    // All other errors: let the task's normal retry policy apply.
+    return undefined
   },
   run: async (payload) => {
     const course = payload.course as unknown as NormalizedCourse

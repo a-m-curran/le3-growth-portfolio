@@ -8,6 +8,7 @@
  */
 
 export { getValenceConfig, isValenceConfigured } from './config'
+export { ValenceRateLimitError } from './client'
 export type { D2LValenceConfig } from './config'
 export { getValenceToken, clearValenceTokenCache } from './auth'
 
