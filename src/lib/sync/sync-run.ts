@@ -8,7 +8,7 @@ import {
   listCoursesUnderOrgUnit, getValenceConfig, type NormalizedCourse,
 } from '@/lib/d2l'
 import type { SyncRunSource, SyncRunMode } from '@/lib/types'
-import type { SyncCounts, SyncError } from '@/lib/sync/sync-engine'
+import type { SyncCounts, SyncError } from '@/lib/sync/sync-types'
 import type { CourseSyncResult } from '@/lib/sync/sync-course'
 
 export async function createSyncRun(
@@ -91,7 +91,9 @@ export async function finalizeSyncRun(
   startedAtMs: number,
   status: 'completed' | 'failed'
 ): Promise<void> {
-  await admin.from('sync_run').update({
+  // A failed status write must not mask the work that already completed,
+  // so log the error for observability instead of throwing.
+  const { error } = await admin.from('sync_run').update({
     status,
     completed_at: new Date().toISOString(),
     duration_seconds: Math.round((Date.now() - startedAtMs) / 1000),
@@ -103,4 +105,10 @@ export async function finalizeSyncRun(
     errors_count: agg.counts.errorsCount,
     error_details: agg.errors.length > 0 ? agg.errors : null,
   }).eq('id', syncRunId)
+  if (error) {
+    console.error(
+      `finalizeSyncRun failed to update sync_run ${syncRunId} (status=${status}):`,
+      error
+    )
+  }
 }

@@ -22,7 +22,7 @@ import {
 import { extractText, isSupported } from '@/lib/extract-text'
 import { autoTagWork } from '@/lib/conversation-engine-live'
 import type { WorkType, StudentWork, SyncRunMode } from '@/lib/types'
-import type { SyncCounts, SyncError } from '@/lib/sync/sync-engine'
+import type { SyncCounts, SyncError } from '@/lib/sync/sync-types'
 
 export interface SyncOneCourseParams {
   syncRunId: string
