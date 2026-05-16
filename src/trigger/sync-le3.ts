@@ -29,6 +29,39 @@ import {
 import { syncCourseTask } from '@/trigger/sync-course'
 import type { CourseSyncResult } from '@/lib/sync/sync-course'
 
+// ── Gap A: parent maxDuration vs fan-out wall-clock ──────────────────
+// The parent blocks in syncCourseTask.batchTriggerAndWait() until every
+// child resolves. Worst-case wall-clock for the one-time ~56-course
+// backfill is ceil(courseCount / childConcurrency) waves, each up to the
+// child's maxDuration — ≈ ceil(56/4) × 1200s ≈ 4.7h, far past a flat
+// 3600s; exceeding it kills the PARENT mid-wait. That kill is bounded and
+// non-destructive (children commit idempotently; resume-from-dedup
+// finishes the tail on re-run) and only matters for the one-time
+// backfill. So rather than restructure into fire-and-forget batchTrigger
+// + a separate completion-triggered finalizer task (more robust as an
+// end-state, but a larger change with live-fan-out surface that is
+// untestable here, for a non-urgent / non-destructive gap), we
+// deliberately size the parent ceiling to the fan-out worst case with
+// margin. Reads the SAME child env vars so parent and child stay in
+// lockstep, env-tunable so the one-time backfill can be widened without a
+// redeploy, and never drops below the prior hand-tuned 3600s floor.
+const CHILD_CONCURRENCY = Number(process.env.SYNC_COURSE_CONCURRENCY ?? '4')
+const CHILD_MAX_DURATION = Number(process.env.SYNC_COURSE_MAX_DURATION ?? '1200')
+// Expected upper bound on courses enumerated in one run (LE3 pilot ≈ 56).
+const SYNC_LE3_MAX_COURSES = Number(process.env.SYNC_LE3_MAX_COURSES ?? '64')
+// Multiplicative headroom over the ideal wave count: child retries
+// (maxAttempts 3 + 429 back-off), queue scheduling latency, uneven
+// per-course sizes.
+const SYNC_LE3_DURATION_MARGIN = Number(process.env.SYNC_LE3_DURATION_MARGIN ?? '1.5')
+const PARENT_MAX_DURATION = Math.max(
+  3600,
+  Math.ceil(
+    Math.ceil(SYNC_LE3_MAX_COURSES / CHILD_CONCURRENCY) *
+      CHILD_MAX_DURATION *
+      SYNC_LE3_DURATION_MARGIN
+  )
+)
+
 export const syncLe3Task = schemaTask({
   id: 'sync-le3',
   schema: z.object({
@@ -48,13 +81,11 @@ export const syncLe3Task = schemaTask({
   // memory pattern is bounded per-submission (fast-follow) this can
   // come back down to medium/large-1x.
   machine: { preset: 'large-2x' },
-  // Raised 1800 → 3600 (60 min). The first real backfill walks ~15
-  // months of program history across 56 courses serially; 30 min was
-  // not enough headroom for a single-pass backfill. Resume-from-dedup
-  // means a time-kill is non-destructive, but a wider window lets the
-  // backfill finish in one run. Steady-state incremental syncs finish
-  // in minutes — this ceiling only matters for the one-time backfill.
-  maxDuration: 3600,
+  // Sized to the fan-out worst case (see PARENT_MAX_DURATION above) so the
+  // parent is not killed mid-batchTriggerAndWait during the one-time
+  // backfill. Steady-state incremental syncs finish in minutes and exit
+  // well before this ceiling; it only matters for the one-time backfill.
+  maxDuration: PARENT_MAX_DURATION,
   retry: {
     maxAttempts: 3,
     factor: 2,
@@ -83,16 +114,26 @@ export const syncLe3Task = schemaTask({
       )
 
       const results: CourseSyncResult[] = []
-      for (const run of handle.runs) {
+      // handle.runs is index-aligned with the input `courses` batch, so a
+      // failed child's course identity is recoverable via courses[i] —
+      // surface it (not 'unknown') so sync_run.error_details is triageable
+      // at 56-course scale. Indexed loop (not handle.runs.entries()) on
+      // purpose: this repo's tsconfig sets no target/downlevelIteration,
+      // so iterating an iterator trips TS2802 — array for-of/indexing is
+      // the only form that compiles here.
+      for (let i = 0; i < handle.runs.length; i++) {
+        const run = handle.runs[i]
         if (run.ok) {
           results.push(run.output as CourseSyncResult)
         } else {
+          const course = courses[i]
           results.push({
-            courseOuId: 'unknown', courseName: 'unknown', studentIds: [],
+            courseOuId: course.orgUnitId, courseName: course.name, studentIds: [],
             counts: { coursesSynced: 0, studentsSynced: 0, assignmentsSynced: 0,
               submissionsSynced: 0, submissionsSkipped: 0, errorsCount: 1 },
-            errors: [{ stage: 'course_process', context: 'child-run',
-              message: `child run failed: ${String(run.error)}` }],
+            errors: [{ stage: 'course_process',
+              context: `course=${course.name} ou=${course.orgUnitId}`,
+              message: `child run failed (sync-course) for course=${course.name} ou=${course.orgUnitId}: ${String(run.error)}` }],
           })
         }
       }
