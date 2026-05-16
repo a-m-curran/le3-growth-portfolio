@@ -37,6 +37,7 @@ import type {
   SyncRunMode,
 } from '@/lib/types'
 import { syncOneCourse } from '@/lib/sync/sync-course'
+import { pickDefaultCoachId } from '@/lib/sync/sync-run'
 
 // ─── PUBLIC API ─────────────────────────────────────
 
@@ -140,7 +141,7 @@ export async function runLe3Sync(options: SyncOptions): Promise<SyncResult> {
     // Pick a default coach for *new student* records — must be a
     // real LE3 coach with a login. Instructors are NOT eligible.
     // Without a real coach, we can't provision new students.
-    const defaultCoachId = await pickDefaultCoachId()
+    const defaultCoachId = await pickDefaultCoachId(admin)
 
     // 2. Process each course
     for (let i = 0; i < courses.length; i++) {
@@ -228,46 +229,8 @@ export async function runLe3Sync(options: SyncOptions): Promise<SyncResult> {
   }
 }
 
-// ─── PRIVATE HELPERS ────────────────────────────────
-
-/**
- * Pick a default LE3 coach for new student records. Only real coaches
- * (entries in the `coach` table) are eligible — never a Brightspace
- * instructor. We prefer coaches with auth_user_id set (i.e. someone
- * who has actually logged in) since assigning students to a coach who
- * can't log in just hides the relationship from the dashboard.
- *
- * Returns null if no eligible coach exists. The caller MUST treat null
- * as a hard error and surface it via sync_run.error_details rather
- * than silently falling back, so the admin sees they need to seed a
- * coach before sync can provision new students.
- */
-async function pickDefaultCoachId(): Promise<string | null> {
-  const admin = createAdminClient()
-
-  // Prefer a coach who has actually logged in (auth_user_id present).
-  const { data: loggedIn } = await admin
-    .from('coach')
-    .select('id')
-    .eq('status', 'active')
-    .not('auth_user_id', 'is', null)
-    .limit(1)
-    .maybeSingle()
-
-  if (loggedIn) return loggedIn.id as string
-
-  // Fall back to any active coach (a seeded record without auth yet).
-  const { data: anyActive } = await admin
-    .from('coach')
-    .select('id')
-    .eq('status', 'active')
-    .limit(1)
-    .maybeSingle()
-
-  return anyActive?.id ?? null
-}
-
 // ─── RE-EXPORTS ──────────────────────────────────────
 
 export { syncOneCourse } from '@/lib/sync/sync-course'
 export type { CourseSyncResult, SyncOneCourseParams } from '@/lib/sync/sync-course'
+export { pickDefaultCoachId, createSyncRun, finalizeSyncRun, enumerateCourses, aggregateCourseResults } from '@/lib/sync/sync-run'
