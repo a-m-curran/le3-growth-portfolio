@@ -12,16 +12,14 @@ export const runtime = 'nodejs'
 /**
  * POST /api/admin/sync-le3
  *
- * Triggers an LE3 data sync. Two modes:
+ * Triggers an LE3 data sync via Trigger.dev. Trigger.dev is REQUIRED:
+ * if TRIGGER_SECRET_KEY is not set on this deployment, the route returns
+ * 503 immediately. There is no inline fallback.
  *
- *   1. Trigger.dev enqueue (preferred): if TRIGGER_SECRET_KEY is set,
- *      the sync runs as a durable Trigger.dev task with retries and
- *      progress metadata. Returns a trigger run ID immediately.
- *
- *   2. Inline fallback: if Trigger.dev isn't configured, the sync
- *      runs synchronously in this request. Response blocks until
- *      sync completes. Only suitable for small pilot cohorts; larger
- *      syncs will exceed Vercel's serverless function timeout.
+ * The sync parent task fans out one child task per course. Providing
+ * `le3OrgUnitId` in the request body causes the parent to fan out exactly
+ * one child (for that single course override) rather than all configured
+ * courses.
  *
  * Access control: only authenticated coaches can trigger a sync.
  *
@@ -29,7 +27,7 @@ export const runtime = 'nodejs'
  *   {
  *     "mode": "full" | "incremental",       // default "incremental"
  *     "source": "d2l_valence_manual" | ...   // default "d2l_valence_manual"
- *     "le3OrgUnitId": "12345"               // override env default
+ *     "le3OrgUnitId": "12345"               // override env default (single-course fan-out)
  *   }
  */
 export async function POST(req: NextRequest) {
@@ -97,43 +95,23 @@ export async function POST(req: NextRequest) {
     const source = body.source || 'd2l_valence_manual'
     const triggeredBy = coach.email
 
-    // ─── Trigger.dev enqueue (preferred) ─────────
-    if (process.env.TRIGGER_SECRET_KEY) {
-      try {
-        const handle = await tasks.trigger<typeof syncLe3Task>('sync-le3', {
-          mode,
-          source,
-          triggeredBy,
-          le3OrgUnitId: body.le3OrgUnitId,
-        })
-        return NextResponse.json({
-          status: 'enqueued',
-          triggerRunId: handle.id,
-          message: 'Sync task enqueued via Trigger.dev',
-        })
-      } catch (err) {
-        console.error('Trigger.dev enqueue failed, falling back to inline:', err)
-      }
+    // ─── Trigger.dev enqueue (required) ──────────
+    if (!process.env.TRIGGER_SECRET_KEY) {
+      return NextResponse.json(
+        { error: 'Sync requires Trigger.dev. TRIGGER_SECRET_KEY is not set on this deployment.' },
+        { status: 503 }
+      )
     }
-
-    // ─── Inline fallback ─────────────────────────
-    // Only suitable for small cohorts. Imports lazily so the Trigger.dev SDK
-    // doesn't pull the sync engine into every request.
-    const { runLe3Sync } = await import('@/lib/sync/sync-engine')
-    const result = await runLe3Sync({
+    const handle = await tasks.trigger<typeof syncLe3Task>('sync-le3', {
       mode,
       source,
       triggeredBy,
       le3OrgUnitId: body.le3OrgUnitId,
     })
-
     return NextResponse.json({
-      status: 'completed',
-      syncRunId: result.syncRunId,
-      counts: result.counts,
-      durationMs: result.durationMs,
-      errorCount: result.errors.length,
-      message: 'Sync completed inline (Trigger.dev not configured)',
+      status: 'enqueued',
+      triggerRunId: handle.id,
+      message: 'Sync task enqueued via Trigger.dev',
     })
   } catch (error) {
     console.error('Sync trigger error:', error)
