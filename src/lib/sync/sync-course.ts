@@ -308,10 +308,24 @@ async function upsertInstructor(
     .select('id')
     .single()
 
-  if (error || !inserted) {
-    throw new Error(`Failed to insert instructor ${email}: ${error?.message}`)
+  if (inserted) return inserted.id as string
+
+  // 23505 = unique_violation. A concurrent child created this instructor
+  // (shared across courses) between our existence check and insert.
+  // instructor_email_key (UNIQUE(email)) is the ONLY unique constraint
+  // and the only column the insert can collide on, so re-fetch by email.
+  // Mirrors the upsertStudent / processSubmission 23505 recovery pattern.
+  if (error?.code === '23505') {
+    const { data: raced } = await admin
+      .from('instructor')
+      .select('id')
+      .eq('email', email)
+      .limit(1)
+      .maybeSingle()
+    if (raced) return raced.id as string
   }
-  return inserted.id as string
+
+  throw new Error(`Failed to insert instructor ${email}: ${error?.message}`)
 }
 
 async function upsertStudent(
