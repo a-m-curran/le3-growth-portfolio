@@ -273,6 +273,27 @@ async function main(): Promise<void> {
     assertTrue(!src.includes('sync_run'), `${rel} code does not touch sync_run`)
   }
 
+  section('route: gate composition + zero-write (source scan)')
+  const routeSrc = readFileSync(
+    resolve(__dirname, '..', 'src/app/api/admin/recover-extractions/route.ts'),
+    'utf-8'
+  )
+  assertTrue(/status:\s*401/.test(routeSrc), 'route returns 401 (no user)')
+  assertTrue(routeSrc.includes('auth_user_id'), 'route looks up coach by auth_user_id')
+  assertTrue(/status:\s*403/.test(routeSrc), 'route returns 403 (non-coach / non-admin)')
+  assertTrue(routeSrc.includes('isAdminEmail'), 'route enforces isAdminEmail defense-in-depth')
+  assertTrue(
+    routeSrc.includes('TRIGGER_SECRET_KEY') && /status:\s*503/.test(routeSrc),
+    'route returns 503 when TRIGGER_SECRET_KEY is absent'
+  )
+  assertTrue(
+    !routeSrc.includes('.insert(') &&
+      !routeSrc.includes('.upsert(') &&
+      !routeSrc.includes('.update(') &&
+      !routeSrc.includes('.delete('),
+    'route performs no DB writes (select-only auth + tasks.trigger)'
+  )
+
   console.log(`\n${passed} passed, ${failed} failed`)
   process.exit(failed > 0 ? 1 : 0)
 }
