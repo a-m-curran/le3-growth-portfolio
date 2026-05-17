@@ -33,6 +33,20 @@ export const recoverEmptyExtractionsTask = schemaTask({
     triggeredBy: z.string().optional(),
   }),
   machine: { preset: 'medium-1x' },
+  // Flat 3600s is deliberate — NOT the env-derived PARENT_MAX_DURATION
+  // formula sync-le3.ts uses. The parent's own active compute is light
+  // (enumerate empty-row org units, map the batch, aggregate, set
+  // metadata); the bulk of its life is the batchTriggerAndWait wait,
+  // which Trigger.dev v4 CHECKPOINTS — waits >5s do not accrue against
+  // maxDuration (see CLAUDE.md), empirically confirmed in this project's
+  // fan-out backfill where a 3600s-maxDuration parent finalized
+  // `completed` at ~67min wall-clock. Recovery per-course work is also
+  // strictly lighter than a full sync-course. If the ceiling is ever
+  // hit anyway, the kill is non-destructive: the only write is the
+  // content-only UPDATE and recovery is re-runnable by construction
+  // (filled rows drop out of the empty set), so the operator re-runs
+  // and it converges — only the final run's aggregate summary is
+  // complete. A flat ceiling is therefore correct here, not an oversight.
   maxDuration: 3600,
   retry: {
     maxAttempts: 3, factor: 2,

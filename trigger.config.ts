@@ -13,6 +13,14 @@ import { defineConfig } from '@trigger.dev/sdk'
  *     courses, rosters, assignments, and submissions into Supabase.
  *     Triggered manually via /api/admin/sync-le3 or on a schedule
  *     configured in the Trigger.dev dashboard.
+ *   - sync-course: Child of sync-le3; syncs one course (assignments +
+ *     submissions including file download + text extraction) in isolation.
+ *   - recover-empty-extractions: Parent task; one-time recovery of
+ *     student_work rows the old PDF extractor left empty. Enumerates
+ *     empty-row org units and fans out recover-course children; dry-run
+ *     by default. Triggered via /api/admin/recover-extractions.
+ *   - recover-course: Child of recover-empty-extractions; re-fetches and
+ *     re-extracts one course's empty rows in place.
  *
  * Environment variables the tasks need at runtime (set these in the
  * Trigger.dev dashboard under Environment Variables):
