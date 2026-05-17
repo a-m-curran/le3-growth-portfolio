@@ -44,6 +44,7 @@ import {
   parseWorkExternalId,
   listEmptyWorkOrgUnits,
   recoverCourseExtractions,
+  aggregateRecoveryResults,
 } from '@/lib/recovery/recover-extractions'
 
 const MOCK_COURSE_ORG_UNIT_IDS = ['2001', '2002']
@@ -217,6 +218,26 @@ async function main(): Promise<void> {
     await cleanupMockData(admin)
     uninstallMockValence()
   }
+
+  section('aggregateRecoveryResults (pure)')
+  const agg = aggregateRecoveryResults([
+    {
+      orgUnitId: 'A', scanned: 5, recovered: 3,
+      stillEmpty: { unsupported: 1, noFile: 1, submissionGone: 0, emptyText: 0, downloadError: 0 },
+      errors: ['x'],
+    },
+    {
+      orgUnitId: 'B', scanned: 2, recovered: 2,
+      stillEmpty: { unsupported: 0, noFile: 0, submissionGone: 0, emptyText: 0, downloadError: 0 },
+      errors: [],
+    },
+  ])
+  assertEqual(agg.orgUnitsProcessed, 2, 'orgUnitsProcessed = 2')
+  assertEqual(agg.scanned, 7, 'scanned summed (5+2)')
+  assertEqual(agg.recovered, 5, 'recovered summed (3+2)')
+  assertEqual(agg.stillEmpty.unsupported, 1, 'stillEmpty.unsupported summed')
+  assertEqual(agg.errorCount, 1, 'errorCount summed (1+0)')
+  assertEqual(agg.perCourse.length, 2, 'perCourse retained')
 
   console.log(`\n${passed} passed, ${failed} failed`)
   process.exit(failed > 0 ? 1 : 0)

@@ -240,3 +240,33 @@ export async function recoverCourseExtractions(params: {
 
   return result
 }
+
+/** Sum per-course results into one run summary. Pure. */
+export function aggregateRecoveryResults(
+  results: CourseRecoveryResult[]
+): RecoverySummary {
+  const stillEmpty = {
+    unsupported: 0, noFile: 0, submissionGone: 0, emptyText: 0, downloadError: 0,
+  }
+  let scanned = 0
+  let recovered = 0
+  let errorCount = 0
+  for (const r of results) {
+    scanned += r.scanned
+    recovered += r.recovered
+    errorCount += r.errors.length
+    stillEmpty.unsupported += r.stillEmpty.unsupported
+    stillEmpty.noFile += r.stillEmpty.noFile
+    stillEmpty.submissionGone += r.stillEmpty.submissionGone
+    stillEmpty.emptyText += r.stillEmpty.emptyText
+    stillEmpty.downloadError += r.stillEmpty.downloadError
+  }
+  return {
+    orgUnitsProcessed: results.length,
+    scanned,
+    recovered,
+    stillEmpty,
+    errorCount,
+    perCourse: results,
+  }
+}
