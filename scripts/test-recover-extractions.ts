@@ -239,8 +239,41 @@ async function main(): Promise<void> {
   assertEqual(agg.errorCount, 1, 'errorCount summed (1+0)')
   assertEqual(agg.perCourse.length, 2, 'perCourse retained')
 
+  section('structural zero-write invariant (source scan)')
+  // Scan comment-stripped source: the module/task DOC COMMENTS
+  // intentionally mention `.update({ content })` and "sync_run" in prose
+  // (mandated by the plan), so raw substring/regex scans would false-
+  // positive. Stripping /* ... */ blocks leaves only real code to assert
+  // the load-bearing zero-write invariant against.
+  const stripBlockComments = (s: string): string =>
+    s.replace(/\/\*[\s\S]*?\*\//g, '')
+  const coreSrc = stripBlockComments(
+    readFileSync(resolve(__dirname, '..', 'src/lib/recovery/recover-extractions.ts'), 'utf-8')
+  )
+  assertTrue(!coreSrc.includes('.insert('), 'core code has no .insert(')
+  assertTrue(!coreSrc.includes('.upsert('), 'core code has no .upsert(')
+  assertTrue(!coreSrc.includes('.delete('), 'core code has no .delete(')
+  const updateCount = (coreSrc.match(/\.update\(/g) || []).length
+  assertEqual(updateCount, 1, 'core code has exactly one .update( (the content fill)')
+  assertTrue(
+    /\.update\(\s*\{\s*content:/.test(coreSrc),
+    'the single update is a content-only fill (whitespace-tolerant)'
+  )
+  for (const rel of [
+    'src/trigger/recover-course.ts',
+    'src/trigger/recover-empty-extractions.ts',
+  ]) {
+    const src = stripBlockComments(
+      readFileSync(resolve(__dirname, '..', rel), 'utf-8')
+    )
+    assertTrue(!src.includes('.insert('), `${rel} code has no .insert(`)
+    assertTrue(!src.includes('.upsert('), `${rel} code has no .upsert(`)
+    assertTrue(!src.includes('.delete('), `${rel} code has no .delete(`)
+    assertTrue(!src.includes('.update('), `${rel} code has no .update( (delegates to core)`)
+    assertTrue(!src.includes('sync_run'), `${rel} code does not touch sync_run`)
+  }
+
   console.log(`\n${passed} passed, ${failed} failed`)
   process.exit(failed > 0 ? 1 : 0)
 }
-void readFileSync
 main()
