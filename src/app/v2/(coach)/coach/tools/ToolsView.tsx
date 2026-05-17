@@ -5,6 +5,7 @@ import { SyncStatusPanel } from '@/components/coach/SyncStatusPanel'
 import { SyncInspectorPanel } from '@/components/coach/SyncInspectorPanel'
 import { LTIInspectorPanel } from '@/components/coach/LTIInspectorPanel'
 import { LiveActivityPanel } from '@/components/coach/LiveActivityPanel'
+import { RecoverExtractionsPanel } from '@/components/coach/RecoverExtractionsPanel'
 import type { SyncRun } from '@/lib/types'
 
 /**
@@ -34,6 +35,7 @@ export function ToolsView({ recentSyncRuns, lastSuccessful }: ToolsViewProps) {
         <div className="space-y-5">
           <SyncStatusPanel recentRuns={recentSyncRuns} lastSuccessful={lastSuccessful} />
           <SyncInspectorPanel />
+          <RecoverExtractionsPanel />
         </div>
       )}
       {tab === 'lti' && <LTIInspectorPanel />}
