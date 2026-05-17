@@ -138,15 +138,88 @@ async function main(): Promise<void> {
     await cleanupMockData(admin)
   }
 
+  section('recoverCourseExtractions — repopulates an emptied row (mock-valence)')
+  await cleanupMockData(admin)
+  installMockValence()
+  clearValenceTokenCache()
+  try {
+    // Realistic setup: sync mock course 2001 so student_work rows exist
+    // exactly as production creates them.
+    const courses = await listCoursesUnderOrgUnit(MOCK_STATS.le3OrgUnitId)
+    const c2001 = courses.find(c => c.orgUnitId === '2001')!
+    const mc = await ensureMockCoach(admin)
+    const synced = await syncOneCourse({
+      syncRunId: 'recover-test', course: c2001, mode: 'full', defaultCoachId: mc,
+    })
+    assertTrue(synced.counts.submissionsSynced >= 1, 'mock 2001 synced >= 1 work row')
+
+    // Pick one synced row and null its content to simulate a PDF-bug row.
+    const { data: mockStudents } = await admin
+      .from('student').select('id').like('email', MOCK_EMAIL_DOMAIN_PATTERN)
+    const sids = (mockStudents || []).map(s => s.id)
+    const { data: target } = await admin
+      .from('student_work')
+      .select('id, content, external_id')
+      .in('student_id', sids)
+      .eq('source', 'd2l_valence_sync')
+      .like('external_id', 'd2l:2001:%')
+      .not('content', 'is', null)
+      .limit(1)
+      .single()
+    const targetId = target!.id as string
+    const originalText = target!.content as string
+    assertTrue(originalText.length > 0, 'target row had real extracted text before')
+
+    await admin.from('student_work').update({ content: null }).eq('id', targetId)
+
+    // Snapshot work_skill_tag count for this row (seam OFF must not add tags).
+    const tagCount = async (): Promise<number> => {
+      const { count } = await admin
+        .from('work_skill_tag')
+        .select('work_id', { count: 'exact', head: true })
+        .eq('work_id', targetId)
+      return count || 0
+    }
+    const tagsBefore = await tagCount()
+    const { count: worksBefore } = await admin
+      .from('student_work').select('id', { count: 'exact', head: true }).in('student_id', sids)
+
+    const res = await recoverCourseExtractions({
+      admin, orgUnitId: '2001', dryRun: false, runAutoTag: false,
+    })
+    assertEqual(res.recovered, 1, 'exactly one row recovered')
+    assertEqual(res.orgUnitId, '2001', 'result reports org 2001')
+
+    const { data: after } = await admin
+      .from('student_work').select('content').eq('id', targetId).single()
+    assertEqual(after!.content, originalText, 'content repopulated to the original extracted text')
+
+    const tagsAfter = await tagCount()
+    assertEqual(tagsAfter, tagsBefore, 'seam OFF → no work_skill_tag rows added')
+    const { count: worksAfter } = await admin
+      .from('student_work').select('id', { count: 'exact', head: true }).in('student_id', sids)
+    assertEqual(worksAfter || 0, worksBefore || 0, 'no student_work rows inserted/deleted')
+
+    section('recoverCourseExtractions — dryRun writes nothing')
+    await admin.from('student_work').update({ content: null }).eq('id', targetId)
+    const dry = await recoverCourseExtractions({
+      admin, orgUnitId: '2001', dryRun: true, runAutoTag: false,
+    })
+    assertEqual(dry.recovered, 1, 'dry-run reports 1 would-recover')
+    const { data: stillEmpty } = await admin
+      .from('student_work').select('content').eq('id', targetId).single()
+    assertTrue(
+      stillEmpty!.content === null,
+      'dry-run did NOT write (content still null)',
+      JSON.stringify(stillEmpty)
+    )
+  } finally {
+    await cleanupMockData(admin)
+    uninstallMockValence()
+  }
+
   console.log(`\n${passed} passed, ${failed} failed`)
   process.exit(failed > 0 ? 1 : 0)
 }
-void installMockValence
-void uninstallMockValence
-void clearValenceTokenCache
-void listCoursesUnderOrgUnit
-void syncOneCourse
-void MOCK_STATS
-void recoverCourseExtractions
 void readFileSync
 main()

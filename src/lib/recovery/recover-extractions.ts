@@ -107,3 +107,136 @@ export async function listEmptyWorkOrgUnits(
   }
   return Array.from(orgUnits)
 }
+
+interface EmptyRow {
+  id: string
+  externalId: string
+}
+
+/**
+ * Per-course recovery. READ-only except for one content-only UPDATE per
+ * recovered row (skipped entirely when dryRun). Re-list each folder once
+ * (rows are grouped by folderId), match the submission by id, download
+ * its first file, re-extract with the fixed extractor.
+ */
+export async function recoverCourseExtractions(params: {
+  admin: SupabaseClient
+  orgUnitId: string
+  dryRun: boolean
+  /** Seam (default false). When false the LLM auto-tag branch is skipped
+   *  entirely — no cost, no work_skill_tag writes. Body intentionally
+   *  unimplemented (spec out-of-scope); enabling later is additive. */
+  runAutoTag?: boolean
+}): Promise<CourseRecoveryResult> {
+  const { admin, orgUnitId, dryRun } = params
+  const runAutoTag = params.runAutoTag ?? false
+
+  const result: CourseRecoveryResult = {
+    orgUnitId,
+    scanned: 0,
+    recovered: 0,
+    stillEmpty: { unsupported: 0, noFile: 0, submissionGone: 0, emptyText: 0, downloadError: 0 },
+    errors: [],
+  }
+
+  // Collect this course's empty rows (paginated, JS-side empty filter).
+  const empties: EmptyRow[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await admin
+      .from('student_work')
+      .select('id, external_id, content')
+      .eq('source', 'd2l_valence_sync')
+      .like('external_id', `d2l:${orgUnitId}:%`)
+      .range(from, from + PAGE - 1)
+    if (error) throw new Error(`recover select failed (ou=${orgUnitId}): ${error.message}`)
+    if (!data || data.length === 0) break
+    for (const row of data) {
+      if (!isEmpty(row.content as string | null)) continue
+      empties.push({ id: row.id as string, externalId: row.external_id as string })
+    }
+    if (data.length < PAGE) break
+  }
+  result.scanned = empties.length
+
+  // Group rows by folder so each folder is listed exactly once.
+  const byFolder = new Map<string, { folderId: string; rows: { id: string; submissionId: string }[] }>()
+  for (const row of empties) {
+    const coords = parseWorkExternalId(row.externalId)
+    if (!coords) {
+      result.errors.push(`unparseable external_id: ${row.externalId}`)
+      continue
+    }
+    const g = byFolder.get(coords.folderId) ?? { folderId: coords.folderId, rows: [] }
+    g.rows.push({ id: row.id, submissionId: coords.submissionId })
+    byFolder.set(coords.folderId, g)
+  }
+
+  for (const group of byFolder.values()) {
+    let submissions
+    try {
+      submissions = await listAssignmentSubmissions(orgUnitId, group.folderId)
+    } catch (err) {
+      result.errors.push(`folder ${group.folderId} list failed: ${String(err)}`)
+      continue
+    }
+    const byId = new Map(submissions.map(s => [s.submissionId, s]))
+
+    for (const row of group.rows) {
+      const submission = byId.get(row.submissionId)
+      if (!submission) {
+        result.stillEmpty.submissionGone++
+        continue
+      }
+      if (submission.files.length === 0) {
+        result.stillEmpty.noFile++
+        continue
+      }
+      const file = submission.files[0]
+      let extracted = ''
+      try {
+        const downloaded = await downloadSubmissionFile(
+          orgUnitId, group.folderId, submission.submissionId, file.fileId
+        )
+        if (isSupported(downloaded.filename)) {
+          extracted = await extractText(downloaded.buffer, downloaded.filename)
+        } else if (downloaded.contentType.startsWith('text/')) {
+          extracted = downloaded.buffer.toString('utf-8').substring(0, 8000)
+        } else {
+          result.stillEmpty.unsupported++
+          continue
+        }
+      } catch (err) {
+        result.stillEmpty.downloadError++
+        result.errors.push(
+          `download/extract failed (sub=${submission.submissionId} file=${file.fileName}): ${String(err)}`
+        )
+        continue
+      }
+
+      if (!extracted || extracted.trim().length === 0) {
+        result.stillEmpty.emptyText++
+        continue
+      }
+
+      result.recovered++
+      if (dryRun) continue
+
+      const { error: updErr } = await admin
+        .from('student_work')
+        .update({ content: extracted })
+        .eq('id', row.id)
+      if (updErr) {
+        result.recovered--
+        result.errors.push(`update failed (work=${row.id}): ${updErr.message}`)
+        continue
+      }
+
+      if (runAutoTag) {
+        // SEAM (intentionally unimplemented; default-off, spec out-of-
+        // scope). Future: autoTagWork(work) + work_skill_tag insert.
+      }
+    }
+  }
+
+  return result
+}
