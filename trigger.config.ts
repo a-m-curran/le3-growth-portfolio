@@ -47,20 +47,17 @@ export default defineConfig({
     //             causing extractText to throw at runtime and every
     //             student_work row to land with content_len=0.
     //
-    // NOT externalized:
-    //   pdf-parse — version 2.4.5 explicitly requires Node
-    //               ">=20.16.0 <21 || >=22.3.0", but Trigger.dev's
-    //               managed container runs Node 21.7.3. Externalizing
-    //               forces a runtime install in an unsupported Node,
-    //               which breaks the managed-index-controller step
-    //               with "Error creating background worker files".
-    //               Letting pdf-parse bundle (so its code is captured
-    //               at build time on a compatible Node) avoids that.
-    //               If we ever need PDF support at runtime from the
-    //               Trigger.dev worker, either wait for pdf-parse to
-    //               support Node 21, swap to a different PDF library,
-    //               or pin Trigger.dev to Node 20.
-    external: ['mammoth'],
+    //   unpdf  — .pdf text extraction (no-DOM serverless pdf.js build).
+    //             ESM-only and dynamic-imported in extract-text.ts, so
+    //             it follows the same external+dynamic-import pattern as
+    //             mammoth. Replaced pdf-parse@2.4.5, which required Node
+    //             ">=20.16.0 <21 || >=22.3.0" while Trigger.dev's
+    //             managed container runs Node 21.7.3, and needed the
+    //             DOMMatrix browser global — together those left every
+    //             synced PDF with empty content. unpdf supports Node 18+
+    //             with no native deps, so a runtime install on Node 21
+    //             is safe.
+    external: ['mammoth', 'unpdf'],
   },
 
   // Default retry policy for tasks that don't override it.

@@ -39,10 +39,16 @@ export async function extractText(buffer: Buffer, filename: string): Promise<str
 }
 
 async function extractPdf(buffer: Buffer): Promise<string> {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>
-  const result = await pdfParse(buffer)
-  return result.text
+  // unpdf ships a no-DOM serverless build of pdf.js and is ESM-only, so
+  // it is dynamic-imported here exactly like mammoth below. This replaced
+  // pdf-parse@2.x, which required the DOMMatrix browser global and a
+  // Node range that excluded Trigger.dev's Node 21.7.3 sandbox — every
+  // synced PDF landed with empty content as a result. (Alias unpdf's
+  // extractText so it does not shadow this module's own extractText.)
+  const { extractText: extractPdfText, getDocumentProxy } = await import('unpdf')
+  const pdf = await getDocumentProxy(new Uint8Array(buffer))
+  const { text } = await extractPdfText(pdf, { mergePages: true })
+  return text
 }
 
 async function extractDocx(buffer: Buffer): Promise<string> {
