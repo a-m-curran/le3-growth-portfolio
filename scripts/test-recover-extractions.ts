@@ -106,34 +106,37 @@ async function main(): Promise<void> {
 
   section('listEmptyWorkOrgUnits (READ-only enumeration)')
   await cleanupMockData(admin)
-  const coachId = await ensureMockCoach(admin)
-  // Seed one mock student + two student_work rows: one empty
-  // (d2l_valence_sync, content=null) under org 2001, one non-empty.
-  const { data: stu } = await admin.from('student').insert({
-    nlu_id: 'd2l:mock-empty-1', d2l_user_id: 'mock-empty-1',
-    first_name: 'Empty', last_name: 'Case', email: 'empty-case@mock.test',
-    coach_id: coachId, cohort: 'Spring 2026',
-    program_start_date: '2026-01-01', status: 'active',
-  }).select('id').single()
-  const studentId = stu!.id as string
-  await admin.from('student_work').insert([
-    {
-      student_id: studentId, title: 'Empty One', work_type: 'other',
-      submitted_at: new Date().toISOString(), quarter: 'Spring 2026',
-      content: null, source: 'd2l_valence_sync',
-      external_id: 'd2l:2001:3001:999001',
-    },
-    {
-      student_id: studentId, title: 'Has Text', work_type: 'other',
-      submitted_at: new Date().toISOString(), quarter: 'Spring 2026',
-      content: 'already extracted', source: 'd2l_valence_sync',
-      external_id: 'd2l:2002:3004:999002',
-    },
-  ])
-  const ous = await listEmptyWorkOrgUnits(admin)
-  assertTrue(ous.includes('2001'), 'org 2001 (empty row) is enumerated')
-  assertTrue(!ous.includes('2002'), 'org 2002 (non-empty row) is NOT enumerated')
-  await cleanupMockData(admin)
+  try {
+    const coachId = await ensureMockCoach(admin)
+    // Seed one mock student + two student_work rows: one empty
+    // (d2l_valence_sync, content=null) under org 2001, one non-empty.
+    const { data: stu } = await admin.from('student').insert({
+      nlu_id: 'd2l:mock-empty-1', d2l_user_id: 'mock-empty-1',
+      first_name: 'Empty', last_name: 'Case', email: 'empty-case@mock.test',
+      coach_id: coachId, cohort: 'Spring 2026',
+      program_start_date: '2026-01-01', status: 'active',
+    }).select('id').single()
+    const studentId = stu!.id as string
+    await admin.from('student_work').insert([
+      {
+        student_id: studentId, title: 'Empty One', work_type: 'other',
+        submitted_at: new Date().toISOString(), quarter: 'Spring 2026',
+        content: null, source: 'd2l_valence_sync',
+        external_id: 'd2l:2001:3001:999001',
+      },
+      {
+        student_id: studentId, title: 'Has Text', work_type: 'other',
+        submitted_at: new Date().toISOString(), quarter: 'Spring 2026',
+        content: 'already extracted', source: 'd2l_valence_sync',
+        external_id: 'd2l:2002:3004:999002',
+      },
+    ])
+    const ous = await listEmptyWorkOrgUnits(admin)
+    assertTrue(ous.includes('2001'), 'org 2001 (empty row) is enumerated')
+    assertTrue(!ous.includes('2002'), 'org 2002 (non-empty row) is NOT enumerated')
+  } finally {
+    await cleanupMockData(admin)
+  }
 
   console.log(`\n${passed} passed, ${failed} failed`)
   process.exit(failed > 0 ? 1 : 0)
