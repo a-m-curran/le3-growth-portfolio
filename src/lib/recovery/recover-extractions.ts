@@ -171,7 +171,7 @@ export async function recoverCourseExtractions(params: {
     byFolder.set(coords.folderId, g)
   }
 
-  for (const group of byFolder.values()) {
+  for (const group of Array.from(byFolder.values())) {
     let submissions
     try {
       submissions = await listAssignmentSubmissions(orgUnitId, group.folderId)
