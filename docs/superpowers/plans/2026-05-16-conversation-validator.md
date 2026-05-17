@@ -1,5 +1,17 @@
 # Conversation Validator (Dry-Run) Implementation Plan
 
+> **⚠️ PARKED 2026-05-17 — DO NOT EXECUTE AS-IS.** A blocking architectural
+> defect was found during implementation: the engine's LLM client
+> unconditionally writes an `event_log` row (with real student name +
+> assignment text) on every call, falsifying this plan's "zero-write by
+> construction" premise and the structural test's adequacy. Tasks 1 + the
+> pagination fix are committed and sound on branch `feat/conversation-validator`
+> (`f5ea6d5`, `562f7a0`); Task 2 (`eadbf64`) carries the latent violation;
+> Tasks 3–5 not started. See the **⚠️ PARKED — blocking defect** section at the
+> top of the spec (`docs/superpowers/specs/2026-05-16-conversation-validator-design.md`)
+> for the verified call chain and resolution options A/B/C. A future
+> brainstorm must pick a resolution before any resume.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** An admin-only, ephemeral tool that walks a real student + real synced assignment through the Phase1→synthesis conversation engine for manual quality validation, writing nothing to the DB and never associating with the student.

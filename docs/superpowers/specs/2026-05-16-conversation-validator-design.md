@@ -1,8 +1,64 @@
 # Conversation Validator (Dry-Run) — Design Spec
 
 **Date:** 2026-05-16
-**Status:** Approved (design); pending implementation plan
+**Status:** ⚠️ PARKED 2026-05-17 — blocking architectural defect found during implementation (see below). Do NOT resume from this spec's premise as-is.
 **Owner:** Andrew Curran
+
+---
+
+## ⚠️ PARKED — blocking defect (added 2026-05-17, verified independently)
+
+**This spec's load-bearing premise is FALSE.** The "Architecture" section asserts
+the engine functions in `conversation-engine-live.ts` "persist nothing; all DB
+writes live in the `api/conversation/*` routes → zero-write by construction."
+That is incorrect. Verified call chain:
+
+`generatePhase1Question()` (and phase2/3, `generateSynthesis`,
+`suggestSkillTags`, `generateConversationOutput`) → `llm().generate()` →
+`llm-client.ts` `runWithLogging()` → `log.info('llm.call', …)` →
+`observability/logger.ts` → **`admin.from('event_log').insert({…})`**.
+
+So **every engine LLM call unconditionally INSERTs an `event_log` row.** That
+row's `student_id` is `null` (no FK — the validator passes no LLM call
+context), but its `context` payload carries prompt/response excerpts
+containing the **real student's name + assignment title/description/content
+in plaintext**, persisted indefinitely. This violates the **Hard constraint**
+below ("write **nothing** … never be associated with the chosen student …
+ephemeral"). The structural source-scan test (Task 1) passes green while this
+write path is live → a source-syntax scan is, alone, an inadequate guard
+(import-smuggling).
+
+**State when parked:** branch `feat/conversation-validator` (NOT pushed/merged;
+nothing deployed; no data has leaked — caught at code review before any use).
+Task 1 (`f5ea6d5`, route skeleton + pickers — genuinely zero-write; pickers
+makes no LLM calls) and the pagination fix (`562f7a0`) are sound. Task 2
+(`eadbf64`, phase steps) is implemented but carries this latent violation via
+the engine import. Tasks 3–5 not started (Task 3 compounds it). Worktree
+preserved at `.worktrees/conversation-validator`. The PDF-extraction-recovery
+feature is unaffected (with its auto-tag seam off it makes zero LLM calls, so
+it never hits this logging path).
+
+**Resolution options (a future brainstorm/spec correction must pick one before
+any resume — do NOT rebuild on the original premise):**
+- **(A)** Thread a scoped `noPersist`/`dryRun` flag from the validator through
+  `llm-client.ts` `runWithLogging` so validator LLM calls skip the `event_log`
+  insert → makes "zero-write by construction" true again. Cost: modifies a
+  **shared production module** (the real engine, autotagger, every LLM call);
+  out of the original plan's "no engine changes" scope; needs its own minimal
+  design + review so production observability is not disturbed.
+- **(B)** Re-scope the contract: accept one non-FK'd `event_log` row per LLM
+  call — identical to what every other LLM call in the system already emits —
+  and rewrite this spec's Hard constraint + the route header + the test
+  invariant to "zero student-domain writes; standard observability row
+  excepted." Honest, but weakens the originally-stated hard constraint.
+- **(C)** Investigate a less-invasive observability-layer dry-run/skip switch
+  before choosing.
+
+Everything below is the ORIGINAL (pre-defect) design and remains as written
+only for historical context. Treat the Hard constraint as currently
+**unmet by the engine path**.
+
+---
 
 ## Problem / Goal
 
