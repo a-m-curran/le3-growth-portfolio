@@ -59,15 +59,19 @@ export const recoverEmptyExtractionsTask = schemaTask({
     )
 
     const results: CourseRecoveryResult[] = []
-    for (const run of handle.runs) {
+    // Index-aligned with the batch input (orgUnits.map(...)), so a failed
+    // child's org unit is recoverable for triage — mirrors sync-le3.ts's
+    // failed-course identity recovery rather than an opaque 'unknown'.
+    for (let i = 0; i < handle.runs.length; i++) {
+      const run = handle.runs[i]
       if (run.ok) {
         results.push(run.output as CourseRecoveryResult)
       } else {
         results.push({
-          orgUnitId: 'unknown',
+          orgUnitId: orgUnits[i],
           scanned: 0, recovered: 0,
           stillEmpty: { unsupported: 0, noFile: 0, submissionGone: 0, emptyText: 0, downloadError: 0 },
-          errors: [`child run failed: ${String(run.error)}`],
+          errors: [`child run failed (ou=${orgUnits[i]}): ${String(run.error)}`],
         })
       }
     }
