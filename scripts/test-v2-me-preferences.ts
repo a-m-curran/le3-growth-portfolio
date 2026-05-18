@@ -26,5 +26,17 @@ section('SP2: DataHandlingNotice extracted (single source of truth)')
   assertEqual(/AI in the conversations/.test(dhn), true, 'notice body present (AI section)')
 }
 
-// Task 2 appends its section here.
+section('SP2: DataConsentModal reuses DataHandlingNotice + re-homed to v2')
+{
+  const dcm = stripComments(read('src/components/student/DataConsentModal.tsx'))
+  assertEqual(/import \{ DataHandlingNotice \} from '\.\/DataHandlingNotice'/.test(dcm), true, 'DataConsentModal imports DataHandlingNotice')
+  assertEqual(/<DataHandlingNotice\s*\/>/.test(dcm), true, 'DataConsentModal renders the shared notice')
+  assertEqual(/if \(!status \|\| status\.acknowledged\) return null/.test(dcm), true, 'first-visit gate unchanged')
+  assertEqual(/acknowledge-consent/.test(dcm) && /method: 'POST'/.test(dcm), true, 'acknowledge POST preserved')
+  const layout = stripComments(read('src/app/v2/(student)/layout.tsx'))
+  assertEqual(/import \{ DataConsentModal \} from '@\/components\/student\/DataConsentModal'/.test(layout), true, 'student layout imports DataConsentModal')
+  assertEqual(/<DataConsentModal\s*\/>/.test(layout), true, 'student layout mounts DataConsentModal (re-homed from v1 /garden)')
+}
+
+// Task 3 appends its section here.
 finish()
