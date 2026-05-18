@@ -92,5 +92,18 @@ section('SP1: v1 pages are redirect stubs to v2')
   assertEqual(/return\s*<>\{?\s*children\s*\}?<\/>|return children/.test(demoLayout) || /=>\s*children/.test(demoLayout), true, 'demo layout is a passthrough')
 }
 
-// Task 4 appends its section here.
+section('SP1: /login restyled to v2, behavior byte-identical')
+{
+  const raw = read('src/app/login/page.tsx')
+  const code = stripComments(raw)
+  assertEqual(/signInWithOtp\(/.test(code), true, 'magic-link send preserved')
+  assertEqual(/emailRedirectTo: `\$\{window\.location\.origin\}\/api\/auth\/callback`/.test(code), true, 'emailRedirectTo unchanged')
+  assertEqual(/error=auth|not_enrolled|error\) === 'not_enrolled'|'not_enrolled'/.test(code), true, 'rejection notice preserved')
+  assertEqual(/<Suspense/.test(code) && /useSearchParams\(\)/.test(code), true, 'Suspense + useSearchParams preserved')
+  assertEqual(/setSent\(true\)/.test(code), true, 'sent state preserved')
+  assertEqual(/rounded-2xl bg-white border border-gray-200 shadow-sm/.test(code), true, 'v2 Card styling applied')
+  assertEqual(/bg-gray-50/.test(code), true, 'v2 background applied')
+  assertEqual(/href="\/v2\/demo"/.test(code), true, 'demo link → /v2/demo')
+  assertEqual(/href="\/demo"/.test(code), false, 'no v1 /demo link')
+}
 finish()
