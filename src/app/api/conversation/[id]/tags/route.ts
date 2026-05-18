@@ -1,39 +1,21 @@
-import { createServerClient } from '@supabase/auth-helpers-nextjs'
 import { createAdminClient } from '@/lib/supabase-admin'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { getV2StudentId } from '@/lib/v2-auth'
 
 /**
  * PUT /api/conversation/:id/tags
  *
- * Updates skill tags for a conversation. Handles:
- * - Confirming/unconfirming existing tags
- * - Adding new student-tagged skills
- * - Removing tags
+ * Updates skill tags for a conversation. Identity resolves via
+ * getV2Identity (real Supabase auth incl. LTI, OR demo persona).
+ * A student may only modify tags on their own conversation.
  */
 export async function PUT(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const cookieStore = cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() { return cookieStore.getAll() },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
-          },
-        },
-      }
-    )
-
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
+    const studentId = await getV2StudentId()
+    if (!studentId) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
@@ -47,34 +29,24 @@ export async function PUT(
 
     const admin = createAdminClient()
 
-    // Verify the conversation belongs to this user
-    const { data: student } = await admin
-      .from('student')
-      .select('id')
-      .eq('auth_user_id', user.id)
-      .single()
-
-    if (!student) {
-      return NextResponse.json({ error: 'Student not found' }, { status: 404 })
-    }
-
     const { data: conversation } = await admin
       .from('growth_conversation')
       .select('id, student_id')
       .eq('id', params.id)
       .single()
 
-    if (!conversation || conversation.student_id !== student.id) {
+    if (!conversation) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
     }
+    if (conversation.student_id !== studentId) {
+      return NextResponse.json({ error: 'Not your conversation' }, { status: 403 })
+    }
 
-    // Delete existing tags and replace with the new set
     await admin
       .from('conversation_skill_tag')
       .delete()
       .eq('conversation_id', params.id)
 
-    // Insert updated tags
     if (tags.length > 0) {
       await admin
         .from('conversation_skill_tag')
