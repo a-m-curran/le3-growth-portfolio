@@ -40,7 +40,24 @@ async function main(): Promise<void> {
     assertEqual(/status:\s*403/.test(code), true, 'tags returns 403 on ownership violation')
   }
 
-  // Tasks 2–5 append their sections here.
+  section('conversation/start: v2 identity + admin data client')
+  {
+    const code = stripComments(read('src/app/api/conversation/start/route.ts'))
+    assertEqual(/getV2StudentId\s*\(/.test(code), true, 'conversation/start calls getV2StudentId()')
+    assertEqual(/createAdminClient\s*\(/.test(code), true, 'conversation/start uses createAdminClient()')
+    assertEqual(
+      /supabase\.auth\.getUser\s*\(/.test(code),
+      false,
+      'conversation/start no longer calls supabase.auth.getUser()'
+    )
+    assertEqual(
+      /createServerClient\s*\(/.test(code),
+      false,
+      'conversation/start no longer creates the RLS anon client'
+    )
+  }
+
+  // Tasks 3–5 append their sections here.
 
   finish()
 }

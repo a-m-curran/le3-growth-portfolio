@@ -1,39 +1,27 @@
-import { createServerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createAdminClient } from '@/lib/supabase-admin'
 import { NextResponse } from 'next/server'
+import { getV2StudentId } from '@/lib/v2-auth'
 import { generatePhase1Question } from '@/lib/conversation-engine-live'
 import { determineTargetSkill, buildSkillLevelMap, type ConversationContext } from '@/lib/llm-prompts'
 import { log } from '@/lib/observability/logger'
 import type { StudentWork, SkillAssessment, GrowthConversation, Student } from '@/lib/types'
 
-function getSupabase() {
-  const cookieStore = cookies()
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-}
-
 export async function POST(request: Request) {
-  // Generate one request_id at the edge so every event from this
-  // request — student lookup, LLM call, DB writes — correlates.
+  // One request_id at the edge so every event correlates.
   const reqLog = log.withRequest()
   let studentId: string | undefined
 
   try {
-    const supabase = getSupabase()
-    const { workId } = await request.json()
+    const resolvedStudentId = await getV2StudentId()
+    if (!resolvedStudentId) {
+      await reqLog.warn('conversation.start_failed', {
+        actorType: 'anonymous',
+        message: 'Unauthenticated attempt to start conversation',
+      })
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
 
+    const { workId } = await request.json()
     if (!workId) {
       await reqLog.warn('conversation.start_failed', {
         message: 'workId missing from request body',
@@ -41,28 +29,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'workId is required' }, { status: 400 })
     }
 
-    // Get current user's student record
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      await reqLog.warn('conversation.start_failed', {
-        actorType: 'anonymous',
-        message: 'Unauthenticated attempt to start conversation',
-        context: { workId },
-      })
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-    }
+    const admin = createAdminClient()
 
-    const { data: student, error: studentError } = await supabase
+    const { data: student, error: studentError } = await admin
       .from('student')
       .select('*')
-      .eq('auth_user_id', user.id)
+      .eq('id', resolvedStudentId)
       .single()
 
     if (studentError || !student) {
       await reqLog.error('conversation.start_failed', {
-        actorType: 'student',
-        actorId: user.id,
-        message: 'Authenticated user has no student record',
+        studentId: resolvedStudentId,
+        message: 'Resolved identity has no student record',
         context: { workId, error: studentError?.message },
       })
       return NextResponse.json({ error: 'Student record not found' }, { status: 404 })
@@ -71,7 +49,7 @@ export async function POST(request: Request) {
     studentId = student.id as string
 
     // Check for existing in-progress conversation — resume it
-    const { data: existing } = await supabase
+    const { data: existing } = await admin
       .from('growth_conversation')
       .select('*')
       .eq('student_id', student.id)
@@ -80,7 +58,6 @@ export async function POST(request: Request) {
 
     if (existing && existing.length > 0) {
       const conv = existing[0]
-      // Determine current phase from what's been filled in
       let currentPhase = 1
       if (conv.response_phase_1 && conv.prompt_phase_2) currentPhase = 2
       if (conv.response_phase_2 && conv.prompt_phase_3) currentPhase = 3
@@ -88,7 +65,7 @@ export async function POST(request: Request) {
       await reqLog.info('conversation.resumed', {
         studentId,
         actorType: 'student',
-        actorId: user.id,
+        actorId: studentId,
         message: `Resumed in-progress conversation at phase ${currentPhase}`,
         context: {
           conversation_id: conv.id,
@@ -116,8 +93,7 @@ export async function POST(request: Request) {
       })
     }
 
-    // Fetch the selected work
-    const { data: work, error: workError } = await supabase
+    const { data: work, error: workError } = await admin
       .from('student_work')
       .select('*')
       .eq('id', workId)
@@ -126,22 +102,24 @@ export async function POST(request: Request) {
     if (workError || !work) {
       return NextResponse.json({ error: 'Work item not found' }, { status: 404 })
     }
+    if (work.student_id !== student.id) {
+      return NextResponse.json({ error: 'Not your work item' }, { status: 403 })
+    }
 
-    // Fetch context for LLM
     const [prevConvosResult, definitionsResult, assessmentsResult] = await Promise.all([
-      supabase
+      admin
         .from('growth_conversation')
         .select('*, student_work(*)')
         .eq('student_id', student.id)
         .eq('status', 'completed')
         .order('started_at', { ascending: false })
         .limit(10),
-      supabase
+      admin
         .from('student_skill_definition')
         .select('*')
         .eq('student_id', student.id)
         .eq('is_current', true),
-      supabase
+      admin
         .from('skill_assessment')
         .select('*')
         .eq('student_id', student.id)
@@ -178,11 +156,9 @@ export async function POST(request: Request) {
       quarter: getCurrentQuarter(),
     }
 
-    // Generate Phase 1 question
     const phase1Question = await generatePhase1Question(context)
 
-    // Create conversation record
-    const { data: conversation, error: createError } = await supabase
+    const { data: conversation, error: createError } = await admin
       .from('growth_conversation')
       .insert({
         student_id: student.id,
@@ -199,13 +175,8 @@ export async function POST(request: Request) {
     if (createError || !conversation) {
       await reqLog.error('conversation.start_failed', {
         studentId,
-        actorType: 'student',
-        actorId: user.id,
         message: 'growth_conversation insert failed',
-        context: {
-          work_id: workId,
-          db_error: createError?.message,
-        },
+        context: { work_id: workId, db_error: createError?.message },
       })
       return NextResponse.json({ error: 'Failed to create conversation' }, { status: 500 })
     }
@@ -213,7 +184,7 @@ export async function POST(request: Request) {
     await reqLog.info('conversation.started', {
       studentId,
       actorType: 'student',
-      actorId: user.id,
+      actorId: studentId,
       message: `New conversation started for work ${work.title}`,
       context: {
         conversation_id: conversation.id,
@@ -262,7 +233,6 @@ function getCurrentWeek(): number {
   return Math.ceil(diff / (7 * 24 * 60 * 60 * 1000))
 }
 
-// Convert snake_case DB rows to camelCase for TypeScript types
 function snakeToCamel(obj: Record<string, unknown>): Record<string, unknown> {
   const result: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(obj)) {
