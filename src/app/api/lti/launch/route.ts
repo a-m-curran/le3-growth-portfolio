@@ -9,6 +9,12 @@ import {
   isInstructor,
 } from '@/lib/lti/claims'
 
+// Internal post-handshake redirect targets (D2L never sees these — set
+// after the LTI handshake completes). Env-gated for per-environment
+// reversibility and the eventual internal-NLU migration.
+const LTI_STUDENT_PATH = process.env.LTI_POST_LAUNCH_STUDENT_PATH || '/v2/today'
+const LTI_INSTRUCTOR_PATH = process.env.LTI_POST_LAUNCH_INSTRUCTOR_PATH || '/v2/coach'
+
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
@@ -253,7 +259,7 @@ export async function POST(req: NextRequest) {
         logEntry.status = 'success'
         logEntry.error_stage = null
         await writeLaunchLog(admin, logEntry, Date.now() - startedAt)
-        return redirectWithSession(admin, email, '/coach', req.nextUrl.origin)
+        return redirectWithSession(admin, email, LTI_INSTRUCTOR_PATH, req.nextUrl.origin)
       }
 
       // Auto-provision coach if they don't exist yet
@@ -276,7 +282,7 @@ export async function POST(req: NextRequest) {
       logEntry.status = 'success'
       logEntry.error_stage = null
       await writeLaunchLog(admin, logEntry, Date.now() - startedAt)
-      return redirectWithSession(admin, email, '/coach', req.nextUrl.origin)
+      return redirectWithSession(admin, email, LTI_INSTRUCTOR_PATH, req.nextUrl.origin)
     }
 
     // Student launch
@@ -408,11 +414,10 @@ export async function POST(req: NextRequest) {
     logEntry.error_stage = null
     await writeLaunchLog(admin, logEntry, Date.now() - startedAt)
 
-    // Store the LTI resource link in a cookie so /conversation can
-    // feature it at the top of the hub
-    const redirectPath = resourceLink?.id
-      ? `/conversation?lti_resource=${encodeURIComponent(resourceLink.id)}`
-      : '/garden'
+    // v2 Today reads the lti_context cookie (set below) to pin the
+    // launched resource — no query param needed. This is an internal
+    // post-handshake redirect; D2L is not involved past this point.
+    const redirectPath = LTI_STUDENT_PATH
 
     // Store LTI context in a cookie for later use (AGS file sync, etc.)
     const ltiContext = {

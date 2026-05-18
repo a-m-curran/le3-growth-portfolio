@@ -1,7 +1,6 @@
-import { createServerClient } from '@supabase/auth-helpers-nextjs'
 import { createAdminClient } from '@/lib/supabase-admin'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { getV2StudentId } from '@/lib/v2-auth'
 import { getClient } from '@/lib/llm-client'
 import { PHASE_1_SYSTEM_PROMPT } from '@/lib/llm-prompts'
 import { buildSkillLevelMap } from '@/lib/llm-prompts'
@@ -35,36 +34,19 @@ function getCurrentWeek(): number {
 /**
  * POST /api/reflect/start
  *
- * Open-ended reflection — no skill selection required.
- * The student just describes what happened. The system picks the
- * most relevant skill heuristically, but doesn't tell the student.
+ * Open-ended reflection — no skill selection required. Identity resolves
+ * via getV2Identity (real Supabase auth incl. LTI, OR demo persona).
  */
 export async function POST(request: Request) {
   try {
-    const cookieStore = cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() { return cookieStore.getAll() },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
-          },
-        },
-      }
-    )
+    const studentId = await getV2StudentId()
+    if (!studentId) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
 
     const { description } = await request.json()
     if (!description?.trim()) {
       return NextResponse.json({ error: 'Description is required' }, { status: 400 })
-    }
-
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
     const admin = createAdminClient()
@@ -72,7 +54,7 @@ export async function POST(request: Request) {
     const { data: studentRow } = await admin
       .from('student')
       .select('*')
-      .eq('auth_user_id', user.id)
+      .eq('id', studentId)
       .single()
 
     if (!studentRow) {
@@ -101,8 +83,6 @@ export async function POST(request: Request) {
     )
     const skillLevels = buildSkillLevelMap(assessments)
 
-    // Build a minimal context for the Phase 1 question
-    // No skill targeting — let the conversation go where it goes
     const lowestLevel = skillLevels.size > 0
       ? Array.from(skillLevels.entries()).sort(([,a], [,b]) => {
           const order: Record<string, number> = { external: 1, introjected: 2, identified: 3, integrated: 4, intrinsic: 5 }
@@ -122,7 +102,7 @@ export async function POST(request: Request) {
       `CURRENT QUARTER: ${getCurrentQuarter()}`,
       '',
       'OPEN REFLECTION (student-initiated, not tied to any assignment):',
-      `The student wants to reflect on something. Here\u2019s what they wrote:`,
+      `The student wants to reflect on something. Here's what they wrote:`,
       `"${description}"`,
       '',
       `STUDENT'S GENERAL SDT LEVEL: ${lowestLevel as SdtLevel}`,
@@ -139,7 +119,6 @@ export async function POST(request: Request) {
     const llm = getClient()
     const phase1Question = await llm.generate(PHASE_1_SYSTEM_PROMPT, userPrompt)
 
-    // Create conversation
     const { data: conversation, error: createError } = await admin
       .from('growth_conversation')
       .insert({
