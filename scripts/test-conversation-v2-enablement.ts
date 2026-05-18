@@ -96,7 +96,30 @@ async function main(): Promise<void> {
     assertEqual(/\/v2\/conversation\//.test(comp), true, 'composer routes into /v2/conversation/[id]')
   }
 
-  // Task 5 appends its section here.
+  section('lti/launch: env-gated internal redirect; handshake untouched')
+  {
+    const raw = read('src/app/api/lti/launch/route.ts')
+    const code = stripComments(raw)
+    assertEqual(
+      /LTI_POST_LAUNCH_STUDENT_PATH/.test(code) && /LTI_POST_LAUNCH_INSTRUCTOR_PATH/.test(code),
+      true,
+      'both LTI post-launch path env vars are used'
+    )
+    assertEqual(
+      /['"]\/conversation\?lti_resource=/.test(code),
+      false,
+      'old hardcoded v1 student redirect is gone'
+    )
+    assertEqual(
+      /redirectWithSession\(\s*\n?\s*admin,\s*\n?\s*email,\s*\n?\s*['"]\/coach['"]/.test(code),
+      false,
+      'old hardcoded /coach instructor redirect is gone'
+    )
+    // D2L-facing handshake must remain intact (no integration change).
+    assertEqual(/verifyPlatformJwt\s*\(/.test(code), true, 'JWT verification still present')
+    assertEqual(/redirectWithSession\s*\(/.test(code), true, 'session mint/redirect still present')
+    assertEqual(/lti_context/.test(code), true, 'lti_context cookie still set (v2 Today consumes it)')
+  }
 
   finish()
 }
