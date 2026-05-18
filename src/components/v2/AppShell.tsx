@@ -41,6 +41,15 @@ export function AppShell({
   children,
 }: AppShellProps) {
   const items = role === 'coach' ? COACH_NAV : STUDENT_NAV
+  const studentPicker = role === 'coach' ? <StudentPicker /> : null
+  const roleSwitcher = dualRole ? <RoleSwitcher role={role} /> : null
+  const belowUser =
+    studentPicker || roleSwitcher ? (
+      <>
+        {studentPicker}
+        {roleSwitcher}
+      </>
+    ) : null
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 antialiased md:flex">
@@ -50,12 +59,7 @@ export function AppShell({
         userSubLabel={userSubLabel}
         items={items}
         showAdmin={showAdmin}
-        belowUser={
-          <>
-            {role === 'coach' ? <StudentPicker /> : null}
-            {dualRole ? <RoleSwitcher role={role} /> : null}
-          </>
-        }
+        belowUser={belowUser}
       />
 
       <main className="flex-1 min-w-0 pb-16 md:pb-0">
