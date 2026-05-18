@@ -136,9 +136,9 @@ export async function GET(request: Request) {
       actorType: 'coach',
       actorId: linkedCoach.id as string,
       message: `Coach signed in (already linked): ${email}`,
-      context: { email, redirect_to: nextPath || '/coach' },
+      context: { email, redirect_to: nextPath || '/v2' },
     })
-    return NextResponse.redirect(new URL(nextPath || '/coach', request.url))
+    return NextResponse.redirect(new URL(nextPath || '/v2', request.url))
   }
 
   // 2. Already linked as student?
@@ -154,9 +154,9 @@ export async function GET(request: Request) {
       actorId: user.id,
       studentId: linkedStudent.id as string,
       message: `Student signed in (already linked): ${email}`,
-      context: { email, redirect_to: nextPath || '/garden' },
+      context: { email, redirect_to: nextPath || '/v2' },
     })
-    return NextResponse.redirect(new URL(nextPath || '/garden', request.url))
+    return NextResponse.redirect(new URL(nextPath || '/v2', request.url))
   }
 
   // 3. Unlinked coach matching this email?
@@ -176,9 +176,9 @@ export async function GET(request: Request) {
       actorType: 'coach',
       actorId: unmatchedCoach.id as string,
       message: `Coach signed in (claimed unlinked record): ${email}`,
-      context: { email, redirect_to: nextPath || '/coach' },
+      context: { email, redirect_to: nextPath || '/v2' },
     })
-    return NextResponse.redirect(new URL(nextPath || '/coach', request.url))
+    return NextResponse.redirect(new URL(nextPath || '/v2', request.url))
   }
 
   // 4. Unlinked student matching this email?
@@ -199,9 +199,9 @@ export async function GET(request: Request) {
       actorId: user.id,
       studentId: unmatchedStudent.id as string,
       message: `Student signed in (claimed unlinked record): ${email}`,
-      context: { email, redirect_to: nextPath || '/garden' },
+      context: { email, redirect_to: nextPath || '/v2' },
     })
-    return NextResponse.redirect(new URL(nextPath || '/garden', request.url))
+    return NextResponse.redirect(new URL(nextPath || '/v2', request.url))
   }
 
   // 5. Admin allowlist fallback (dev/admin access)
@@ -221,7 +221,7 @@ export async function GET(request: Request) {
 
     if (!coachInsertError && newCoach) {
       console.log(`Admin coach provisioned via ADMIN_EMAILS: ${email}`)
-      return NextResponse.redirect(new URL(nextPath || '/coach', request.url))
+      return NextResponse.redirect(new URL(nextPath || '/v2', request.url))
     }
     // If the coach insert failed for some reason, fall through to rejection
     console.error('Failed to provision admin coach:', coachInsertError)
