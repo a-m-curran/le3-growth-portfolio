@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence } from 'framer-motion'
 import { ConversationPanel } from '@/components/panels/ConversationPanel'
-import { ReflectForm } from '@/app/reflect/ReflectForm'
+import { V2ReflectComposer } from './V2ReflectComposer'
 import { pillarStripeStyle } from '@/components/v2/PillarStripe'
 
 /**
@@ -62,7 +62,7 @@ export function JournalView() {
     <div className="space-y-5">
       {/* Composer */}
       <Card>
-        <ReflectForm />
+        <V2ReflectComposer />
       </Card>
 
       {error && (

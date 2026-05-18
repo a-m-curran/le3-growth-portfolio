@@ -1,59 +1,85 @@
+'use client'
+
+import { useEffect, useRef, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
 /**
- * /v2/reflect/start?work=<id>
+ * /v2/reflect/start?work=<student_work id>
  *
- * Stub destination for "Start reflection" clicks on a featured work
- * card. v2 doesn't yet have its own end-to-end conversation flow —
- * the 3-phase guided experience still runs through v1 routes.
+ * Real v2 entry: create (or resume) the conversation for the chosen
+ * work via /api/conversation/start (now v2-identity-aware), then route
+ * into the existing /v2/conversation/[id] flow.
  *
- * Rather than routing to v1 from inside v2 (which would bounce demo
- * personas back into the v1 layout that ignores the v2 demo cookie
- * and treats everyone as a coach), this page acknowledges the gap
- * and gives the user a clear next move.
- *
- * When the v2 conversation flow gets built, this page becomes the
- * real entry point.
+ * The LTI-pinned card passes ?lti=<resourceLinkId>; mapping that to a
+ * work row is out of scope (spec) — LTI students land on /v2/today and
+ * start via their featured work (?work=). Missing/lti-only degrades to
+ * a clear link back to Today.
  */
-export default function V2ReflectStartPage({ searchParams }: { searchParams: { work?: string } }) {
+export default function V2ReflectStartPage() {
+  const router = useRouter()
+  const params = useSearchParams()
+  const workId = params.get('work')
+  const [error, setError] = useState<string | null>(null)
+  const started = useRef(false)
+
+  useEffect(() => {
+    if (!workId || started.current) return
+    started.current = true
+    ;(async () => {
+      try {
+        const res = await fetch('/api/conversation/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ workId }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          setError(data.error || `Couldn't start (HTTP ${res.status})`)
+          return
+        }
+        router.replace(`/v2/conversation/${data.conversationId}`)
+      } catch {
+        setError('Failed to connect. Please try again.')
+      }
+    })()
+  }, [workId, router])
+
   return (
     <div className="max-w-2xl mx-auto px-6 py-12">
       <div className="rounded-2xl bg-white border border-gray-200 shadow-sm p-8">
-        <h1 className="text-xl font-bold text-gray-900 mb-2">
-          Start a reflection
-        </h1>
-        <p className="text-sm text-gray-600 mb-6">
-          The 3-phase guided conversation flow is part of the v2 IA
-          exploration that&rsquo;s still being built. For now you can:
-        </p>
-        <div className="space-y-2">
-          <Link
-            href="/v2/reflect"
-            className="block px-4 py-3 rounded-lg bg-green-50 border border-green-200 hover:border-green-400 hover:bg-white transition-colors"
-          >
-            <span className="text-sm font-semibold text-green-900 block">
-              ← Back to Reflect
-            </span>
-            <span className="text-xs text-gray-600">
-              See past reflections and in-progress entries
-            </span>
-          </Link>
-          <Link
-            href="/v2/today"
-            className="block px-4 py-3 rounded-lg bg-white border border-gray-200 hover:border-gray-400 transition-colors"
-          >
-            <span className="text-sm font-semibold text-gray-900 block">
-              Go to Today
-            </span>
-            <span className="text-xs text-gray-600">
-              Your home view
-            </span>
-          </Link>
-        </div>
-        {searchParams.work && (
-          <p className="text-[11px] text-gray-400 mt-6">
-            (Work selected: <code className="font-mono">{searchParams.work}</code>)
-          </p>
+        {!workId ? (
+          <>
+            <h1 className="text-xl font-bold text-gray-900 mb-2">Start a reflection</h1>
+            <p className="text-sm text-gray-600 mb-6">
+              Pick a piece of work from your Today view to start a guided
+              reflection on it.
+            </p>
+            <Link
+              href="/v2/today"
+              className="inline-block px-4 py-3 rounded-lg bg-green-50 border border-green-200 hover:border-green-400 hover:bg-white transition-colors text-sm font-semibold text-green-900"
+            >
+              Go to Today →
+            </Link>
+          </>
+        ) : error ? (
+          <>
+            <h1 className="text-xl font-bold text-gray-900 mb-2">
+              Couldn&rsquo;t start the reflection
+            </h1>
+            <p className="text-sm text-red-700 mb-6">{error}</p>
+            <Link
+              href="/v2/today"
+              className="inline-block px-4 py-3 rounded-lg bg-white border border-gray-200 hover:border-gray-400 transition-colors text-sm font-semibold text-gray-900"
+            >
+              ← Back to Today
+            </Link>
+          </>
+        ) : (
+          <div className="flex items-center gap-3 text-sm text-gray-600">
+            <span className="h-4 w-4 rounded-full border-2 border-green-600 border-t-transparent animate-spin" />
+            Starting your reflection…
+          </div>
         )}
       </div>
     </div>
