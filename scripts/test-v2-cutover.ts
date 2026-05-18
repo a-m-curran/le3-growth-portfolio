@@ -28,5 +28,33 @@ section('SP1: root → /v2')
   assertEqual(/redirect\(\s*['"]\/garden['"]/.test(code), false, 'root no longer redirects to v1 /garden')
 }
 
-// Task 2 appends its section here.
+section('SP1: auth callback no-next fallback → /v2; LTI path untouched')
+{
+  const raw = read('src/app/api/auth/callback/route.ts')
+  const code = stripComments(raw)
+  assertEqual(
+    /nextPath \|\| ['"]\/garden['"]/.test(code) || /nextPath \|\| ['"]\/coach['"]/.test(code),
+    false,
+    'no v1 nextPath fallback (/garden or /coach) remains'
+  )
+  assertEqual(
+    (code.match(/nextPath \|\| ['"]\/v2['"]/g) || []).length >= 5,
+    true,
+    'all 5 no-next fallbacks now use /v2'
+  )
+  assertEqual(/verifyOtp\(/.test(code), true, 'OTP verification still present')
+  assertEqual(/exchangeCodeForSession\(/.test(code), true, 'code exchange still present')
+  assertEqual(
+    /const nextPath = next && next\.startsWith\('\/'\) \? next : null/.test(code),
+    true,
+    'nextPath derivation unchanged (LTI passes explicit next → never hits fallback)'
+  )
+  assertEqual(
+    /\/login\?error=not_enrolled/.test(code),
+    true,
+    'rejection path unchanged'
+  )
+}
+
+// Task 3 appends its section here.
 finish()
