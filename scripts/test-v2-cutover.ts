@@ -56,5 +56,41 @@ section('SP1: auth callback no-next fallback → /v2; LTI path untouched')
   )
 }
 
-// Task 3 appends its section here.
+section('SP1: v1 pages are redirect stubs to v2')
+{
+  const cases: [string, string][] = [
+    ['src/app/garden/page.tsx', '/v2'],
+    ['src/app/coach/page.tsx', '/v2/coach'],
+    ['src/app/coach/[studentId]/page.tsx', '/v2/coach/'],
+    ['src/app/coach/[studentId]/prep/page.tsx', '/v2/coach/'],
+    ['src/app/conversation/page.tsx', '/v2'],
+    ['src/app/conversation/[id]/page.tsx', '/v2/conversation/'],
+    ['src/app/reflect/page.tsx', '/v2/journal'],
+    ['src/app/reflection/new/page.tsx', '/v2/journal'],
+    ['src/app/narrative/page.tsx', '/v2/narrative'],
+    ['src/app/career/page.tsx', '/v2/career'],
+    ['src/app/demo/page.tsx', '/v2/demo'],
+    ['src/app/demo/career/page.tsx', '/v2/demo'],
+    ['src/app/demo/coach/page.tsx', '/v2/demo'],
+    ['src/app/demo/coach/[studentId]/page.tsx', '/v2/demo'],
+    ['src/app/demo/coach/[studentId]/prep/page.tsx', '/v2/demo'],
+    ['src/app/demo/conversation/page.tsx', '/v2/demo'],
+    ['src/app/demo/conversation/[id]/page.tsx', '/v2/demo'],
+    ['src/app/demo/garden/page.tsx', '/v2/demo'],
+    ['src/app/demo/narrative/page.tsx', '/v2/demo'],
+    ['src/app/demo/reflect/page.tsx', '/v2/demo'],
+    ['src/app/demo/reflection/new/page.tsx', '/v2/demo'],
+    ['src/app/demo/work/import/page.tsx', '/v2/demo'],
+  ]
+  for (const [file, target] of cases) {
+    const code = stripComments(read(file))
+    assertEqual(/from 'next\/navigation'/.test(code) && /redirect\(/.test(code), true, `${file} is a redirect stub`)
+    assertEqual(code.includes(`redirect(\`${target}`) || code.includes(`redirect('${target}'`), true, `${file} → ${target}`)
+    assertEqual(/getCurrentStudent|getGardenData|DataConsentModal|ConversationFlow|GardenClient/.test(code), false, `${file} no longer renders v1 content`)
+  }
+  const demoLayout = stripComments(read('src/app/demo/layout.tsx'))
+  assertEqual(/return\s*<>\{?\s*children\s*\}?<\/>|return children/.test(demoLayout) || /=>\s*children/.test(demoLayout), true, 'demo layout is a passthrough')
+}
+
+// Task 4 appends its section here.
 finish()
