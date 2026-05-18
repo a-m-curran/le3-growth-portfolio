@@ -23,6 +23,7 @@ import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase-admin'
 
 const PERSONA_COOKIE = 'le3-v2-demo-persona'
+const ACTIVE_ROLE_COOKIE = 'le3-v2-active-role'
 
 export type V2Identity =
   | {
@@ -32,6 +33,7 @@ export type V2Identity =
       email: string
       authUserId: string
       isDemo: boolean
+      dualRole: boolean
     }
   | {
       role: 'student'
@@ -43,6 +45,7 @@ export type V2Identity =
       cohort: string | null
       authUserId: string
       isDemo: boolean
+      dualRole: boolean
     }
 
 export async function getV2Identity(): Promise<V2Identity | null> {
@@ -94,44 +97,59 @@ export async function getV2Identity(): Promise<V2Identity | null> {
 
   const admin = createAdminClient()
 
-  // Coach first — coaches who are also students would still want
-  // the coach shell as their primary view.
-  const { data: coachRow } = await admin
-    .from('coach')
-    .select('id, name, email, is_demo')
-    .eq('auth_user_id', user.id)
-    .maybeSingle()
+  // Dual-role resolution. The DB already allows one auth_user_id to
+  // own BOTH a coach and a student row (each table is
+  // UNIQUE(auth_user_id)). Look up both; if the human owns both, the
+  // le3-v2-active-role cookie SELECTS which experience is active. The
+  // cookie is only a selector among roles proven-owned right here — it
+  // never grants a role. Absent/invalid cookie ⇒ coach-first (today's
+  // behavior, preserved). Single-role and demo paths are unchanged.
+  const [{ data: coachRow }, { data: studentRow }] = await Promise.all([
+    admin
+      .from('coach')
+      .select('id, name, email, is_demo')
+      .eq('auth_user_id', user.id)
+      .maybeSingle(),
+    admin
+      .from('student')
+      .select('id, first_name, last_name, email, cohort, is_demo')
+      .eq('auth_user_id', user.id)
+      .maybeSingle(),
+  ])
 
-  if (coachRow) {
-    return {
-      role: 'coach',
-      id: coachRow.id as string,
-      name: coachRow.name as string,
-      email: coachRow.email as string,
-      authUserId: user.id,
-      isDemo: !!(coachRow.is_demo as boolean | null),
-    }
+  const dualRole = !!coachRow && !!studentRow
+  const activeRole = cookieStore.get(ACTIVE_ROLE_COOKIE)?.value
+
+  const asCoach = (): V2Identity => ({
+    role: 'coach',
+    id: coachRow!.id as string,
+    name: coachRow!.name as string,
+    email: coachRow!.email as string,
+    authUserId: user.id,
+    isDemo: !!(coachRow!.is_demo as boolean | null),
+    dualRole,
+  })
+
+  const asStudent = (): V2Identity => ({
+    role: 'student',
+    id: studentRow!.id as string,
+    firstName: studentRow!.first_name as string,
+    lastName: studentRow!.last_name as string,
+    name: `${studentRow!.first_name} ${studentRow!.last_name}`.trim(),
+    email: studentRow!.email as string,
+    cohort: (studentRow!.cohort as string | null) ?? null,
+    authUserId: user.id,
+    isDemo: !!(studentRow!.is_demo as boolean | null),
+    dualRole,
+  })
+
+  // Both roles: cookie selects; coach-first default when unset/invalid.
+  if (coachRow && studentRow) {
+    return activeRole === 'student' ? asStudent() : asCoach()
   }
-
-  const { data: studentRow } = await admin
-    .from('student')
-    .select('id, first_name, last_name, email, cohort, is_demo')
-    .eq('auth_user_id', user.id)
-    .maybeSingle()
-
-  if (studentRow) {
-    return {
-      role: 'student',
-      id: studentRow.id as string,
-      firstName: studentRow.first_name as string,
-      lastName: studentRow.last_name as string,
-      name: `${studentRow.first_name} ${studentRow.last_name}`.trim(),
-      email: studentRow.email as string,
-      cohort: (studentRow.cohort as string | null) ?? null,
-      authUserId: user.id,
-      isDemo: !!(studentRow.is_demo as boolean | null),
-    }
-  }
+  // Single role: byte-equivalent to the prior behavior (dualRole=false).
+  if (coachRow) return asCoach()
+  if (studentRow) return asStudent()
 
   return null
 }
@@ -174,6 +192,7 @@ async function resolvePersonaFromDb(personaSlug: string): Promise<V2Identity | n
       cohort: (studentRow.cohort as string | null) ?? null,
       authUserId: `demo:${personaSlug}`,
       isDemo: true,
+      dualRole: false,
     }
   }
 
@@ -192,13 +211,14 @@ async function resolvePersonaFromDb(personaSlug: string): Promise<V2Identity | n
       email: coachRow.email as string,
       authUserId: `demo:${personaSlug}`,
       isDemo: true,
+      dualRole: false,
     }
   }
 
   return null
 }
 
-export { PERSONA_COOKIE }
+export { PERSONA_COOKIE, ACTIVE_ROLE_COOKIE }
 
 /**
  * Convenience helper for API routes: get the resolved student id
