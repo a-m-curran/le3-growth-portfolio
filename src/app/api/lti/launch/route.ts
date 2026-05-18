@@ -8,6 +8,7 @@ import {
   isStudent,
   isInstructor,
 } from '@/lib/lti/claims'
+import { ACTIVE_ROLE_COOKIE } from '@/lib/v2-auth'
 
 // Internal post-handshake redirect targets (D2L never sees these — set
 // after the LTI handshake completes). Env-gated for per-environment
@@ -259,7 +260,24 @@ export async function POST(req: NextRequest) {
         logEntry.status = 'success'
         logEntry.error_stage = null
         await writeLaunchLog(admin, logEntry, Date.now() - startedAt)
-        return redirectWithSession(admin, email, LTI_INSTRUCTOR_PATH, req.nextUrl.origin)
+        {
+          const res = await redirectWithSession(
+            admin,
+            email,
+            LTI_INSTRUCTOR_PATH,
+            req.nextUrl.origin
+          )
+          res.cookies.set({
+            name: ACTIVE_ROLE_COOKIE,
+            value: 'coach',
+            path: '/',
+            httpOnly: true,
+            secure: true,
+            sameSite: 'none',
+            maxAge: 86400,
+          })
+          return res
+        }
       }
 
       // Auto-provision coach if they don't exist yet
@@ -282,7 +300,24 @@ export async function POST(req: NextRequest) {
       logEntry.status = 'success'
       logEntry.error_stage = null
       await writeLaunchLog(admin, logEntry, Date.now() - startedAt)
-      return redirectWithSession(admin, email, LTI_INSTRUCTOR_PATH, req.nextUrl.origin)
+      {
+        const res = await redirectWithSession(
+          admin,
+          email,
+          LTI_INSTRUCTOR_PATH,
+          req.nextUrl.origin
+        )
+        res.cookies.set({
+          name: ACTIVE_ROLE_COOKIE,
+          value: 'coach',
+          path: '/',
+          httpOnly: true,
+          secure: true,
+          sameSite: 'none',
+          maxAge: 86400,
+        })
+        return res
+      }
     }
 
     // Student launch
@@ -442,6 +477,21 @@ export async function POST(req: NextRequest) {
       sameSite: 'none',
       maxAge: 86400,
       path: '/',
+    })
+
+    // Dual-role: an LTI student launch makes 'student' the active role
+    // on arrival (overwrites any stale web cookie so D2L's per-launch
+    // role wins). Same attribute profile as lti_context so it survives
+    // the cross-site Brightspace redirect. Switchable mid-session via
+    // /api/v2/switch-role. Post-handshake — D2L never sees this.
+    response.cookies.set({
+      name: ACTIVE_ROLE_COOKIE,
+      value: 'student',
+      path: '/',
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      maxAge: 86400,
     })
 
     // Clear state/nonce cookies
