@@ -78,7 +78,25 @@ async function main(): Promise<void> {
     )
   }
 
-  // Tasks 4–5 append their sections here.
+  section('v2 Journal: v2-native composer, no v1 ReflectForm bounce')
+  {
+    const jv = read('src/app/v2/(student)/journal/JournalView.tsx')
+    assertEqual(
+      /@\/app\/reflect\/ReflectForm/.test(jv),
+      false,
+      'JournalView no longer imports the v1 ReflectForm'
+    )
+    assertEqual(
+      /V2ReflectComposer/.test(jv),
+      true,
+      'JournalView uses V2ReflectComposer'
+    )
+    const comp = read('src/app/v2/(student)/journal/V2ReflectComposer.tsx')
+    assertEqual(/\/api\/reflect\/start/.test(comp), true, 'composer POSTs /api/reflect/start')
+    assertEqual(/\/v2\/conversation\//.test(comp), true, 'composer routes into /v2/conversation/[id]')
+  }
+
+  // Task 5 appends its section here.
 
   finish()
 }
