@@ -46,6 +46,7 @@ export async function GET(
     student_id: string
     work_id: string | null
     status: string
+    conversation_type: string | null
     started_at: string
     completed_at: string | null
     duration_seconds: number | null
@@ -76,7 +77,7 @@ export async function GET(
   const { data: convRowRaw, error: convErr } = await admin
     .from('growth_conversation')
     .select(
-      'id, student_id, work_id, status, started_at, completed_at, ' +
+      'id, student_id, work_id, status, conversation_type, started_at, completed_at, ' +
         'duration_seconds, quarter, week_number, work_context, ' +
         'prompt_phase_1, response_phase_1, prompt_phase_2, response_phase_2, ' +
         'prompt_phase_3, response_phase_3, synthesis_text, suggested_insight, ' +
@@ -153,6 +154,7 @@ export async function GET(
     studentId: convRow.student_id,
     workId: convRow.work_id,
     status: convRow.status,
+    conversationType: convRow.conversation_type,
     startedAt: convRow.started_at,
     completedAt: convRow.completed_at,
     durationSeconds: convRow.duration_seconds,

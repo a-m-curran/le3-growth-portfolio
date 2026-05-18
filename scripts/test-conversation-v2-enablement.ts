@@ -121,6 +121,22 @@ async function main(): Promise<void> {
     assertEqual(/lti_context/.test(code), true, 'lti_context cookie still set (v2 Today consumes it)')
   }
 
+  section('api/conversations/[id]: returns conversationType (open-reflection synthesis fix)')
+  {
+    const raw = read('src/app/api/conversations/[id]/route.ts')
+    const code = stripComments(raw)
+    assertEqual(
+      /conversation_type/.test(code),
+      true,
+      'conversation_type selected from growth_conversation'
+    )
+    assertEqual(
+      /conversationType:\s*convRow\.conversation_type/.test(code),
+      true,
+      'conversationType returned in the JSON response'
+    )
+  }
+
   finish()
 }
 main()
