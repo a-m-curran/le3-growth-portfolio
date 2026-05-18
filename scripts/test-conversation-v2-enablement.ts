@@ -57,7 +57,28 @@ async function main(): Promise<void> {
     )
   }
 
-  // Tasks 3–5 append their sections here.
+  section('v2 reflect/start: real surface (no longer the stub)')
+  {
+    const code = read('src/app/v2/(student)/reflect/start/page.tsx')
+    assertEqual(/'use client'/.test(code), true, 'reflect/start is a client component')
+    assertEqual(
+      /\/api\/conversation\/start/.test(code),
+      true,
+      'reflect/start POSTs /api/conversation/start'
+    )
+    assertEqual(
+      /\/v2\/conversation\//.test(code),
+      true,
+      'reflect/start routes into /v2/conversation/[id]'
+    )
+    assertEqual(
+      /still being built/.test(code),
+      false,
+      'the v2 IA "still being built" stub copy is gone'
+    )
+  }
+
+  // Tasks 4–5 append their sections here.
 
   finish()
 }
