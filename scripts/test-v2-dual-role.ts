@@ -91,5 +91,35 @@ section('switch-role: authed, ownership-gated, cookie selector')
   )
 }
 
-// Task 3 appends its section here.
+section('lti/launch: active-role cookie at all 3 exits; handshake intact')
+{
+  const raw = read('src/app/api/lti/launch/route.ts')
+  const code = stripComments(raw)
+  assertEqual(
+    /ACTIVE_ROLE_COOKIE/.test(code) && /from '@\/lib\/v2-auth'/.test(code),
+    true,
+    'imports the shared ACTIVE_ROLE_COOKIE const'
+  )
+  assertEqual(
+    (code.match(/name:\s*ACTIVE_ROLE_COOKIE/g) || []).length >= 3,
+    true,
+    'active-role cookie set at ≥3 exits (2 instructor + 1 student)'
+  )
+  assertEqual(
+    (code.match(/value:\s*'coach'/g) || []).length >= 2,
+    true,
+    'instructor exits set value coach'
+  )
+  assertEqual(
+    /value:\s*'student'/.test(code),
+    true,
+    'student exit sets value student'
+  )
+  // D2L-facing handshake must remain intact (no integration change).
+  assertEqual(/verifyPlatformJwt\s*\(/.test(code), true, 'JWT verification still present')
+  assertEqual(/redirectWithSession\s*\(/.test(code), true, 'session mint still present')
+  assertEqual(/lti_context/.test(code), true, 'lti_context cookie still set')
+}
+
+// Task 4 appends its section here.
 finish()
