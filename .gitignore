@@ -26,6 +26,9 @@
 # git worktrees (isolated dev workspaces)
 /.worktrees
 
+# superpowers brainstorm mockups (visual companion)
+/.superpowers
+
 # Word/Office lock files (temporary files created while docs are open)
 ~$*.docx
 ~$*.doc
