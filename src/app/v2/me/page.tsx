@@ -27,6 +27,7 @@ export default async function V2MePage() {
       userName={identity.name}
       userSubLabel={identity.role === 'coach' ? 'Coach' : identity.cohort}
       showAdmin={showAdmin}
+      dualRole={identity.dualRole}
     >
       {identity.role === 'coach' ? (
         <MeView
@@ -34,6 +35,7 @@ export default async function V2MePage() {
           name={identity.name}
           email={identity.email}
           meta="Active coach"
+          dualRole={identity.dualRole}
         />
       ) : (
         <MeView
@@ -41,6 +43,7 @@ export default async function V2MePage() {
           name={identity.name}
           email={identity.email}
           meta={identity.cohort || 'No cohort assigned'}
+          dualRole={identity.dualRole}
         />
       )}
     </AppShell>

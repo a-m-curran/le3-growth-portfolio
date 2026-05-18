@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { AppShell } from '@/components/v2/AppShell'
 import { getV2Identity } from '@/lib/v2-auth'
+import { DataConsentModal } from '@/components/student/DataConsentModal'
 
 /**
  * Student-shell wrapper. Forces the student sidebar / bottom-tab-bar
@@ -32,6 +33,7 @@ export default async function StudentGroupLayout({ children }: { children: React
   return (
     <AppShell role="student" userName={identity.name} userSubLabel={subLabel} dualRole={identity.dualRole}>
       {children}
+      <DataConsentModal />
     </AppShell>
   )
 }
