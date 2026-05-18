@@ -38,5 +38,17 @@ section('SP2: DataConsentModal reuses DataHandlingNotice + re-homed to v2')
   assertEqual(/<DataConsentModal\s*\/>/.test(layout), true, 'student layout mounts DataConsentModal (re-homed from v1 /garden)')
 }
 
-// Task 3 appends its section here.
+section('SP2: /v2/me passes dualRole; MeView tidied + data-handling works')
+{
+  const page = stripComments(read('src/app/v2/me/page.tsx'))
+  assertEqual(/dualRole=\{identity\.dualRole\}/.test(page), true, 'page passes dualRole')
+  const mv = stripComments(read('src/app/v2/me/MeView.tsx'))
+  assertEqual(/Email notifications/.test(mv), false, 'Email notifications row removed')
+  assertEqual(/Push notifications/.test(mv), false, 'Push notifications row removed')
+  assertEqual(/nluId|programStartDate/.test(mv), false, 'dead nluId/programStartDate props removed')
+  assertEqual(/dualRole/.test(mv), true, 'MeView takes dualRole')
+  assertEqual(/DataHandlingNotice/.test(mv) && /from '@\/components\/student\/DataHandlingNotice'/.test(mv), true, 'MeView opens the shared notice')
+  assertEqual(/acknowledge-consent/.test(mv), true, 'MeView reads acknowledgement state')
+  assertEqual(/RoleSwitcher/.test(mv) && /from '@\/components\/v2\/RoleSwitcher'/.test(mv), true, 'MeView reuses RoleSwitcher')
+}
 finish()
