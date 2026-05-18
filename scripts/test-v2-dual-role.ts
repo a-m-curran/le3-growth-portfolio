@@ -57,5 +57,39 @@ section('v2-auth: dual-role active-role resolution')
   )
 }
 
-// Task 2 appends its section here.
+section('switch-role: authed, ownership-gated, cookie selector')
+{
+  const raw = read('src/app/api/v2/switch-role/route.ts')
+  const code = stripComments(raw)
+  assertEqual(/export async function POST/.test(code), true, 'POST handler')
+  assertEqual(
+    /ACTIVE_ROLE_COOKIE/.test(code) && /from '@\/lib\/v2-auth'/.test(code),
+    true,
+    'imports the shared ACTIVE_ROLE_COOKIE const'
+  )
+  assertEqual(
+    /supabase\.auth\.getUser\(\)/.test(code),
+    true,
+    'resolves the real Supabase auth user (no demo path)'
+  )
+  assertEqual(/status:\s*401/.test(code), true, 'unauthenticated → 401')
+  assertEqual(
+    /\.eq\('auth_user_id', user\.id\)/.test(code),
+    true,
+    'validates ownership by auth_user_id'
+  )
+  assertEqual(/status:\s*403/.test(code), true, 'unowned role → 403')
+  assertEqual(
+    /cookies\.delete\(ACTIVE_ROLE_COOKIE\)/.test(code),
+    true,
+    'clear path unsets the cookie'
+  )
+  assertEqual(
+    /response\.cookies\.set\(\{[\s\S]*name:\s*ACTIVE_ROLE_COOKIE/.test(code),
+    true,
+    'sets the cookie on the redirect response object'
+  )
+}
+
+// Task 3 appends its section here.
 finish()
