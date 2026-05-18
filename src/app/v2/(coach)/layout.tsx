@@ -25,7 +25,7 @@ export default async function CoachGroupLayout({ children }: { children: React.R
   const showAdmin = isAdminEmail(identity.email)
 
   return (
-    <AppShell role="coach" userName={identity.name} userSubLabel="Coach" showAdmin={showAdmin}>
+    <AppShell role="coach" userName={identity.name} userSubLabel="Coach" showAdmin={showAdmin} dualRole={identity.dualRole}>
       {children}
     </AppShell>
   )

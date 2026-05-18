@@ -121,5 +121,34 @@ section('lti/launch: active-role cookie at all 3 exits; handshake intact')
   assertEqual(/lti_context/.test(code), true, 'lti_context cookie still set')
 }
 
-// Task 4 appends its section here.
+section('v2 shell: dual-role switch control wired')
+{
+  const rs = stripComments(read('src/components/v2/RoleSwitcher.tsx'))
+  assertEqual(/'use client'/.test(rs), true, 'RoleSwitcher is a client component')
+  assertEqual(
+    /\/api\/v2\/switch-role\?role=/.test(rs),
+    true,
+    'RoleSwitcher posts to /api/v2/switch-role'
+  )
+  assertEqual(/method="POST"/i.test(rs), true, 'RoleSwitcher uses a POST form')
+
+  const shell = stripComments(read('src/components/v2/AppShell.tsx'))
+  assertEqual(/dualRole/.test(shell), true, 'AppShell takes a dualRole prop')
+  assertEqual(/RoleSwitcher/.test(shell), true, 'AppShell renders RoleSwitcher')
+
+  const sl = stripComments(read('src/app/v2/(student)/layout.tsx'))
+  const cl = stripComments(read('src/app/v2/(coach)/layout.tsx'))
+  assertEqual(
+    /dualRole=\{identity\.dualRole\}/.test(sl),
+    true,
+    'student layout passes dualRole'
+  )
+  assertEqual(
+    /dualRole=\{identity\.dualRole\}/.test(cl),
+    true,
+    'coach layout passes dualRole'
+  )
+}
+
+// Task 5 (verification) appends nothing — finish() stays last.
 finish()

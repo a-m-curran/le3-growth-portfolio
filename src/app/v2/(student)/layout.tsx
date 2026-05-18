@@ -30,7 +30,7 @@ export default async function StudentGroupLayout({ children }: { children: React
   const subLabel = identity.cohort
 
   return (
-    <AppShell role="student" userName={identity.name} userSubLabel={subLabel}>
+    <AppShell role="student" userName={identity.name} userSubLabel={subLabel} dualRole={identity.dualRole}>
       {children}
     </AppShell>
   )

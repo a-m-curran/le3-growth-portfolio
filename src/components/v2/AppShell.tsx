@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Sidebar } from './Sidebar'
 import { BottomTabBar } from './BottomTabBar'
 import { StudentPicker } from './StudentPicker'
+import { RoleSwitcher } from './RoleSwitcher'
 import { STUDENT_NAV, COACH_NAV } from './nav-config'
 
 interface AppShellProps {
@@ -13,6 +14,8 @@ interface AppShellProps {
   userSubLabel?: string | null
   /** True if current user is allowed to see admin-flagged nav items */
   showAdmin?: boolean
+  /** True iff this auth_user_id owns both a coach and a student row */
+  dualRole?: boolean
   children: ReactNode
 }
 
@@ -34,6 +37,7 @@ export function AppShell({
   userName,
   userSubLabel,
   showAdmin = false,
+  dualRole = false,
   children,
 }: AppShellProps) {
   const items = role === 'coach' ? COACH_NAV : STUDENT_NAV
@@ -46,7 +50,12 @@ export function AppShell({
         userSubLabel={userSubLabel}
         items={items}
         showAdmin={showAdmin}
-        belowUser={role === 'coach' ? <StudentPicker /> : null}
+        belowUser={
+          <>
+            {role === 'coach' ? <StudentPicker /> : null}
+            {dualRole ? <RoleSwitcher role={role} /> : null}
+          </>
+        }
       />
 
       <main className="flex-1 min-w-0 pb-16 md:pb-0">
