@@ -30,6 +30,12 @@ export async function GET() {
 
   const admin = createAdminClient()
 
+  // Pilot: both queries are intentionally unbounded. Real students have
+  // up to ~240 submissions / ~18 conversations; a silent .limit() here
+  // previously dropped older work from /v2/reflect (compounded by the
+  // featuredWork cap below), making submissions unavailable to reflect
+  // on. A navigable quarter→course→assignment view is the planned
+  // redesign; until then nothing eligible may be hidden.
   const [{ data: convoRows }, { data: workRows }] = await Promise.all([
     admin
       .from('growth_conversation')
@@ -43,14 +49,12 @@ export async function GET() {
           '  durable_skill(name, pillar:pillar_id(name)))'
       )
       .eq('student_id', studentId)
-      .order('started_at', { ascending: false })
-      .limit(50),
+      .order('started_at', { ascending: false }),
     admin
       .from('student_work')
       .select('id, title, course_name, submitted_at, work_type')
       .eq('student_id', studentId)
-      .order('submitted_at', { ascending: false, nullsFirst: false })
-      .limit(20),
+      .order('submitted_at', { ascending: false, nullsFirst: false }),
   ])
 
   interface ConvoTag {
@@ -129,9 +133,9 @@ export async function GET() {
       .filter((id): id is string => !!id)
   )
 
+  // No cap — every un-reflected submission is returned (see note above).
   const featuredWork = work
     .filter(w => !reflectedWorkIds.has(w.id))
-    .slice(0, 5)
     .map(w => ({
       id: w.id,
       title: w.title,
