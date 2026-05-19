@@ -68,5 +68,23 @@ section('Task 4: passlink-admin lib')
   assertEqual(/"(.*?)"/.test(s) === true && /replace\(/.test(s), true, 'CSV escaping present')
 }
 
+section('Task 5: admin passlink routes')
+{
+  const issue = stripComments(read('src/app/api/admin/passlinks/issue/route.ts'))
+  const roster = stripComments(read('src/app/api/admin/passlinks/route.ts'))
+  const rotate = stripComments(read('src/app/api/admin/passlinks/rotate/route.ts'))
+  const revoke = stripComments(read('src/app/api/admin/passlinks/revoke-all/route.ts'))
+  for (const [name, src] of [['issue', issue], ['roster', roster], ['rotate', rotate], ['revoke', revoke]] as const) {
+    assertEqual(/import \{ requireAdmin \} from '@\/lib\/auth\/require-admin'/.test(src), true, `${name}: uses requireAdmin`)
+    assertEqual(/const gate = await requireAdmin\(\)/.test(src) && /!gate\.ok/.test(src), true, `${name}: gate enforced`)
+    assertEqual(/export const runtime = 'nodejs'/.test(src) && /export const dynamic = 'force-dynamic'/.test(src), true, `${name}: runtime/dynamic`)
+  }
+  assertEqual(/text\/csv/.test(issue) && /Content-Disposition/.test(issue) && /attachment; filename=/.test(issue), true, 'issue returns CSV attachment')
+  assertEqual(/gatherPilotSubjects/.test(issue) && /ensureSubjectAndMint/.test(issue) && /toCsv/.test(issue), true, 'issue uses lib')
+  assertEqual(/getPasslinkRoster/.test(roster), true, 'roster uses getPasslinkRoster')
+  assertEqual(/rotatePasslink/.test(rotate), true, 'rotate uses rotatePasslink')
+  assertEqual(/revokeAllPasslinks/.test(revoke), true, 'revoke-all uses revokeAllPasslinks')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 finish()
