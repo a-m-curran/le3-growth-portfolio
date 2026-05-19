@@ -1,15 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { requireAdmin } from '@/lib/auth/require-admin'
-import { gatherPilotSubjects, ensureSubjectAndMint, toCsv, type IssueResult } from '@/lib/auth/passlink-admin'
+import {
+  gatherPilotSubjects,
+  ensureSubjectAndMint,
+  prefetchAuthUserIdsByEmail,
+  toCsv,
+  type IssueResult,
+} from '@/lib/auth/passlink-admin'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
-// ~81 pilot subjects are provisioned + minted SEQUENTIALLY here (each
-// subject: auth listUsers + several Supabase round-trips), realistically
-// ~25-50s+. Raise the function ceiling well above that. NOTE: this only
-// takes effect on Vercel Pro (300s max); Hobby hard-caps at 10s and
-// cannot run the full bulk issue — see the Task 7 owner runbook.
+// One up-front listUsers snapshot (prefetchAuthUserIdsByEmail) makes the
+// ~81-subject bulk issue a few seconds (one paginated listUsers + ~3
+// Supabase round-trips per subject) instead of ~25-50s. maxDuration is a
+// generous safety margin, not load-bearing — effective on Vercel Pro;
+// the optimized path also completes well within Hobby's 10s for the
+// pilot size. See the Task 7 owner runbook.
 export const maxDuration = 300
 
 /**
@@ -28,10 +35,11 @@ export async function POST(req: NextRequest) {
     const baseUrl = req.nextUrl.origin
     const rotateAll = req.nextUrl.searchParams.get('rotateAll') === '1'
 
+    const authMap = await prefetchAuthUserIdsByEmail(admin)
     const subjects = await gatherPilotSubjects(admin)
     const results: IssueResult[] = []
     for (const s of subjects) {
-      results.push(await ensureSubjectAndMint(admin, s, baseUrl, rotateAll))
+      results.push(await ensureSubjectAndMint(admin, s, baseUrl, rotateAll, authMap))
     }
 
     const csv = toCsv(results)

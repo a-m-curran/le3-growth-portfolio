@@ -68,18 +68,50 @@ async function findAuthUserIdByEmail(admin: Admin, email: string): Promise<strin
   return null
 }
 
-async function ensureAuthUser(admin: Admin, email: string): Promise<string> {
-  const existing = await findAuthUserIdByEmail(admin, email)
+/**
+ * One-shot snapshot of all auth users -> Map<emailLower, id>. Built ONCE
+ * by the bulk issue route and threaded into ensureAuthUser so the
+ * ~81-subject batch does a single listUsers pagination instead of one
+ * per subject (the dominant cost; was ~25-50s, now a few seconds).
+ */
+export async function prefetchAuthUserIdsByEmail(admin: Admin): Promise<Map<string, string>> {
+  const map = new Map<string, string>()
+  for (let page = 1; page <= 50; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 })
+    if (error) throw error
+    const users = data?.users ?? []
+    for (const u of users) {
+      const e = (u.email ?? '').toLowerCase()
+      if (e) map.set(e, u.id)
+    }
+    if (users.length < 1000) break
+  }
+  return map
+}
+
+async function ensureAuthUser(
+  admin: Admin,
+  email: string,
+  authMap?: Map<string, string>
+): Promise<string> {
+  const key = email.toLowerCase()
+  const existing = authMap ? authMap.get(key) ?? null : await findAuthUserIdByEmail(admin, email)
   if (existing) return existing
   const { data, error } = await admin.auth.admin.createUser({ email, email_confirm: true })
   if (error || !data?.user) {
     throw new Error(`auth user create failed for ${email}: ${error?.message ?? 'no user'}`)
   }
+  if (authMap) authMap.set(key, data.user.id)
   return data.user.id
 }
 
-async function ensureCoachId(admin: Admin, email: string, name: string): Promise<string> {
-  const authUserId = await ensureAuthUser(admin, email)
+async function ensureCoachId(
+  admin: Admin,
+  email: string,
+  name: string,
+  authMap?: Map<string, string>
+): Promise<string> {
+  const authUserId = await ensureAuthUser(admin, email, authMap)
   const { data: coach, error: cErr } = await admin
     .from('coach')
     .select('id, auth_user_id, status')
@@ -105,7 +137,11 @@ async function ensureCoachId(admin: Admin, email: string, name: string): Promise
   return inserted.id as string
 }
 
-async function ensureStudentId(admin: Admin, email: string): Promise<string> {
+async function ensureStudentId(
+  admin: Admin,
+  email: string,
+  authMap?: Map<string, string>
+): Promise<string> {
   const { data: student, error } = await admin
     .from('student')
     .select('id, auth_user_id')
@@ -115,7 +151,7 @@ async function ensureStudentId(admin: Admin, email: string): Promise<string> {
     .maybeSingle()
   if (error) throw error
   if (!student?.id) throw new Error(`no active non-demo student row for ${email}`)
-  const authUserId = await ensureAuthUser(admin, email)
+  const authUserId = await ensureAuthUser(admin, email, authMap)
   if (!student.auth_user_id) {
     const { error: uErr } = await admin
       .from('student')
@@ -130,15 +166,16 @@ export async function ensureSubjectAndMint(
   admin: Admin,
   subject: PilotSubject,
   baseUrl: string,
-  rotate = false
+  rotate = false,
+  authMap?: Map<string, string>
 ): Promise<IssueResult> {
   const base = { name: subject.name, email: subject.email, role: subject.kind }
   try {
     const col = subject.kind === 'coach' ? 'coach_id' : 'student_id'
     const subjectId =
       subject.kind === 'coach'
-        ? await ensureCoachId(admin, subject.email, subject.name)
-        : await ensureStudentId(admin, subject.email)
+        ? await ensureCoachId(admin, subject.email, subject.name, authMap)
+        : await ensureStudentId(admin, subject.email, authMap)
 
     const { data: active, error: aErr } = await admin
       .from('auth_passlink')
