@@ -87,5 +87,19 @@ section('Task 5: admin passlink routes')
   assertEqual(/revokeAllPasslinks/.test(revoke), true, 'revoke-all uses revokeAllPasslinks')
 }
 
+section('Task 6: Tools Passlinks tab + panel + prefetch')
+{
+  const tv = stripComments(read('src/app/v2/(coach)/coach/tools/ToolsView.tsx'))
+  assertEqual(/'passlinks'/.test(tv) && /label="Passlinks"/.test(tv), true, 'ToolsView has Passlinks tab')
+  assertEqual(/<PasslinksPanel/.test(tv) && /from '@\/components\/coach\/PasslinksPanel'/.test(tv), true, 'renders PasslinksPanel')
+  const pg = stripComments(read('src/app/v2/(coach)/coach/tools/page.tsx'))
+  assertEqual(/getPasslinkRoster/.test(pg) && /from '@\/lib\/auth\/passlink-admin'/.test(pg), true, 'page prefetches roster')
+  const pp = stripComments(read('src/components/coach/PasslinksPanel.tsx'))
+  assertEqual(/'use client'/.test(pp), true, 'PasslinksPanel is client')
+  assertEqual(/\/api\/admin\/passlinks\/issue/.test(pp) && /attachment|download|Blob/.test(pp), true, 'issue → CSV download')
+  assertEqual(/\/api\/admin\/passlinks\/rotate/.test(pp), true, 'rotate wired')
+  assertEqual(/\/api\/admin\/passlinks\/revoke-all/.test(pp) && /confirm\(/.test(pp), true, 'revoke-all confirm-gated')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 finish()
