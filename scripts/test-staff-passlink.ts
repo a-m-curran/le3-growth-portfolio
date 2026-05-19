@@ -28,5 +28,16 @@ section('Task 1: 017_auth_passlink.sql migration')
   assertEqual(/alter table auth_passlink enable row level security/.test(sql), true, 'RLS enabled')
 }
 
+section('Task 2: redirectWithSession extracted to shared module')
+{
+  const mod = stripComments(read('src/lib/auth/redirect-with-session.ts'))
+  assertEqual(/export async function redirectWithSession\s*\(/.test(mod), true, 'shared module exports redirectWithSession')
+  assertEqual(/type: 'magiclink'/.test(mod) && /hashed_token/.test(mod), true, 'mints magiclink hashed_token')
+  assertEqual(/\/api\/auth\/callback\?/.test(mod), true, 'redirects to /api/auth/callback')
+  const launch = stripComments(read('src/app/api/lti/launch/route.ts'))
+  assertEqual(/import \{ redirectWithSession \} from '@\/lib\/auth\/redirect-with-session'/.test(launch), true, 'launch route imports the shared helper')
+  assertEqual(/async function redirectWithSession\s*\(/.test(launch), false, 'launch route no longer defines redirectWithSession locally')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 finish()
