@@ -39,5 +39,21 @@ section('Task 2: redirectWithSession extracted to shared module')
   assertEqual(/async function redirectWithSession\s*\(/.test(launch), false, 'launch route no longer defines redirectWithSession locally')
 }
 
+section('Task 3: /api/auth/passlink endpoint + middleware unchanged')
+{
+  const r = stripComments(read('src/app/api/auth/passlink/route.ts'))
+  assertEqual(/export const dynamic = 'force-dynamic'/.test(r) && /export const runtime = 'nodejs'/.test(r), true, 'dynamic + nodejs runtime')
+  assertEqual(/createHash\('sha256'\)/.test(r), true, 'hashes token with SHA-256')
+  assertEqual(/from\('auth_passlink'\)/.test(r) && /\.is\('revoked_at', null\)/.test(r), true, 'looks up non-revoked auth_passlink')
+  assertEqual(/from\('coach'\)/.test(r) && /status !== 'active'/.test(r), true, 'requires active coach')
+  assertEqual(/import \{ redirectWithSession \} from '@\/lib\/auth\/redirect-with-session'/.test(r) && /redirectWithSession\(\s*admin,/.test(r), true, 'delegates to shared session helper')
+  assertEqual(/'\/v2\/coach'/.test(r), true, 'lands on /v2/coach')
+  assertEqual(/\/login\?error=invalid_link/.test(r), true, 'generic invalid_link error')
+  assertEqual(/ACTIVE_ROLE_COOKIE/.test(r), true, 'sets active-role cookie (coach)')
+  const mw = stripComments(read('src/middleware.ts'))
+  assertEqual(/pathname\.startsWith\('\/api\/auth'\)/.test(mw), true, 'middleware still public-allowlists /api/auth (passlink inherits it)')
+  assertEqual(/passlink/.test(mw), false, 'middleware NOT edited for passlink')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 finish()
