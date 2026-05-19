@@ -45,6 +45,12 @@ export async function GET(req: NextRequest) {
   if (!link) return invalid(origin)
 
   // Best-effort usage stamp; a failed stats write must not block sign-in.
+  // Stamped here — for ANY valid, non-revoked token, BEFORE subject
+  // resolution — so the coach and student branches share one stamp.
+  // Semantics: "token presented & passed token-level validation".
+  // NOTE: intentionally differs from 017's coach-only stamp (placed
+  // AFTER the active-coach check); admin surfaces (Tasks 4/6) must read
+  // last_used_at with THESE semantics, not the old coach-only meaning.
   await admin
     .from('auth_passlink')
     .update({ last_used_at: new Date().toISOString() })
