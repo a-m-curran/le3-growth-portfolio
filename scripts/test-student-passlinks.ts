@@ -36,5 +36,21 @@ section('Task 2: requireAdmin reusable gate')
   assertEqual(/ok: true/.test(g) && /ok: false/.test(g), true, 'discriminated result')
 }
 
+section('Task 3: passlink endpoint — student branch + coach path preserved')
+{
+  const r = stripComments(read('src/app/api/auth/passlink/route.ts'))
+  assertEqual(/select\('id, coach_id, student_id, revoked_at'\)/.test(r), true, 'selects student_id too')
+  assertEqual(/link\.coach_id/.test(r) && /'\/v2\/coach'/.test(r) && /value: 'coach'/.test(r), true, 'coach path preserved (/v2/coach, cookie coach)')
+  assertEqual(/link\.student_id/.test(r) && /from\('student'\)/.test(r), true, 'student branch loads student')
+  assertEqual(/process\.env\.LTI_POST_LAUNCH_STUDENT_PATH \|\| '\/v2\/today'/.test(r), true, 'STUDENT_LANDING default /v2/today')
+  assertEqual(/value: 'student'/.test(r), true, 'student cookie role')
+  assertEqual(/status !== 'active'/.test(r), true, 'active gate (coach & student)')
+  assertEqual((r.match(/\/login\?error=invalid_link/g) || []).length >= 1 && /function invalid\(/.test(r), true, 'generic invalid_link preserved')
+  const mw = stripComments(read('src/middleware.ts'))
+  assertEqual(/pathname\.startsWith\('\/api\/auth'\)/.test(mw) && /passlink/.test(mw) === false, true, 'middleware unchanged (public via /api/auth)')
+  const rws = stripComments(read('src/lib/auth/redirect-with-session.ts'))
+  assertEqual(/export async function redirectWithSession/.test(rws) && /type: 'magiclink'/.test(rws), true, 'redirect-with-session unchanged')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 finish()
