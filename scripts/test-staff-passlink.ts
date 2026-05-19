@@ -55,5 +55,20 @@ section('Task 3: /api/auth/passlink endpoint + middleware unchanged')
   assertEqual(/passlink/.test(mw), false, 'middleware NOT edited for passlink')
 }
 
+section('Task 4: scripts/issue-passlink.ts')
+{
+  const s = stripComments(read('scripts/issue-passlink.ts'))
+  assertEqual(/dotenvConfig\(\{ path: '\.env\.local' \}\)/.test(s), true, 'loads .env.local before supabase import')
+  assertEqual(/SUPABASE_SERVICE_ROLE_KEY/.test(s) && /createClient\(/.test(s), true, 'own service-role client (no @/ import)')
+  assertEqual(/from '@\//.test(s), false, 'no @/ alias imports (tsx-safe)')
+  assertEqual(/admin\.createUser|auth\.admin\.createUser/.test(s) && /email_confirm: true/.test(s), true, 'provisions auth user')
+  assertEqual(/from\('coach'\)/.test(s) && /status: 'active'/.test(s), true, 'ensures an active coach row')
+  assertEqual(/randomBytes\(32\)/.test(s) && /createHash\('sha256'\)/.test(s), true, '256-bit token, stored hashed')
+  assertEqual(/from\('auth_passlink'\)[\s\S]{0,80}\.insert/.test(s), true, 'inserts auth_passlink row')
+  assertEqual(/--rotate/.test(s) && /revoked_at/.test(s), true, '--rotate revokes prior links')
+  assertEqual(/process\.env\.LTI_TOOL_URL/.test(s), true, 'builds URL from LTI_TOOL_URL')
+  assertEqual(/NOT minting|already exists/i.test(s), true, 'idempotent no-op path when active link exists')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 finish()
