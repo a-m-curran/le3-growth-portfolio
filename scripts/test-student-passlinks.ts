@@ -26,5 +26,15 @@ section('Task 1: 018_auth_passlink_student.sql generalizes the subject')
   assertEqual(/create index auth_passlink_student_active_idx[\s\S]{0,80}where revoked_at is null/.test(sql), true, 'student active partial index')
 }
 
+section('Task 2: requireAdmin reusable gate')
+{
+  const g = stripComments(read('src/lib/auth/require-admin.ts'))
+  assertEqual(/export async function requireAdmin\s*\(/.test(g), true, 'requireAdmin exported')
+  assertEqual(/supabase\.auth\.getUser\(\)/.test(g) && /status: 401/.test(g), true, 'unauth → 401')
+  assertEqual(/from\('coach'\)[\s\S]{0,120}\.eq\('auth_user_id', user\.id\)/.test(g), true, 'resolves coach by auth_user_id')
+  assertEqual(/isAdminEmail\(/.test(g) && /status: 403/.test(g), true, 'non-admin → 403')
+  assertEqual(/ok: true/.test(g) && /ok: false/.test(g), true, 'discriminated result')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 finish()
