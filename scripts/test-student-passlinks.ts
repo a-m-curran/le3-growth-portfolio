@@ -80,6 +80,7 @@ section('Task 5: admin passlink routes')
     assertEqual(/export const runtime = 'nodejs'/.test(src) && /export const dynamic = 'force-dynamic'/.test(src), true, `${name}: runtime/dynamic`)
   }
   assertEqual(/text\/csv/.test(issue) && /Content-Disposition/.test(issue) && /attachment; filename=/.test(issue), true, 'issue returns CSV attachment')
+  assertEqual(/export const maxDuration\s*=\s*300/.test(issue), true, 'issue sets maxDuration=300 (bulk-issue timeout)')
   assertEqual(/gatherPilotSubjects/.test(issue) && /ensureSubjectAndMint/.test(issue) && /toCsv/.test(issue), true, 'issue uses lib')
   assertEqual(/getPasslinkRoster/.test(roster), true, 'roster uses getPasslinkRoster')
   assertEqual(/rotatePasslink/.test(rotate), true, 'rotate uses rotatePasslink')

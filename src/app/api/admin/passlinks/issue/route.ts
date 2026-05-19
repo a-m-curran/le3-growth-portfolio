@@ -5,6 +5,12 @@ import { gatherPilotSubjects, ensureSubjectAndMint, toCsv, type IssueResult } fr
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
+// ~81 pilot subjects are provisioned + minted SEQUENTIALLY here (each
+// subject: auth listUsers + several Supabase round-trips), realistically
+// ~25-50s+. Raise the function ceiling well above that. NOTE: this only
+// takes effect on Vercel Pro (300s max); Hobby hard-caps at 10s and
+// cannot run the full bulk issue — see the Task 7 owner runbook.
+export const maxDuration = 300
 
 /**
  * POST /api/admin/passlinks/issue[?rotateAll=1]
