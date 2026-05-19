@@ -52,5 +52,21 @@ section('Task 3: passlink endpoint — student branch + coach path preserved')
   assertEqual(/export async function redirectWithSession/.test(rws) && /type: 'magiclink'/.test(rws), true, 'redirect-with-session unchanged')
 }
 
+section('Task 4: passlink-admin lib')
+{
+  const s = stripComments(read('src/lib/auth/passlink-admin.ts'))
+  assertEqual(/export async function ensureSubjectAndMint\s*\(/.test(s), true, 'ensureSubjectAndMint exported')
+  assertEqual(/export async function gatherPilotSubjects\s*\(/.test(s), true, 'gatherPilotSubjects exported')
+  assertEqual(/export async function getPasslinkRoster\s*\(/.test(s), true, 'getPasslinkRoster exported')
+  assertEqual(/export async function rotatePasslink\s*\(/.test(s), true, 'rotatePasslink exported')
+  assertEqual(/export async function revokeAllPasslinks\s*\(/.test(s), true, 'revokeAllPasslinks exported')
+  assertEqual(/export function toCsv\s*\(/.test(s), true, 'toCsv exported')
+  assertEqual(/randomBytes\(32\)/.test(s) && /createHash\('sha256'\)/.test(s), true, '256-bit token stored hashed')
+  assertEqual(/from\('instructor'\)/.test(s) && /toLowerCase\(\)/.test(s), true, 'instructors gathered + lowercased dedup')
+  assertEqual(/email_confirm: true/.test(s), true, 'provisions auth user')
+  assertEqual(/is_demo/.test(s) && /'active'/.test(s), true, 'active non-demo scoping')
+  assertEqual(/"(.*?)"/.test(s) === true && /replace\(/.test(s), true, 'CSV escaping present')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 finish()
