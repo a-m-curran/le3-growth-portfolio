@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation'
 import { getRecentSyncRuns, getLastSuccessfulSyncRun } from '@/lib/queries'
 import { getV2Identity, isAdminEmail } from '@/lib/v2-auth'
+import { createAdminClient } from '@/lib/supabase-admin'
+import { getPasslinkRoster } from '@/lib/auth/passlink-admin'
 import { ToolsView } from './ToolsView'
 
 /**
@@ -35,9 +37,11 @@ export default async function V2ToolsPage() {
 
   // Pre-fetch the sync data the SyncStatusPanel needs server-side
   // (it expects props rather than fetching itself).
-  const [recentSyncRuns, lastSuccessful] = await Promise.all([
+  const admin = createAdminClient()
+  const [recentSyncRuns, lastSuccessful, passlinkRoster] = await Promise.all([
     getRecentSyncRuns(5),
     getLastSuccessfulSyncRun(),
+    getPasslinkRoster(admin),
   ])
 
   return (
@@ -48,7 +52,11 @@ export default async function V2ToolsPage() {
           Admin views for the integrations powering the portfolio.
         </p>
       </div>
-      <ToolsView recentSyncRuns={recentSyncRuns} lastSuccessful={lastSuccessful} />
+      <ToolsView
+        recentSyncRuns={recentSyncRuns}
+        lastSuccessful={lastSuccessful}
+        passlinkRoster={passlinkRoster}
+      />
     </div>
   )
 }

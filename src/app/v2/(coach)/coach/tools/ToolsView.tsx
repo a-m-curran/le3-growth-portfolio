@@ -6,21 +6,24 @@ import { SyncInspectorPanel } from '@/components/coach/SyncInspectorPanel'
 import { LTIInspectorPanel } from '@/components/coach/LTIInspectorPanel'
 import { LiveActivityPanel } from '@/components/coach/LiveActivityPanel'
 import { RecoverExtractionsPanel } from '@/components/coach/RecoverExtractionsPanel'
+import { PasslinksPanel } from '@/components/coach/PasslinksPanel'
 import type { SyncRun } from '@/lib/types'
+import type { RosterRow } from '@/lib/auth/passlink-admin'
 
 /**
  * Tabbed view of the admin observability panels. Reuses the existing
  * v1 components wholesale — each is already a self-contained client
  * component with its own data fetching and UI state.
  */
-type Tab = 'sync' | 'lti' | 'activity'
+type Tab = 'sync' | 'lti' | 'activity' | 'passlinks'
 
 interface ToolsViewProps {
   recentSyncRuns: SyncRun[]
   lastSuccessful: SyncRun | null
+  passlinkRoster: RosterRow[]
 }
 
-export function ToolsView({ recentSyncRuns, lastSuccessful }: ToolsViewProps) {
+export function ToolsView({ recentSyncRuns, lastSuccessful, passlinkRoster }: ToolsViewProps) {
   const [tab, setTab] = useState<Tab>('sync')
 
   return (
@@ -29,6 +32,7 @@ export function ToolsView({ recentSyncRuns, lastSuccessful }: ToolsViewProps) {
         <TabBtn label="Sync" active={tab === 'sync'} onClick={() => setTab('sync')} />
         <TabBtn label="LTI" active={tab === 'lti'} onClick={() => setTab('lti')} />
         <TabBtn label="Live Activity" active={tab === 'activity'} onClick={() => setTab('activity')} />
+        <TabBtn label="Passlinks" active={tab === 'passlinks'} onClick={() => setTab('passlinks')} />
       </div>
 
       {tab === 'sync' && (
@@ -40,6 +44,7 @@ export function ToolsView({ recentSyncRuns, lastSuccessful }: ToolsViewProps) {
       )}
       {tab === 'lti' && <LTIInspectorPanel />}
       {tab === 'activity' && <LiveActivityPanel />}
+      {tab === 'passlinks' && <PasslinksPanel roster={passlinkRoster} />}
     </div>
   )
 }
