@@ -70,5 +70,14 @@ section('Task 4: scripts/issue-passlink.ts')
   assertEqual(/NOT minting|already exists/i.test(s), true, 'idempotent no-op path when active link exists')
 }
 
+section('Task 5: scripts/revoke-passlink.ts')
+{
+  const s = stripComments(read('scripts/revoke-passlink.ts'))
+  assertEqual(/dotenvConfig\(\{ path: '\.env\.local' \}\)/.test(s), true, 'loads .env.local')
+  assertEqual(/from '@\//.test(s), false, 'no @/ alias imports (tsx-safe)')
+  assertEqual(/from\('coach'\)[\s\S]{0,120}\.eq\('email', email\)/.test(s), true, 'resolves coach by email')
+  assertEqual(/from\('auth_passlink'\)[\s\S]{0,160}revoked_at/.test(s) && /\.is\('revoked_at', null\)/.test(s), true, 'sets revoked_at on active links')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 finish()
