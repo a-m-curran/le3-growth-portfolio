@@ -48,7 +48,12 @@ export async function POST(request: Request) {
 
     studentId = student.id as string
 
-    // Check for existing in-progress conversation — resume it
+    // Existing in-progress conversation handling. A conversation with
+    // no phase-1 response yet was never actually started (the student
+    // opened a reflection and backed out); it is auto-abandoned below
+    // so it can't trap every later assignment click in a stale shell.
+    // Only a conversation with real progress (a phase-1 response) is
+    // resumed. Full resume-or-discard UX is the planned reflect redesign.
     const { data: existing } = await admin
       .from('growth_conversation')
       .select('*')
@@ -56,7 +61,7 @@ export async function POST(request: Request) {
       .eq('status', 'in_progress')
       .limit(1)
 
-    if (existing && existing.length > 0) {
+    if (existing && existing.length > 0 && existing[0].response_phase_1) {
       const conv = existing[0]
       let currentPhase = 1
       if (conv.response_phase_1 && conv.prompt_phase_2) currentPhase = 2
@@ -89,6 +94,26 @@ export async function POST(request: Request) {
           phase1: conv.response_phase_1,
           phase2: conv.response_phase_2,
           phase3: conv.response_phase_3,
+        },
+      })
+    }
+
+    // Unstarted in-progress shell (no phase-1 response): abandon it so
+    // it stops hijacking navigation, then fall through to create a fresh
+    // conversation for the work the student actually clicked.
+    if (existing && existing.length > 0) {
+      await admin
+        .from('growth_conversation')
+        .update({ status: 'abandoned' })
+        .eq('id', existing[0].id)
+      await reqLog.info('conversation.abandoned_empty', {
+        studentId,
+        actorType: 'student',
+        actorId: studentId,
+        message: 'Auto-abandoned an unstarted in-progress conversation (no phase-1 response)',
+        context: {
+          conversation_id: existing[0].id,
+          work_id: existing[0].work_id,
         },
       })
     }

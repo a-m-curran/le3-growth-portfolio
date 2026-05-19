@@ -43,16 +43,16 @@ export async function GET() {
   const admin = createAdminClient()
 
   // ─── Recent work + linked conversations ───
-  // Pull the most recent submissions, then look up any completed
-  // conversation per work_id so the card can either route to
-  // /v2/conversation/[id] (existing reflection) or /v2/reflect/start
-  // (start a new one).
+  // Pull submissions (intentionally unbounded — a silent .limit(5) here
+  // previously hid all but 5 of a student's work from /v2/today; a
+  // navigable date-scoped view is the planned redesign), then look up
+  // any completed conversation per work_id so the card can route to
+  // /v2/conversation/[id] (existing reflection) or /v2/reflect/start.
   const { data: workRows } = await admin
     .from('student_work')
     .select('id, title, course_name, submitted_at, work_type')
     .eq('student_id', studentId)
     .order('submitted_at', { ascending: false, nullsFirst: false })
-    .limit(5)
 
   interface WorkRow {
     id: string
