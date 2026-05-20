@@ -29,6 +29,17 @@ section('Task 2: currentQuarter() extracted to src/lib/sync/quarter.ts')
   assertEqual(/cohort:\s*currentQuarter\(\)/.test(s), true, "line 384's cohort: currentQuarter() preserved (OUT OF SCOPE)")
 }
 
+section('Task 3: D2LCourseOffering raw type')
+{
+  const t = stripComments(read('src/lib/d2l/types.ts'))
+  assertEqual(/export interface D2LCourseOffering/.test(t), true, 'D2LCourseOffering interface exported')
+  assertEqual(/Identifier:\s*string/.test(t) && /Name:\s*string/.test(t) && /Code:\s*string\s*\|\s*null/.test(t), true, 'has Identifier / Name / Code')
+  assertEqual(/IsActive:\s*boolean/.test(t), true, 'has IsActive')
+  assertEqual(/StartDate:\s*string\s*\|\s*null/.test(t), true, 'has StartDate (nullable)')
+  assertEqual(/EndDate:\s*string\s*\|\s*null/.test(t), true, 'has EndDate (nullable)')
+  assertEqual(/Semester:\s*\{[\s\S]{0,200}Identifier:\s*string[\s\S]{0,200}Name:\s*string[\s\S]{0,200}\}\s*\|\s*null/.test(t), true, 'has Semester reference (nullable, with Identifier+Name)')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 
 finish()
