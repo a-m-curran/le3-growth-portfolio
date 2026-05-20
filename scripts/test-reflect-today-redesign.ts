@@ -27,6 +27,19 @@ section('Task 1: shared types module')
   assertEqual(/currentPhase:\s*1\s*\|\s*2\s*\|\s*3/.test(t), true, 'ActiveInProgress.currentPhase literal union')
 }
 
+section('Task 2: POST /api/conversation/[id]/discard')
+{
+  const r = stripComments(read('src/app/api/conversation/[id]/discard/route.ts'))
+  assertEqual(/export const dynamic = 'force-dynamic'/.test(r) && /export const runtime = 'nodejs'/.test(r), true, 'force-dynamic + nodejs runtime')
+  assertEqual(/export async function POST\s*\(/.test(r), true, 'POST handler exported')
+  assertEqual(/getV2StudentId/.test(r), true, 'auth via getV2StudentId')
+  assertEqual(/status: 'abandoned'/.test(r), true, "sets status='abandoned'")
+  assertEqual(/\.eq\('status', 'in_progress'\)/.test(r), true, "only updates if currently in_progress")
+  assertEqual(/conversation\.discarded/.test(r), true, "logs 'conversation.discarded' event")
+  assertEqual(/createAdminClient/.test(r), true, 'uses admin client')
+  assertEqual(/\.eq\('student_id'/.test(r) || /student_id !== /.test(r), true, 'verifies student ownership')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 
 finish()
