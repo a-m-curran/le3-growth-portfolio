@@ -106,6 +106,19 @@ section('Task 7: DiscardConfirmDialog component')
   assertEqual(/Discard/.test(c) && /Cancel/.test(c), true, 'Discard + Cancel buttons')
 }
 
+section('Task 8: InProgressBanner component')
+{
+  const c = stripComments(read('src/components/v2/student/InProgressBanner.tsx'))
+  assertEqual(/'use client'/.test(c), true, 'client component')
+  assertEqual(/export function InProgressBanner/.test(c), true, 'InProgressBanner exported')
+  assertEqual(/DiscardConfirmDialog/.test(c), true, 'uses DiscardConfirmDialog')
+  assertEqual(/\/api\/conversation\/.*\/discard/.test(c), true, 'POSTs to /api/conversation/[id]/discard')
+  assertEqual(/Resume/.test(c) && /Discard/.test(c), true, 'Resume + Discard buttons')
+  assertEqual(/from '@\/components\/v2\/student\/types'/.test(c), true, 'imports ActiveInProgress')
+  assertEqual(/router\.push\(['"`]\/v2\/conversation\//.test(c), true, 'Resume navigates to /v2/conversation/[id]')
+  assertEqual(/work_context|workContext|workTitle/.test(c), true, 'falls back to work context for open_reflection')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 
 finish()
