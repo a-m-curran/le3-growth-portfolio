@@ -171,6 +171,17 @@ section('Task 12: TodayBuckets component')
   assertEqual(/submittedAt/.test(c), true, 'reads submittedAt for bucketing')
 }
 
+section('Task 13: ConversationFullView component')
+{
+  const c = stripComments(read('src/components/v2/student/ConversationFullView.tsx'))
+  assertEqual(/'use client'/.test(c), true, 'client component')
+  assertEqual(/export function ConversationFullView/.test(c), true, 'ConversationFullView exported')
+  assertEqual(/\/api\/conversations\//.test(c), true, 'fetches /api/conversations/[id]')
+  assertEqual(/phase1|promptPhase1/i.test(c) && /phase2|promptPhase2/i.test(c) && /phase3|promptPhase3/i.test(c), true, 'renders all three phases at once')
+  assertEqual(/typewriter/i.test(c), false, 'no typewriter logic')
+  assertEqual(/synthesisText|synthesis_text/.test(c), true, 'renders synthesis')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 
 finish()
