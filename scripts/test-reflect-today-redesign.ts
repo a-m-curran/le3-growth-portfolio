@@ -40,6 +40,15 @@ section('Task 2: POST /api/conversation/[id]/discard')
   assertEqual(/\.eq\('student_id'/.test(r) || /student_id !== /.test(r), true, 'verifies student ownership')
 }
 
+section('Task 3: /api/conversation/start honors discardAndStart')
+{
+  const r = stripComments(read('src/app/api/conversation/start/route.ts'))
+  assertEqual(/discardAndStart/.test(r), true, 'reads discardAndStart from request body')
+  assertEqual(/conversation\.abandoned_explicit/.test(r), true, "logs 'conversation.abandoned_explicit' event")
+  assertEqual(/existing && existing\.length > 0 && existing\[0\]\.response_phase_1/.test(r), true, 'PR #13 phase-1-gated resume guard preserved')
+  assertEqual(/conversation\.abandoned_empty/.test(r), true, 'PR #13 auto-abandon-empty default-flag log preserved')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 
 finish()

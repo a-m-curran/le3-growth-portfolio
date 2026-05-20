@@ -21,7 +21,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
-    const { workId } = await request.json()
+    const { workId, discardAndStart } = await request.json()
     if (!workId) {
       await reqLog.warn('conversation.start_failed', {
         message: 'workId missing from request body',
@@ -61,7 +61,30 @@ export async function POST(request: Request) {
       .eq('status', 'in_progress')
       .limit(1)
 
-    if (existing && existing.length > 0 && existing[0].response_phase_1) {
+    // Explicit "discard and start new" path (from the InProgressInterstitial).
+    // The student has acknowledged they're abandoning their in-progress
+    // reflection to start a new one. Force-abandon regardless of phase-1
+    // progress, then fall through to the create-new path for `workId`.
+    // The default-flag behavior (resume non-empty / silently abandon empty)
+    // is preserved exactly when discardAndStart is not set.
+    if (discardAndStart && existing && existing.length > 0) {
+      await admin
+        .from('growth_conversation')
+        .update({ status: 'abandoned' })
+        .eq('id', existing[0].id)
+      await reqLog.info('conversation.abandoned_explicit', {
+        studentId,
+        actorType: 'student',
+        actorId: studentId,
+        message: 'Auto-abandoned in-progress conversation per explicit discardAndStart',
+        context: {
+          conversation_id: existing[0].id,
+          work_id: existing[0].work_id,
+          had_phase1_response: !!existing[0].response_phase_1,
+        },
+      })
+      // Fall through to create-new (do not enter resume guard or empty-abandon).
+    } else if (existing && existing.length > 0 && existing[0].response_phase_1) {
       const conv = existing[0]
       let currentPhase = 1
       if (conv.response_phase_1 && conv.prompt_phase_2) currentPhase = 2
