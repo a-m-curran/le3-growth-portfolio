@@ -49,6 +49,18 @@ section('Task 4: NormalizedCourse extended with quarter / startDate / semesterNa
   assertEqual(/orgUnitId:\s*string/.test(t) && /name:\s*string/.test(t) && /code:\s*string\s*\|\s*null/.test(t) && /active:\s*boolean/.test(t), true, 'existing NormalizedCourse fields preserved')
 }
 
+section('Task 5: deriveQuarter helper in src/lib/d2l/mappers.ts')
+{
+  const m = stripComments(read('src/lib/d2l/mappers.ts'))
+  assertEqual(/export function deriveQuarter/.test(m), true, 'deriveQuarter exported')
+  assertEqual(/import\s*\{\s*currentQuarter\s*\}\s*from\s*['"]@\/lib\/sync\/quarter['"]/.test(m), true, 'imports currentQuarter from @/lib/sync/quarter')
+  assertEqual(/\^\(Winter\|Spring\|Summer\|Fall\)\\s\+\\d\{4\}\$/.test(m), true, 'canonical Semester.Name regex present')
+  assertEqual(/SEASON_BY_MONTH/.test(m) && /Winter.*Spring.*Summer.*Fall/.test(m), true, 'SEASON_BY_MONTH array present')
+  assertEqual(/semesterName:\s*string\s*\|\s*null/.test(m) && /startDate:\s*string\s*\|\s*null/.test(m), true, 'helper input shape (semesterName + startDate, both nullable)')
+  assertEqual(/deriveQuarter[\s\S]{0,200}\):\s*string\b/.test(m), true, 'deriveQuarter returns string')
+  assertEqual(/export function normalizeCourseOffering/.test(m), true, 'normalizeCourseOffering exported (maps raw D2L payload to NormalizedCourse)')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 
 finish()
