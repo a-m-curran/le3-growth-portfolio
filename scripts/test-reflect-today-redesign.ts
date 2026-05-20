@@ -159,6 +159,18 @@ section('Task 11: ReflectTree component')
   assertEqual(/Nothing to reflect on yet/.test(c) || /your portfolio will fill/.test(c), true, 'has empty state')
 }
 
+section('Task 12: TodayBuckets component')
+{
+  const c = stripComments(read('src/components/v2/student/TodayBuckets.tsx'))
+  assertEqual(/'use client'/.test(c), true, 'client component')
+  assertEqual(/export function TodayBuckets/.test(c), true, 'TodayBuckets exported')
+  assertEqual(/SubmissionRow/.test(c), true, 'renders SubmissionRow')
+  assertEqual(/surface=['"]today['"]/.test(c), true, 'passes surface="today"')
+  assertEqual(/Today/.test(c) && /This week/.test(c) && /Earlier/.test(c), true, 'three bucket labels')
+  assertEqual(/earlierOpen|earlier_open|defaultEarlierOpen|expandedEarlier/.test(c) || /useState\(false\)/.test(c), true, 'tracks earlier-open state (default closed)')
+  assertEqual(/submittedAt/.test(c), true, 'reads submittedAt for bucketing')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 
 finish()
