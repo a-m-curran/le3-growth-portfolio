@@ -7,7 +7,8 @@
  */
 
 import { lpGet, lpGetAllPaged } from './client'
-import type { D2LOrgUnitDescendant, NormalizedCourse } from './types'
+import type { D2LCourseOffering, D2LOrgUnitDescendant, NormalizedCourse } from './types'
+import { normalizeCourseOffering } from './mappers'
 
 const ORG_UNIT_TYPE_COURSE_OFFERING = 3
 
@@ -69,20 +70,12 @@ export async function listCoursesUnderOrgUnit(
 }
 
 /**
- * Get details for a single course offering by org unit ID.
+ * Get details for a single course offering by org unit ID. Returns a
+ * fully-shaped NormalizedCourse including derived quarter (via
+ * normalizeCourseOffering, which applies the Semester→StartDate→
+ * currentQuarter() priority chain).
  */
 export async function getCourse(orgUnitId: string): Promise<NormalizedCourse> {
-  const info = await lpGet<{
-    Identifier: string
-    Name: string
-    Code: string | null
-    IsActive: boolean
-  }>(`/courses/${orgUnitId}`)
-
-  return {
-    orgUnitId: info.Identifier,
-    name: info.Name,
-    code: info.Code,
-    active: info.IsActive,
-  }
+  const info = await lpGet<D2LCourseOffering>(`/courses/${orgUnitId}`)
+  return normalizeCourseOffering(info)
 }

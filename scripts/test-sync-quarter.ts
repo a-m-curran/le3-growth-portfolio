@@ -61,6 +61,20 @@ section('Task 5: deriveQuarter helper in src/lib/d2l/mappers.ts')
   assertEqual(/export function normalizeCourseOffering/.test(m), true, 'normalizeCourseOffering exported (maps raw D2L payload to NormalizedCourse)')
 }
 
+section('Task 6: getCourse() requests full CourseOffering + uses mapper')
+{
+  const c = stripComments(read('src/lib/d2l/courses.ts'))
+  // Imports the new mapper + raw type.
+  assertEqual(/import\s*\{[\s\S]{0,200}normalizeCourseOffering[\s\S]{0,200}\}\s*from\s*['"]\.\/mappers['"]/.test(c), true, 'imports normalizeCourseOffering from ./mappers')
+  assertEqual(/import\s+type\s*\{[\s\S]{0,200}D2LCourseOffering[\s\S]{0,200}\}\s*from\s*['"]\.\/types['"]/.test(c), true, 'imports D2LCourseOffering type from ./types')
+  // getCourse uses the new mapper.
+  assertEqual(/export async function getCourse\([\s\S]{0,400}return\s+normalizeCourseOffering\(/.test(c), true, 'getCourse() delegates to normalizeCourseOffering')
+  // The lpGet call requests the new typed shape.
+  assertEqual(/lpGet<D2LCourseOffering>/.test(c), true, 'lpGet<D2LCourseOffering>(...) typed request')
+  // The minimal inline type from the old getCourse is gone.
+  assertEqual(/lpGet<\{\s*Identifier:\s*string;\s*Name:\s*string;\s*Code:[\s\S]{0,80}IsActive:\s*boolean\s*\}>/.test(c), false, 'old minimal inline type removed')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 
 finish()
