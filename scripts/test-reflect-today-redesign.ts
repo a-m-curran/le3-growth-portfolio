@@ -145,6 +145,20 @@ section('Task 10: useStartReflection hook')
   assertEqual(/status === 'in_progress'/.test(c) || /'in_progress'/.test(c), true, 'handles in_progress status')
 }
 
+section('Task 11: ReflectTree component')
+{
+  const c = stripComments(read('src/components/v2/student/ReflectTree.tsx'))
+  assertEqual(/'use client'/.test(c), true, 'client component')
+  assertEqual(/export function ReflectTree/.test(c), true, 'ReflectTree exported')
+  assertEqual(/SubmissionRow/.test(c), true, 'renders SubmissionRow')
+  assertEqual(/surface=['"]reflect['"]/.test(c), true, 'passes surface="reflect"')
+  assertEqual(/quarter/.test(c) && /course/i.test(c) && /week/i.test(c), true, 'has quarter/course/week levels')
+  assertEqual(/smartExpandDefaults|smart-?expand/i.test(c), true, 'has smart-expand defaults helper')
+  assertEqual(/localeCompare/.test(c), true, 'alphabetical course sort')
+  assertEqual(/Winter|Spring|Summer|Fall/.test(c), true, 'parses quarter season')
+  assertEqual(/Nothing to reflect on yet/.test(c) || /your portfolio will fill/.test(c), true, 'has empty state')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 
 finish()
