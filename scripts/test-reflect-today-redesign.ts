@@ -211,6 +211,17 @@ section('Task 15: TodayView wired to new components')
   assertEqual(/activeInProgress/.test(v) && /submissions/.test(v), true, 'reads new response fields')
 }
 
+section('Task 16: ConversationView dispatcher (View > Replay for real students)')
+{
+  const v = stripComments(read('src/app/v2/(student)/conversation/[id]/ConversationView.tsx'))
+  assertEqual(/'use client'/.test(v), true, 'client component')
+  assertEqual(/ConversationFullView/.test(v), true, 'imports ConversationFullView')
+  assertEqual(/data\.status === 'completed'[\s\S]{0,400}ConversationFullView/.test(v), true, 'completed branch dispatches to ConversationFullView')
+  assertEqual(/ConversationReplay/.test(v), true, 'ConversationReplay still imported (demo path)')
+  assertEqual(/isDemo|is_demo|demoMode/.test(v), true, 'demo gating present')
+  assertEqual(/ConversationFlowView/.test(v), true, 'in_progress branch still dispatches to ConversationFlowView')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 
 finish()

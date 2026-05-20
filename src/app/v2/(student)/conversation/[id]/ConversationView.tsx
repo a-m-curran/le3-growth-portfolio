@@ -3,23 +3,26 @@
 import { useEffect, useState } from 'react'
 import { ConversationReplay } from './ConversationReplay'
 import { ConversationFlowView } from './ConversationFlowView'
+import { ConversationFullView } from '@/components/v2/student/ConversationFullView'
 
 /**
  * ConversationView — top-level client dispatcher for the
  * /v2/conversation/[id] page.
  *
- * Fetches the conversation once via /api/conversations/[id] and
- * routes to the right surface based on status:
- *   - status === 'completed' → ConversationReplay (read-only
- *     phase-by-phase walkthrough with the typewriter effect; the
- *     same component that's been in place since the v2 demo
- *     replay shipped)
- *   - status === 'in_progress' → ConversationFlowView (live,
- *     interactive 3-phase flow)
+ * Status routing:
+ *   - status === 'in_progress' → ConversationFlowView (live, interactive)
+ *   - status === 'completed'   →
+ *       - real student (isDemo=false): ConversationFullView (the
+ *         non-typewriter "all at once" view — same component used
+ *         when a row is clicked from the Reflect tree)
+ *       - demo persona (isDemo=true): ConversationReplay (typewriter
+ *         walkthrough — preserved for the demo flow only)
  *
- * Both downstream surfaces render their own work header — this
- * dispatcher only owns the fetch + the routing decision. Keeps
- * the page.tsx server component tiny.
+ * isDemo is inferred from /api/conversations/[id]: the route already
+ * resolves the student id; we extend the response by including
+ * `isDemo` on the JSON (added in this task — see route patch below).
+ * If the route doesn't yet expose isDemo (older deploy), default to
+ * false (treat as real student).
  */
 
 interface ConversationDetail {
@@ -28,6 +31,7 @@ interface ConversationDetail {
   courseName: string | null
   conversationType: 'work_based' | 'open_reflection' | null
   status: 'in_progress' | 'completed'
+  isDemo?: boolean
   promptPhase1: string | null
   responsePhase1: string | null
   promptPhase2: string | null
@@ -87,15 +91,18 @@ export function ConversationView({ conversationId }: Props) {
     )
   }
 
-  // Replay path — completed conversations get the typewriter
-  // walkthrough (unchanged behavior).
+  // Completed path:
+  //   - Real students get the new "View" (all at once, no typewriter).
+  //   - Demo personas keep the existing typewriter Replay.
   if (data.status === 'completed') {
-    return <ConversationReplay conversationId={conversationId} />
+    const isDemo = data.isDemo === true
+    if (isDemo) {
+      return <ConversationReplay conversationId={conversationId} />
+    }
+    return <ConversationFullView conversationId={conversationId} />
   }
 
-  // Interactive path — in-progress conversations get the live
-  // typing flow. Wrap with a shared work-header so the page chrome
-  // is consistent across both modes.
+  // In-progress path unchanged.
   return (
     <div className="max-w-2xl mx-auto px-6 py-8">
       <WorkHeader workTitle={data.workTitle} courseName={data.courseName} />
