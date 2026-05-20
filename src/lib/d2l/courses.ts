@@ -37,12 +37,32 @@ export async function listCoursesUnderOrgUnit(
   }
 
   if (descendants.length > 0) {
-    return descendants.map(d => ({
-      orgUnitId: d.Identifier,
-      name: d.Name,
-      code: d.Code || null,
-      active: true,
-    }))
+    // The descendants endpoint returns lightweight rows (no Semester /
+    // StartDate). Round-trip getCourse() per descendant to enrich each
+    // one with the full CourseOffering payload, so callers always see
+    // a fully-shaped NormalizedCourse (with derived quarter).
+    // Bounded by ~47 today; one extra HTTP per discovered course is
+    // acceptable at this scale. If a per-course fetch fails, fall
+    // back to a minimal NormalizedCourse with currentQuarter() so the
+    // sync isn't blocked.
+    const enriched: NormalizedCourse[] = []
+    for (const d of descendants) {
+      try {
+        enriched.push(await getCourse(d.Identifier))
+      } catch {
+        enriched.push(normalizeCourseOffering({
+          Identifier: d.Identifier,
+          Name: d.Name,
+          Code: d.Code || null,
+          IsActive: true,
+          Path: '',
+          StartDate: null,
+          EndDate: null,
+          Semester: null,
+        }))
+      }
+    }
+    return enriched
   }
 
   // No descendants. Check whether the configured org unit is itself a
@@ -55,14 +75,9 @@ export async function listCoursesUnderOrgUnit(
   }>(`/orgstructure/${parentOrgUnitId}`)
 
   if (self.Type?.Id === ORG_UNIT_TYPE_COURSE_OFFERING) {
-    return [
-      {
-        orgUnitId: self.Identifier,
-        name: self.Name,
-        code: self.Code || null,
-        active: true,
-      },
-    ]
+    // Self-as-course: enrich via getCourse() so we get the full
+    // CourseOffering (Semester / StartDate) and the derived quarter.
+    return [await getCourse(self.Identifier)]
   }
 
   // Genuinely empty (container exists but has no course children).

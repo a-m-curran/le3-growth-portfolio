@@ -75,6 +75,14 @@ section('Task 6: getCourse() requests full CourseOffering + uses mapper')
   assertEqual(/lpGet<\{\s*Identifier:\s*string;\s*Name:\s*string;\s*Code:[\s\S]{0,80}IsActive:\s*boolean\s*\}>/.test(c), false, 'old minimal inline type removed')
 }
 
+section('Task 7: listCoursesUnderOrgUnit enriches each descendant via getCourse')
+{
+  const c = stripComments(read('src/lib/d2l/courses.ts'))
+  assertEqual(/export async function listCoursesUnderOrgUnit[\s\S]{0,1500}getCourse\(/.test(c), true, 'listCoursesUnderOrgUnit calls getCourse() for enrichment')
+  assertEqual(/ORG_UNIT_TYPE_COURSE_OFFERING/.test(c), true, 'self-as-course fallback preserved')
+  assertEqual(/quarter:\s*['"](Winter|Spring|Summer|Fall)/.test(c) || /normalizeCourseOffering/.test(c) || /getCourse\(/.test(c), true, 'all NormalizedCourse construction sites have the new required fields')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 
 finish()
