@@ -132,6 +132,19 @@ section('Task 9: InProgressInterstitial component')
   assertEqual(/discardAndStart:\s*true/.test(c), true, 'POSTs /api/conversation/start with discardAndStart:true')
 }
 
+section('Task 10: useStartReflection hook')
+{
+  const c = stripComments(read('src/components/v2/student/use-start-reflection.ts'))
+  assertEqual(/'use client'/.test(c), true, 'client module')
+  assertEqual(/export function useStartReflection/.test(c), true, 'useStartReflection exported')
+  assertEqual(/onSubmissionClick/.test(c), true, 'returns onSubmissionClick')
+  assertEqual(/InProgressInterstitial/.test(c) || /interstitialFor/.test(c), true, 'manages interstitial state')
+  assertEqual(/\/api\/conversation\/start/.test(c), true, 'POSTs /api/conversation/start')
+  assertEqual(/router\.push\(['"`]\/v2\/conversation\//.test(c), true, 'navigates to /v2/conversation/[id]')
+  assertEqual(/status === 'completed'/.test(c) || /'completed'/.test(c), true, 'handles completed status')
+  assertEqual(/status === 'in_progress'/.test(c) || /'in_progress'/.test(c), true, 'handles in_progress status')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 
 finish()
