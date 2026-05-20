@@ -182,6 +182,19 @@ section('Task 13: ConversationFullView component')
   assertEqual(/synthesisText|synthesis_text/.test(c), true, 'renders synthesis')
 }
 
+section('Task 14: ReflectView wired to new components')
+{
+  const v = stripComments(read('src/app/v2/(student)/reflect/ReflectView.tsx'))
+  assertEqual(/'use client'/.test(v), true, 'client component')
+  assertEqual(/InProgressBanner/.test(v), true, 'renders InProgressBanner')
+  assertEqual(/ReflectTree/.test(v), true, 'renders ReflectTree')
+  assertEqual(/InProgressInterstitial/.test(v), true, 'renders InProgressInterstitial')
+  assertEqual(/useStartReflection/.test(v), true, 'uses useStartReflection hook')
+  assertEqual(/\/api\/student\/reflect/.test(v), true, 'fetches /api/student/reflect')
+  assertEqual(/featuredWork/.test(v), false, 'old featuredWork removed')
+  assertEqual(/completed:\s*Array/.test(v), false, 'old completed Array typing removed')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 
 finish()
