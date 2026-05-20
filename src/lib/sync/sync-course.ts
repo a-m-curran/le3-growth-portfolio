@@ -21,6 +21,7 @@ import {
 } from '@/lib/d2l'
 import { extractText, isSupported } from '@/lib/extract-text'
 import { autoTagWork } from '@/lib/conversation-engine-live'
+import { currentQuarter } from '@/lib/sync/quarter'
 import type { WorkType, StudentWork, SyncRunMode } from '@/lib/types'
 import type { SyncCounts, SyncError } from '@/lib/sync/sync-types'
 
@@ -678,15 +679,6 @@ async function processSubmission(params: {
 
 // ─── UTILITIES ─────────────────────────────────────
 
-function currentQuarter(): string {
-  const now = new Date()
-  const month = now.getMonth()
-  const year = now.getFullYear()
-  if (month < 3) return `Winter ${year}`
-  if (month < 6) return `Spring ${year}`
-  if (month < 9) return `Summer ${year}`
-  return `Fall ${year}`
-}
 
 function recordError(errors: SyncError[], stage: string, context: string, err: unknown): void {
   errors.push({
