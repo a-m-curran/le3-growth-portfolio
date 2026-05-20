@@ -600,6 +600,14 @@ async function processSubmission(params: {
 
   const workType = (inferWorkType(assignment.name) || 'other') as WorkType
   const title = assignment.name || fileTitle || 'Assignment'
+  // Derive curriculum week from the title's "Week N" prefix (matches
+  // how LE3 courses name assignments — "Week 1 Assignment 1: …", "Week
+  // 12: Goal Setting", etc.). The /v2/reflect Quarter→Course→Week tree
+  // groups by this value; rows without a "Week N" match bucket under
+  // "Other". Backfill on existing rows happened separately; this keeps
+  // future-synced rows correct.
+  const weekMatch = title.match(/Week\s+(\d+)/)
+  const weekNumber = weekMatch ? parseInt(weekMatch[1], 10) : null
 
   // Insert student_work
   const { data: work, error: insertError } = await admin
@@ -614,6 +622,7 @@ async function processSubmission(params: {
       course_code: courseCode,
       submitted_at: submission.submittedAt || new Date().toISOString(),
       quarter: currentQuarter(),
+      week_number: weekNumber,
       attempt_number: submission.attempt,
       content,
       grade: submission.grade != null ? String(submission.grade) : null,
