@@ -81,6 +81,19 @@ section('Task 5: /api/student/today new shape')
   assertEqual(/from '@\/components\/v2\/student\/types'/.test(r), true, 'imports shared types')
 }
 
+section('Task 6: SubmissionRow component')
+{
+  const c = stripComments(read('src/components/v2/student/SubmissionRow.tsx'))
+  assertEqual(/'use client'/.test(c), true, 'client component')
+  assertEqual(/export function SubmissionRow/.test(c), true, 'SubmissionRow exported')
+  assertEqual(/surface:\s*'reflect'\s*\|\s*'today'/.test(c), true, 'surface prop union')
+  assertEqual(/['"]Start['"]/.test(c) && /['"]Resume['"]/.test(c) && /['"]View['"]/.test(c), true, 'all three action chip labels')
+  assertEqual(/aria-label/.test(c), true, 'status glyph has aria-label')
+  assertEqual(/pillarStripeStyle/.test(c), true, 'uses pillarStripeStyle for completed rows')
+  assertEqual(/from '@\/components\/v2\/student\/types'/.test(c), true, 'imports SubmissionItem')
+  assertEqual(/<button/.test(c), true, 'renders <button>')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 
 finish()
