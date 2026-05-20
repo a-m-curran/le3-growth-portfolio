@@ -94,6 +94,18 @@ section('Task 6: SubmissionRow component')
   assertEqual(/<button/.test(c), true, 'renders <button>')
 }
 
+section('Task 7: DiscardConfirmDialog component')
+{
+  const c = stripComments(read('src/components/v2/student/DiscardConfirmDialog.tsx'))
+  assertEqual(/'use client'/.test(c), true, 'client component')
+  assertEqual(/export function DiscardConfirmDialog/.test(c), true, 'DiscardConfirmDialog exported')
+  assertEqual(/role="dialog"/.test(c), true, 'has role="dialog"')
+  assertEqual(/aria-modal/.test(c), true, 'has aria-modal')
+  assertEqual(/onConfirm/.test(c) && /onCancel/.test(c), true, 'onConfirm + onCancel props')
+  assertEqual(/Escape/.test(c), true, 'handles Escape to cancel')
+  assertEqual(/Discard/.test(c) && /Cancel/.test(c), true, 'Discard + Cancel buttons')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 
 finish()
