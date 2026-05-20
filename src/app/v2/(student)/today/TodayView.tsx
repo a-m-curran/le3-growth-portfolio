@@ -1,52 +1,38 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { pillarStripeStyle } from '@/components/v2/PillarStripe'
+import { InProgressBanner } from '@/components/v2/student/InProgressBanner'
+import { InProgressInterstitial } from '@/components/v2/student/InProgressInterstitial'
+import { TodayBuckets } from '@/components/v2/student/TodayBuckets'
+import { useStartReflection } from '@/components/v2/student/use-start-reflection'
+import type { ActiveInProgress, SubmissionItem } from '@/components/v2/student/types'
 
 /**
- * Student-side Today view.
+ * Student-side Today view (post-redesign).
  *
- * Renders a stack of focused cards:
- *   1. LTI pinned (when arriving from Brightspace) — the launched
- *      resource as the top action
- *   2. Featured work — submitted assignments awaiting reflection
- *   3. This week — count card (conversations + uploads)
- *   4. Recent journal — last few open reflections
- *   5. Quick actions — start a journal entry, open growth view
+ * Stack (top → bottom):
+ *   1. Greeting / hero
+ *   2. LTI pinned (when arriving from Brightspace) — unchanged
+ *   3. InProgressBanner (if activeInProgress)
+ *   4. TodayBuckets (Today / This week / Earlier)
+ *   5. WeekStatsCard — unchanged
+ *   6. RecentJournalSection — unchanged
+ *   7. QuickActions — unchanged
  *
- * Designed so on most visits, the top card answers "what should I do
- * now?" within one glance.
+ * Click routing on submissions is delegated to useStartReflection
+ * (shared with ReflectView).
  */
 
 interface TodayResponse {
-  featuredWork: Array<{
-    id: string
-    title: string
-    courseName: string | null
-    submittedAt: string | null
-    workType: string | null
-    /**
-     * Demo mode only: id of the existing conversation for this work,
-     * used to route to the /v2/conversation/[id] replay. Real mode
-     * leaves this absent (featuredWork is unreflected work) and the
-     * card routes to the /v2/reflect/start stub instead.
-     */
-    conversationId?: string | null
-    /**
-     * Canonical pillar name (e.g. "Creative & Curious Thinkers") of
-     * the dominant skill tag on this item's reflection, when one
-     * exists. Drives the pillar-color stripe on the card. Null in
-     * real mode for unreflected work — no conversation, no tag.
-     */
-    primaryPillar?: string | null
-  }>
+  activeInProgress: ActiveInProgress | null
+  submissions: SubmissionItem[]
   recentJournal: Array<{
     id: string
     startedAt: string
     description: string | null
     synthesisExcerpt: string | null
-    /** Canonical pillar name from the entry's dominant skill tag. */
     primaryPillar?: string | null
   }>
   weekStats: {
@@ -64,6 +50,8 @@ export function TodayView() {
   const router = useRouter()
   const [data, setData] = useState<TodayResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
+  const refresh = useCallback(() => setReloadKey(k => k + 1), [])
 
   useEffect(() => {
     let cancelled = false
@@ -78,7 +66,10 @@ export function TodayView() {
       .then(j => { if (!cancelled) setData(j) })
       .catch(e => { if (!cancelled) setError(String(e)) })
     return () => { cancelled = true }
-  }, [])
+  }, [reloadKey])
+
+  const { onSubmissionClick, interstitialFor, closeInterstitial, startError } =
+    useStartReflection({ active: data?.activeInProgress ?? null, onRefresh: refresh })
 
   if (error) {
     return (
@@ -98,14 +89,16 @@ export function TodayView() {
   }
 
   const totalActionable =
-    (data.ltiPinned ? 1 : 0) + data.featuredWork.length
+    (data.ltiPinned ? 1 : 0) +
+    data.submissions.filter(s => s.status === 'unreflected').length
   const hasAnyContent =
-    totalActionable > 0 || data.recentJournal.length > 0 ||
-    data.weekStats.conversationsCompleted > 0 || data.weekStats.workSubmitted > 0
+    totalActionable > 0 ||
+    data.recentJournal.length > 0 ||
+    data.weekStats.conversationsCompleted > 0 ||
+    data.weekStats.workSubmitted > 0
 
   return (
     <div className="space-y-5">
-      {/* Hero / greeting line */}
       <div className="mb-2">
         <h1 className="text-2xl font-bold text-gray-900">Today</h1>
         <p className="text-sm text-gray-500 mt-1">
@@ -117,7 +110,6 @@ export function TodayView() {
         </p>
       </div>
 
-      {/* LTI pinned card */}
       {data.ltiPinned && (
         <LtiPinnedCard
           pinned={data.ltiPinned}
@@ -127,41 +119,39 @@ export function TodayView() {
         />
       )}
 
-      {/* Featured work */}
-      <FeaturedWorkSection
-        items={data.featuredWork}
-        onSelect={item => {
-          // Demo mode: each featured item carries a conversationId so
-          // we deep-link into the replay. Real mode: no conversation
-          // yet (the whole point of "featured" is "unreflected"), so
-          // we land on the start stub.
-          if (item.conversationId) {
-            router.push(`/v2/conversation/${item.conversationId}`)
-          } else {
-            router.push(`/v2/reflect/start?work=${item.id}`)
-          }
-        }}
-      />
+      {data.activeInProgress && (
+        <InProgressBanner active={data.activeInProgress} onDiscarded={refresh} />
+      )}
 
-      {/* Week stats */}
+      {startError && <p className="text-xs text-red-700">{startError}</p>}
+
+      <TodayBuckets submissions={data.submissions} onRowClick={onSubmissionClick} />
+
       <WeekStatsCard stats={data.weekStats} />
 
-      {/* Recent journal */}
       <RecentJournalSection
         items={data.recentJournal}
         onOpen={id => router.push(`/v2/journal?entry=${id}`)}
       />
 
-      {/* Quick actions */}
       <QuickActions
         onStartJournal={() => router.push('/v2/journal?new=1')}
         onOpenGrowth={() => router.push('/v2/growth')}
       />
+
+      {interstitialFor && data.activeInProgress && (
+        <InProgressInterstitial
+          active={data.activeInProgress}
+          newWork={interstitialFor}
+          onClose={closeInterstitial}
+          onStarted={refresh}
+        />
+      )}
     </div>
   )
 }
 
-// ─── Sections ───────────────────────────────────
+// ─── Sections (LTI / WeekStats / RecentJournal / QuickActions — unchanged) ───
 
 function LtiPinnedCard({
   pinned,
@@ -175,9 +165,7 @@ function LtiPinnedCard({
       <div className="text-[10px] uppercase tracking-wider font-semibold text-green-700 mb-1">
         From Brightspace
       </div>
-      <h2 className="text-base font-semibold text-gray-900 leading-snug">
-        {pinned.title}
-      </h2>
+      <h2 className="text-base font-semibold text-gray-900 leading-snug">{pinned.title}</h2>
       {pinned.courseTitle && (
         <p className="text-xs text-gray-500 mt-0.5">{pinned.courseTitle}</p>
       )}
@@ -188,42 +176,6 @@ function LtiPinnedCard({
       >
         Start reflecting →
       </button>
-    </Card>
-  )
-}
-
-function FeaturedWorkSection({
-  items,
-  onSelect,
-}: {
-  items: TodayResponse['featuredWork']
-  onSelect: (item: TodayResponse['featuredWork'][number]) => void
-}) {
-  if (items.length === 0) return null
-  return (
-    <Card>
-      <SectionHeader title="Submitted work" subtitle="Reflect on what you've turned in" />
-      <ul className="space-y-2">
-        {items.map(w => (
-          <li key={w.id}>
-            <button
-              type="button"
-              onClick={() => onSelect(w)}
-              className="w-full text-left flex items-center gap-3 pl-3 pr-3 py-3 rounded-lg hover:bg-gray-50 transition-colors"
-              style={pillarStripeStyle(w.primaryPillar)}
-            >
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{w.title}</p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {w.courseName && `${w.courseName} · `}
-                  {w.submittedAt ? `Submitted ${formatRelative(w.submittedAt)}` : 'Recently added'}
-                </p>
-              </div>
-              <span className="text-gray-400 shrink-0">→</span>
-            </button>
-          </li>
-        ))}
-      </ul>
     </Card>
   )
 }
@@ -312,7 +264,7 @@ function QuickActions({
   )
 }
 
-// ─── Primitives ─────────────────────────────────
+// ─── Primitives (unchanged from prior file) ─────────
 
 function Card({
   children,

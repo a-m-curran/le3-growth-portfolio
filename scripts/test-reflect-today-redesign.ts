@@ -195,6 +195,22 @@ section('Task 14: ReflectView wired to new components')
   assertEqual(/completed:\s*Array/.test(v), false, 'old completed Array typing removed')
 }
 
+section('Task 15: TodayView wired to new components')
+{
+  const v = stripComments(read('src/app/v2/(student)/today/TodayView.tsx'))
+  assertEqual(/'use client'/.test(v), true, 'client component')
+  assertEqual(/InProgressBanner/.test(v), true, 'renders InProgressBanner')
+  assertEqual(/TodayBuckets/.test(v), true, 'renders TodayBuckets')
+  assertEqual(/InProgressInterstitial/.test(v), true, 'renders InProgressInterstitial')
+  assertEqual(/useStartReflection/.test(v), true, 'uses useStartReflection hook')
+  assertEqual(/LtiPinnedCard/.test(v), true, 'LtiPinnedCard preserved')
+  assertEqual(/WeekStatsCard/.test(v), true, 'WeekStatsCard preserved')
+  assertEqual(/RecentJournalSection/.test(v), true, 'RecentJournalSection preserved')
+  assertEqual(/QuickActions/.test(v), true, 'QuickActions preserved')
+  assertEqual(/FeaturedWorkSection/.test(v), false, 'old FeaturedWorkSection removed')
+  assertEqual(/activeInProgress/.test(v) && /submissions/.test(v), true, 'reads new response fields')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 
 finish()
