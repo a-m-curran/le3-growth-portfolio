@@ -193,6 +193,12 @@ export interface NormalizedCourse {
   code: string | null
   active: boolean
   instructorEmail?: string
+  /** Canonical "Season YYYY". Never null (currentQuarter() safety net guarantees a value). */
+  quarter: string
+  /** Raw D2L CourseOffering.StartDate, for traceability. */
+  startDate: string | null
+  /** Raw D2L CourseOffering.Semester.Name, for traceability. */
+  semesterName: string | null
 }
 
 export interface NormalizedEnrollment {

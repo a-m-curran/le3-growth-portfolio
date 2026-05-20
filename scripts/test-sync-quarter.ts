@@ -40,6 +40,15 @@ section('Task 3: D2LCourseOffering raw type')
   assertEqual(/Semester:\s*\{[\s\S]{0,200}Identifier:\s*string[\s\S]{0,200}Name:\s*string[\s\S]{0,200}\}\s*\|\s*null/.test(t), true, 'has Semester reference (nullable, with Identifier+Name)')
 }
 
+section('Task 4: NormalizedCourse extended with quarter / startDate / semesterName')
+{
+  const t = stripComments(read('src/lib/d2l/types.ts'))
+  assertEqual(/export interface NormalizedCourse\s*\{[\s\S]{0,400}quarter:\s*string\b/.test(t), true, 'NormalizedCourse.quarter (non-null string)')
+  assertEqual(/export interface NormalizedCourse\s*\{[\s\S]{0,500}startDate:\s*string\s*\|\s*null/.test(t), true, 'NormalizedCourse.startDate (nullable)')
+  assertEqual(/export interface NormalizedCourse\s*\{[\s\S]{0,600}semesterName:\s*string\s*\|\s*null/.test(t), true, 'NormalizedCourse.semesterName (nullable)')
+  assertEqual(/orgUnitId:\s*string/.test(t) && /name:\s*string/.test(t) && /code:\s*string\s*\|\s*null/.test(t) && /active:\s*boolean/.test(t), true, 'existing NormalizedCourse fields preserved')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 
 finish()
