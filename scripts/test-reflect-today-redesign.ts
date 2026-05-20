@@ -49,6 +49,23 @@ section('Task 3: /api/conversation/start honors discardAndStart')
   assertEqual(/conversation\.abandoned_empty/.test(r), true, 'PR #13 auto-abandon-empty default-flag log preserved')
 }
 
+section('Task 4: /api/student/reflect new shape')
+{
+  const r = stripComments(read('src/app/api/student/reflect/route.ts'))
+  assertEqual(/activeInProgress/.test(r), true, 'returns activeInProgress field')
+  assertEqual(/submissions/.test(r), true, 'returns submissions field')
+  assertEqual(/\.limit\(20\)/.test(r), false, 'no .limit(20) reintroduced')
+  assertEqual(/\.limit\(50\)/.test(r), false, 'no .limit(50) reintroduced')
+  assertEqual(/\.slice\(0,\s*5\)/.test(r), false, 'no .slice(0,5) reintroduced')
+  assertEqual(/inProgress:\s*convos/.test(r), false, "old 'inProgress' top-level field removed")
+  assertEqual(/featuredWork:/.test(r), false, "old 'featuredWork' top-level field removed")
+  assertEqual(/'unreflected'/.test(r) && /'in_progress'/.test(r) && /'completed'/.test(r), true, 'per-row status discriminator present')
+  assertEqual(/from\('student_work'\)/.test(r) && /from\('growth_conversation'\)/.test(r), true, 'queries both tables')
+  assertEqual(/from '@\/components\/v2\/student\/types'/.test(r) || /from '@\/components\/v2\/student\/types\.js'/.test(r), true, 'imports shared SubmissionItem / ActiveInProgress types')
+  assertEqual(/getV2StudentId/.test(r), true, 'auth via getV2StudentId')
+  assertEqual(/export const dynamic = 'force-dynamic'/.test(r), true, 'force-dynamic')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 
 finish()
