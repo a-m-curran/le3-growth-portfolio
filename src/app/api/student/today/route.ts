@@ -3,6 +3,11 @@ import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { getV2StudentId } from '@/lib/v2-auth'
 import { primaryPillarFromTags } from '@/lib/pillar-resolution'
+import type {
+  ActiveInProgress,
+  SubmissionItem,
+  SubmissionStatus,
+} from '@/components/v2/student/types'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -10,24 +15,17 @@ export const runtime = 'nodejs'
 /**
  * GET /api/student/today
  *
- * Aggregates the dynamic data behind /v2/today into a single response
- * so the page doesn't have to chain three fetches.
- *
- * Returns:
- *   featuredWork    — most recent submitted work, each enriched with
- *                     its dominant conversation (if any) so the card
- *                     can deep-link into the conversation replay
- *                     (`conversationId`) or, when no conversation
- *                     exists, route to `/v2/reflect/start?work=X` to
- *                     start one.
- *   recentJournal   — recent completed conversations of type
- *                     'open_reflection'. Capped at 3.
- *   weekStats       — conversations completed + work submitted in the
- *                     last 7 days.
- *   ltiPinned       — the LTI resource the student most recently
- *                     launched from Brightspace, parsed from the
- *                     lti_context cookie set by /api/lti/launch.
- *                     Null when the student didn't arrive via LTI.
+ * Returns the data behind /v2/today after the redesign:
+ *   - activeInProgress: same shape as /api/student/reflect; drives the
+ *     pinned in-progress banner (the banner appears on both surfaces).
+ *   - submissions: every student_work row with per-row status. The
+ *     Today/This week/Earlier buckets are computed client-side from
+ *     submitted_at in the user's local timezone.
+ *   - recentJournal: unchanged (last 3 open_reflection completed). The
+ *     .limit(3) here is intentional and doc-stated — separate concern
+ *     from the work-list caps removed in PR #12 and PR #13.
+ *   - weekStats: unchanged (counts for the last 7 days).
+ *   - ltiPinned: unchanged (parsed from the lti_context cookie).
  *
  * Demo personas are real DB rows (is_demo=true). The student id is
  * resolved through `getV2StudentId` which honors the demo persona
@@ -42,90 +40,123 @@ export async function GET() {
 
   const admin = createAdminClient()
 
-  // ─── Recent work + linked conversations ───
-  // Pull submissions (intentionally unbounded — a silent .limit(5) here
-  // previously hid all but 5 of a student's work from /v2/today; a
-  // navigable date-scoped view is the planned redesign), then look up
-  // any completed conversation per work_id so the card can route to
-  // /v2/conversation/[id] (existing reflection) or /v2/reflect/start.
-  const { data: workRows } = await admin
-    .from('student_work')
-    .select('id, title, course_name, submitted_at, work_type')
-    .eq('student_id', studentId)
-    .order('submitted_at', { ascending: false, nullsFirst: false })
+  // ─── Work + per-work conversations (status discriminator) ───
+  const [{ data: workRows }, { data: convoRows }] = await Promise.all([
+    admin
+      .from('student_work')
+      .select('id, title, course_name, course_code, quarter, week_number, submitted_at, work_type')
+      .eq('student_id', studentId)
+      .order('submitted_at', { ascending: false, nullsFirst: false }),
+    admin
+      .from('growth_conversation')
+      .select(
+        'id, work_id, status, conversation_type, started_at, work_context, ' +
+          'response_phase_1, response_phase_2, response_phase_3, ' +
+          'prompt_phase_2, prompt_phase_3, ' +
+          'student_work(title), ' +
+          'conversation_skill_tag(skill_id, confidence, durable_skill(pillar:pillar_id(name)))'
+      )
+      .eq('student_id', studentId)
+      .in('status', ['in_progress', 'completed'])
+      .order('started_at', { ascending: false }),
+  ])
 
   interface WorkRow {
     id: string
     title: string
     course_name: string | null
+    course_code: string | null
+    quarter: string
+    week_number: number | null
     submitted_at: string | null
     work_type: string | null
   }
-  const allWork = (workRows ?? []) as unknown as WorkRow[]
+  interface ConvoTag {
+    skill_id: string
+    confidence: number
+    durable_skill: { pillar: { name: string } | null } | null
+  }
+  interface ConvoRow {
+    id: string
+    work_id: string | null
+    status: 'in_progress' | 'completed'
+    conversation_type: 'work_based' | 'open_reflection' | null
+    started_at: string
+    work_context: string | null
+    response_phase_1: string | null
+    response_phase_2: string | null
+    response_phase_3: string | null
+    prompt_phase_2: string | null
+    prompt_phase_3: string | null
+    student_work: { title: string } | null
+    conversation_skill_tag: ConvoTag[] | null
+  }
+  const work = (workRows ?? []) as unknown as WorkRow[]
+  const convos = (convoRows ?? []) as unknown as ConvoRow[]
 
-  // For the work items we just pulled, find the most recent completed
-  // conversation per work_id. Returning this enables the demo's "see
-  // it in action" flow on cards that already have a reflection.
-  const conversationByWorkId = new Map<string, string>()
-  const pillarByWorkId = new Map<string, string | null>()
-  if (allWork.length > 0) {
-    const { data: convoRows } = await admin
-      .from('growth_conversation')
-      .select(
-        'id, work_id, started_at, conversation_skill_tag(skill_id, confidence, student_confirmed, durable_skill(name, pillar:pillar_id(name)))'
-      )
-      .eq('student_id', studentId)
-      .eq('status', 'completed')
-      .in('work_id', allWork.map(w => w.id))
-      .order('started_at', { ascending: false })
-
-    interface ConvoRow {
-      id: string
-      work_id: string | null
-      conversation_skill_tag: Array<{
-        skill_id: string
-        confidence: number
-        student_confirmed: boolean
-        durable_skill: {
-          name: string
-          pillar: { name: string } | null
-        } | null
-      }> | null
-    }
-    for (const c of (convoRows ?? []) as unknown as ConvoRow[]) {
-      if (!c.work_id || conversationByWorkId.has(c.work_id)) continue
-      conversationByWorkId.set(c.work_id, c.id)
-      // Dominant pillar — derived from skill tags joined through
-      // durable_skill → pillar. Single query, no second round-trip.
-      const tags = (c.conversation_skill_tag ?? []).map(t => ({
-        skillId: t.skill_id,
-        confidence: t.confidence,
-        studentConfirmed: t.student_confirmed,
-      }))
-      const topTag = tags.length
-        ? [...tags].sort((a, b) => b.confidence - a.confidence)[0]
-        : null
-      const topPillar = topTag
-        ? c.conversation_skill_tag?.find(t => t.skill_id === topTag.skillId)
-            ?.durable_skill?.pillar?.name ?? null
-        : null
-      pillarByWorkId.set(c.work_id, topPillar)
+  const convoByWorkId = new Map<string, ConvoRow>()
+  for (const c of convos) {
+    if (c.conversation_type === 'open_reflection') continue
+    if (!c.work_id) continue
+    const existing = convoByWorkId.get(c.work_id)
+    if (!existing) convoByWorkId.set(c.work_id, c)
+    else if (existing.status === 'completed' && c.status === 'in_progress') {
+      convoByWorkId.set(c.work_id, c)
     }
   }
 
-  const featuredWork = allWork.map(w => ({
-    id: w.id,
-    title: w.title,
-    courseName: w.course_name,
-    submittedAt: w.submitted_at,
-    workType: w.work_type,
-    conversationId: conversationByWorkId.get(w.id) ?? null,
-    primaryPillar: pillarByWorkId.get(w.id) ?? null,
-  }))
+  function dominantPillar(c: ConvoRow): string | null {
+    const tags = c.conversation_skill_tag ?? []
+    if (tags.length === 0) return null
+    const top = [...tags].sort((a, b) => b.confidence - a.confidence)[0]
+    return top.durable_skill?.pillar?.name ?? null
+  }
 
-  // ─── Recent journal (open_reflection) ─────────────
-  // Pull skill-tag rows + their joined skill→pillar so we can resolve
-  // each entry's dominant pillar without a second round-trip.
+  const submissions: SubmissionItem[] = work.map(w => {
+    const c = convoByWorkId.get(w.id) ?? null
+    let status: SubmissionStatus = 'unreflected'
+    if (c) status = c.status === 'in_progress' ? 'in_progress' : 'completed'
+    return {
+      id: w.id,
+      title: w.title,
+      courseName: w.course_name,
+      courseCode: w.course_code,
+      quarter: w.quarter,
+      weekNumber: w.week_number,
+      submittedAt: w.submitted_at,
+      workType: w.work_type,
+      status,
+      conversationId: c?.id ?? null,
+      primaryPillar: c && status === 'completed' ? dominantPillar(c) : null,
+    }
+  })
+
+  // Active in-progress.
+  const inProgress = convos.filter(c => c.status === 'in_progress')
+  const activeRow = inProgress[0] ?? null
+
+  function derivePhase(c: ConvoRow): 1 | 2 | 3 {
+    if (c.response_phase_2 && c.prompt_phase_3) return 3
+    if (c.response_phase_1 && c.prompt_phase_2) return 2
+    return 1
+  }
+
+  const activeInProgress: ActiveInProgress | null = activeRow
+    ? {
+        id: activeRow.id,
+        workId: activeRow.work_id,
+        workTitle: activeRow.student_work?.title ?? null,
+        conversationType: (activeRow.conversation_type ?? 'work_based') as
+          | 'work_based'
+          | 'open_reflection',
+        currentPhase: derivePhase(activeRow),
+        startedAt: activeRow.started_at,
+      }
+    : null
+
+  // ─── Recent journal (open_reflection completed). Cap of 3 is
+  //     intentional / doc-stated — separate from the work-list caps
+  //     removed in PR #12 and PR #13.
   const { data: journalRows } = await admin
     .from('growth_conversation')
     .select(`
@@ -150,10 +181,7 @@ export async function GET() {
       skill_id: string
       confidence: number
       student_confirmed: boolean
-      durable_skill: {
-        name: string
-        pillar: { name: string } | null
-      } | null
+      durable_skill: { name: string; pillar: { name: string } | null } | null
     }> | null
   }
   const recentJournal = ((journalRows ?? []) as unknown as JournalRow[]).map(j => {
@@ -180,9 +208,8 @@ export async function GET() {
     }
   })
 
-  // ─── Week stats ─────────────────────────────
+  // ─── Week stats (unchanged from prior shape) ─────────
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-
   const [{ count: convoCount }, { count: workCount }] = await Promise.all([
     admin
       .from('growth_conversation')
@@ -197,16 +224,16 @@ export async function GET() {
       .gte('submitted_at', weekAgo),
   ])
 
-  // ─── LTI pinned resource ────────────────────
+  // ─── LTI pinned (unchanged) ─────────────────────────
   const ltiPinned = parseLtiContext(cookieStore.get('lti_context')?.value)
 
-  // Note: `primaryPillarFromTags` import retained for legacy callers
-  // but unused here — pillar resolution now joins through the SQL
-  // query directly.
+  // Retained for legacy callers; not used here (pillar resolution joins
+  // through SQL directly).
   void primaryPillarFromTags
 
   return NextResponse.json({
-    featuredWork,
+    activeInProgress,
+    submissions,
     recentJournal,
     weekStats: {
       conversationsCompleted: convoCount ?? 0,

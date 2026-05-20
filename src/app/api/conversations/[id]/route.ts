@@ -131,6 +131,20 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  // Expose is_demo on the response so ConversationView can route
+  // completed conversations to ConversationFullView for real students
+  // and to ConversationReplay (typewriter) for demo personas. Mirrors
+  // the small lookup already used in the demo-coach auth branch above.
+  let studentIsDemo = false
+  {
+    const { data: s } = await admin
+      .from('student')
+      .select('is_demo')
+      .eq('id', convRow.student_id)
+      .maybeSingle()
+    studentIsDemo = !!s?.is_demo
+  }
+
   const tagRows = convRow.conversation_skill_tag ?? []
 
   const skillIds = Array.from(new Set(tagRows.map(t => t.skill_id)))
@@ -155,6 +169,7 @@ export async function GET(
     workId: convRow.work_id,
     status: convRow.status,
     conversationType: convRow.conversation_type,
+    isDemo: studentIsDemo,
     startedAt: convRow.started_at,
     completedAt: convRow.completed_at,
     durationSeconds: convRow.duration_seconds,
