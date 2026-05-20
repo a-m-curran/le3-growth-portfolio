@@ -66,6 +66,21 @@ section('Task 4: /api/student/reflect new shape')
   assertEqual(/export const dynamic = 'force-dynamic'/.test(r), true, 'force-dynamic')
 }
 
+section('Task 5: /api/student/today new shape')
+{
+  const r = stripComments(read('src/app/api/student/today/route.ts'))
+  assertEqual(/activeInProgress/.test(r), true, 'returns activeInProgress field')
+  assertEqual(/submissions/.test(r), true, 'returns submissions field')
+  assertEqual(/featuredWork:/.test(r), false, "old 'featuredWork' top-level field removed")
+  assertEqual(/\.from\('student_work'\)[\s\S]*\.limit\(5\)/.test(r), false, "no .limit(5) on student_work reintroduced")
+  assertEqual(/recentJournal/.test(r), true, 'recentJournal preserved')
+  assertEqual(/weekStats/.test(r), true, 'weekStats preserved')
+  assertEqual(/ltiPinned/.test(r), true, 'ltiPinned preserved')
+  assertEqual(/parseLtiContext/.test(r), true, 'parseLtiContext helper preserved')
+  assertEqual(/\.eq\('conversation_type', 'open_reflection'\)[\s\S]*\.limit\(3\)/.test(r), true, 'recentJournal .limit(3) preserved (intentional)')
+  assertEqual(/from '@\/components\/v2\/student\/types'/.test(r), true, 'imports shared types')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 
 finish()
