@@ -29,8 +29,8 @@ export function deriveQuarter(input: {
   startDate: string | null
 }): string {
   // Priority 1: D2L Semester.Name, if it's already canonical.
-  if (input.semesterName && CANONICAL_SEMESTER.test(input.semesterName)) {
-    return input.semesterName
+  if (input.semesterName && CANONICAL_SEMESTER.test(input.semesterName.trim())) {
+    return input.semesterName.trim()
   }
   // Priority 2: StartDate month → Season + the date's year.
   if (input.startDate) {
@@ -48,16 +48,15 @@ export function deriveQuarter(input: {
  * Used by getCourse() (and listCoursesUnderOrgUnit() after enrichment).
  */
 export function normalizeCourseOffering(raw: D2LCourseOffering): NormalizedCourse {
+  const semesterName = raw.Semester?.Name ?? null
+  const startDate = raw.StartDate ?? null
   return {
     orgUnitId: raw.Identifier,
     name: raw.Name,
     code: raw.Code,
     active: raw.IsActive,
-    quarter: deriveQuarter({
-      semesterName: raw.Semester?.Name ?? null,
-      startDate: raw.StartDate,
-    }),
-    startDate: raw.StartDate,
-    semesterName: raw.Semester?.Name ?? null,
+    quarter: deriveQuarter({ semesterName, startDate }),
+    startDate,
+    semesterName,
   }
 }
