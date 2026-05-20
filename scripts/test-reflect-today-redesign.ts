@@ -119,6 +119,19 @@ section('Task 8: InProgressBanner component')
   assertEqual(/work_context|workContext|workTitle/.test(c), true, 'falls back to work context for open_reflection')
 }
 
+section('Task 9: InProgressInterstitial component')
+{
+  const c = stripComments(read('src/components/v2/student/InProgressInterstitial.tsx'))
+  assertEqual(/'use client'/.test(c), true, 'client component')
+  assertEqual(/export function InProgressInterstitial/.test(c), true, 'InProgressInterstitial exported')
+  assertEqual(/role="dialog"/.test(c) && /aria-modal/.test(c), true, 'modal a11y attrs')
+  assertEqual(/Resume in-progress/.test(c), true, 'Resume in-progress button')
+  assertEqual(/Discard and start new/.test(c), true, 'Discard and start new button')
+  assertEqual(/Cancel/.test(c), true, 'Cancel button')
+  assertEqual(/DiscardConfirmDialog/.test(c), true, 'uses DiscardConfirmDialog')
+  assertEqual(/discardAndStart:\s*true/.test(c), true, 'POSTs /api/conversation/start with discardAndStart:true')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 
 finish()
