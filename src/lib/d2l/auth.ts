@@ -29,19 +29,11 @@ let cache: CachedToken | null = null
 
 /**
  * Scopes requested on every Valence token. Must match what the OAuth
- * app has been granted on the Brightspace side; the token endpoint
- * returns the intersection of requested and granted scopes.
+ * app has been granted on the Brightspace side.
  *
  * Scope to endpoint coverage:
  *   organizations:organization:read - orgstructure endpoints (course discovery)
  *   orgunit:children:read           - orgstructure children listing
- *   orgunits:course:read            - /courses/{id} CourseOffering (Semester+StartDate
- *                                     for per-course quarter derivation; added with the
- *                                     course-quarter integration). Brightspace must also
- *                                     GRANT this on the OAuth app registration — adding
- *                                     it here without the grant is a no-op, since D2L
- *                                     issues a token containing the intersection of
- *                                     requested and granted scopes.
  *   enrollment:orgunit:read         - /classlist/ (enrollments per course)
  *   dropbox:folders:read            - dropbox folders listing
  *   dropbox:submissions:read        - dropbox submissions listing
@@ -50,11 +42,24 @@ let cache: CachedToken | null = null
  *   users:own_profile:read          - /users/whoami
  *   users:profile:read              - read any user's profile
  *   users:userdata:read             - user data like grades, enrollments
+ *
+ * IMPORTANT: do NOT add a scope here that the NLU OAuth app doesn't
+ * already grant. NLU's Brightspace token endpoint REJECTS the whole
+ * token request with 400 invalid_scope if ANY requested scope is
+ * unauthorized — it does NOT silently drop ungranted scopes. Adding
+ * one ungranted scope breaks all D2L access until reverted (or the
+ * scope is granted on the OAuth app side). See the PR #19 → PR #22
+ * incident for history.
+ *
+ * If we ever need /courses/{id} CourseOffering data (Semester +
+ * StartDate), the path is: (1) NLU IT grants orgunits:course:read on
+ * the OAuth app FIRST; (2) confirm with a one-off token mint;
+ * (3) ONLY THEN add it here. As of PR #21 we derive quarter from
+ * course.code (NLU Banner term code) without needing this scope.
  */
 const VALENCE_SCOPES = [
   'organizations:organization:read',
   'orgunit:children:read',
-  'orgunits:course:read',
   'enrollment:orgunit:read',
   'dropbox:folders:read',
   'dropbox:submissions:read',
