@@ -6,7 +6,7 @@
  * configured LE3 org unit and filter for course offerings.
  */
 
-import { lpGet, lpGetAllPaged, ValenceRateLimitError } from './client'
+import { lpGet, lpGetAllPaged } from './client'
 import type { D2LCourseOffering, D2LOrgUnitDescendant, NormalizedCourse } from './types'
 import { normalizeCourseOffering } from './mappers'
 
@@ -23,6 +23,17 @@ const ORG_UNIT_TYPE_COURSE_OFFERING = 3
  * the OAuth app access to just one course before opening it to the whole
  * program. Without this fallback, descendants returns [] and the sync
  * would silently skip everything.
+ *
+ * Earlier this function called getCourse() per descendant to enrich
+ * each with the full CourseOffering payload (Semester + StartDate),
+ * but /courses/{id} requires the orgunits:course:read scope NLU's
+ * OAuth app does not grant. Since deriveQuarter now derives from the
+ * NLU Banner term code embedded in course.code (which the lightweight
+ * descendants payload already includes), the per-course enrichment
+ * call was 100% wasted — every call 403'd and fell through to a
+ * fallback that produced the same result we now compute directly
+ * from the descendant. Removing it saves ~70 HTTPs per discovery and
+ * ~70 console.warn log lines.
  */
 export async function listCoursesUnderOrgUnit(
   parentOrgUnitId: string
@@ -37,46 +48,25 @@ export async function listCoursesUnderOrgUnit(
   }
 
   if (descendants.length > 0) {
-    // The descendants endpoint returns lightweight rows (no Semester /
-    // StartDate). Round-trip getCourse() per descendant to enrich each
-    // one with the full CourseOffering payload, so callers always see
-    // a fully-shaped NormalizedCourse (with derived quarter).
-    // Bounded by ~47 today; one extra HTTP per discovered course is
-    // acceptable at this scale. If a per-course fetch fails, fall
-    // back to a minimal NormalizedCourse with currentQuarter() so the
-    // sync isn't blocked.
-    const enriched: NormalizedCourse[] = []
-    for (const d of descendants) {
-        try {
-          enriched.push(await getCourse(d.Identifier))
-        } catch (err) {
-          // Sustained D2L rate-limiting: surface so the parent task's
-          // retry policy can apply tuned backoff. Silently degrading
-          // every descendant to currentQuarter() fallback would produce
-          // 47 low-quality records when the data is actually fetchable
-          // after a brief backoff.
-          if (err instanceof ValenceRateLimitError) throw err
-          // Other failures (transient 5xx, schema mismatch on one record,
-          // etc.): degrade this single descendant to a minimal record so
-          // the rest of the sync isn't blocked, but log for ops visibility.
-          console.warn('listCoursesUnderOrgUnit: enrichment failed, using fallback', {
-            orgUnitId: d.Identifier,
-            name: d.Name,
-            err: err instanceof Error ? err.message : String(err),
-          })
-          enriched.push(normalizeCourseOffering({
-            Identifier: d.Identifier,
-            Name: d.Name,
-            Code: d.Code || null,
-            IsActive: true,
-            Path: '',
-            StartDate: null,
-            EndDate: null,
-            Semester: null,
-          }))
-        }
-      }
-    return enriched
+    // Build NormalizedCourse directly from each descendant. The
+    // descendants payload doesn't carry Semester or StartDate, but
+    // deriveQuarter falls back to course.code (Banner term code) for
+    // its primary signal, which IS present here. IsActive isn't in
+    // the descendants payload either; assume true (matches the
+    // pre-PR-17 behavior, and inactive courses don't generally appear
+    // in the descendants query anyway).
+    return descendants.map(d =>
+      normalizeCourseOffering({
+        Identifier: d.Identifier,
+        Name: d.Name,
+        Code: d.Code || null,
+        IsActive: true,
+        Path: '',
+        StartDate: null,
+        EndDate: null,
+        Semester: null,
+      })
+    )
   }
 
   // No descendants. Check whether the configured org unit is itself a
@@ -89,9 +79,21 @@ export async function listCoursesUnderOrgUnit(
   }>(`/orgstructure/${parentOrgUnitId}`)
 
   if (self.Type?.Id === ORG_UNIT_TYPE_COURSE_OFFERING) {
-    // Self-as-course: enrich via getCourse() so we get the full
-    // CourseOffering (Semester / StartDate) and the derived quarter.
-    return [await getCourse(self.Identifier)]
+    // Self-as-course: build NormalizedCourse from the org-structure
+    // payload directly (same rationale as the descendants .map above —
+    // /courses/{id} would require a scope we don't have).
+    return [
+      normalizeCourseOffering({
+        Identifier: self.Identifier,
+        Name: self.Name,
+        Code: self.Code,
+        IsActive: true,
+        Path: '',
+        StartDate: null,
+        EndDate: null,
+        Semester: null,
+      }),
+    ]
   }
 
   // Genuinely empty (container exists but has no course children).
@@ -101,8 +103,15 @@ export async function listCoursesUnderOrgUnit(
 /**
  * Get details for a single course offering by org unit ID. Returns a
  * fully-shaped NormalizedCourse including derived quarter (via
- * normalizeCourseOffering, which applies the Semester→StartDate→
- * currentQuarter() priority chain).
+ * normalizeCourseOffering, which applies the Banner-code → Semester →
+ * StartDate → currentQuarter() priority chain).
+ *
+ * NOTE: as of today, NLU's OAuth app does not grant the
+ * orgunits:course:read scope, so this function 403s against NLU's
+ * prod. Kept for completeness (other deployments where the scope is
+ * granted can use it) and for the unlikely future scenario where NLU
+ * IT grants it. listCoursesUnderOrgUnit() no longer calls this for
+ * the discovery path.
  */
 export async function getCourse(orgUnitId: string): Promise<NormalizedCourse> {
   const info = await lpGet<D2LCourseOffering>(`/courses/${orgUnitId}`)
