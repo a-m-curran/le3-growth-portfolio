@@ -15,8 +15,9 @@ export const runtime = 'nodejs'
  * SELECTOR among roles the authenticated user provably owns — it never
  * grants a role (getV2Identity re-validates row ownership every
  * request, so a tampered cookie cannot escalate). ?role=clear unsets
- * it (→ coach-first default). Real Supabase auth required; this is the
- * real-auth analog of /api/v2/demo-as.
+ * it (→ coach-first default). Real Supabase auth required; the
+ * persona-cookie set by /demo/aja and /demo/elizabeth is the demo
+ * analog.
  *
  * Cookie attributes mirror the demo-persona cookie (same-site web set;
  * sameSite=lax, secure in production) — distinct from the LTI launch

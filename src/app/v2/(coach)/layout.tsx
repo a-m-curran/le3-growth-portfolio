@@ -6,20 +6,22 @@ import { getV2Identity, isAdminEmail } from '@/lib/v2-auth'
  * Coach-shell wrapper. Forces the coach sidebar.
  *
  * Redirects:
- *   - No identity → /v2/demo (persona picker).
- *   - Student identity → /v2/demo so they pick a coach persona to
- *     preview as. Same shape as the student layout — explicit persona
- *     selection beats silently leaking demo data.
+ *   - No identity → /login. Demo viewers should arrive via
+ *     /demo/elizabeth (coach persona) — the direct link sets the
+ *     persona cookie and lands them in the right shell.
+ *   - Student identity → /login. The coach IA is for coach identities;
+ *     students who want to preview the coach view should hit
+ *     /demo/elizabeth.
  *   - Coach identity → renders the coach shell. Tools nav item is
  *     gated by ADMIN_EMAILS allowlist.
  */
 export default async function CoachGroupLayout({ children }: { children: React.ReactNode }) {
   const identity = await getV2Identity()
   if (!identity) {
-    redirect('/v2/demo')
+    redirect('/login')
   }
   if (identity.role !== 'coach') {
-    redirect('/v2/demo')
+    redirect('/login')
   }
 
   const showAdmin = isAdminEmail(identity.email)

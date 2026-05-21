@@ -19,7 +19,7 @@ import { GrowthView } from './GrowthView'
  */
 export default async function V2GrowthPage() {
   const studentId = await getV2StudentId()
-  if (!studentId) redirect('/v2/demo')
+  if (!studentId) redirect('/login')
 
   const data = await getGardenData(studentId)
 

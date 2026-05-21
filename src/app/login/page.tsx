@@ -3,7 +3,6 @@
 import { createBrowserClient } from '@supabase/auth-helpers-nextjs'
 import { useState, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import Link from 'next/link'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 /**
@@ -148,15 +147,6 @@ function LoginForm() {
       <p className="text-xs text-gray-400 text-center">
         No password needed. We&apos;ll email you a secure link.
       </p>
-
-      <div className="text-center pt-2 border-t border-gray-100">
-        <Link
-          href="/v2/demo"
-          className="text-sm text-green-700 hover:text-green-900 hover:underline"
-        >
-          Just exploring? Try the demo &rarr;
-        </Link>
-      </div>
     </Shell>
   )
 }
