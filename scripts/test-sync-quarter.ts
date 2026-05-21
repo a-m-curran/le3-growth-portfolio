@@ -107,6 +107,23 @@ section('Task 9: sync-course.ts uses course.quarter (not currentQuarter()) in th
   assertEqual(/quarter:\s*currentQuarter\(\)/.test(s), false, 'no remaining `quarter: currentQuarter()` writes')
 }
 
+section('Task 10: backfill-course-quarter.ts script')
+{
+  const s = stripComments(read('scripts/backfill-course-quarter.ts'))
+  assertEqual(/import\s*\{\s*config\s+as\s+dotenvConfig\s*\}\s*from\s*['"]dotenv['"]/.test(s), true, 'loads .env.local via dotenv before other imports')
+  assertEqual(/dotenvConfig\(\s*\{\s*path:\s*['"]\.env\.local['"]\s*\}\s*\)/.test(s), true, "calls dotenvConfig({ path: '.env.local' })")
+  assertEqual(/import\s*\{\s*createClient\s*\}\s*from\s*['"]@supabase\/supabase-js['"]/.test(s), true, 'imports createClient directly (own admin client)')
+  assertEqual(/from\s+['"]@\//.test(s), false, 'no @/ aliases (tsx CLI rule)')
+  assertEqual(/SUPABASE_SERVICE_ROLE_KEY/.test(s) && /NEXT_PUBLIC_SUPABASE_URL/.test(s), true, 'reads service-role env vars')
+  assertEqual(/from\s*['"]\.\.\/src\/lib\/d2l\/courses['"]|from\s*['"]\.\.\/src\/lib\/d2l\/courses\.js['"]/.test(s), true, 'imports getCourse via relative path')
+  assertEqual(/process\.exit\(errored\s*>\s*0\s*\?\s*1\s*:\s*0\)/.test(s), true, 'exit 1 if any course errored, else 0')
+  assertEqual(/from\(['"]course['"]\)[\s\S]{0,200}\.update/.test(s), true, 'updates course.quarter')
+  assertEqual(/from\(['"]assignment['"]\)[\s\S]{0,200}\.update/.test(s), true, 'updates assignment.quarter')
+  assertEqual(/from\(['"]student_work['"]\)[\s\S]{0,300}\.update/.test(s), true, 'updates student_work.quarter')
+  assertEqual(/skip|already|unchanged|no.?op/i.test(s), true, 'has idempotency skip path')
+  assertEqual(/try\s*\{[\s\S]{0,2000}catch\s*\(/.test(s), true, 'per-course try/catch')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 
 finish()
