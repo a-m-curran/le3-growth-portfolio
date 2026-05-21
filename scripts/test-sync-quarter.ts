@@ -83,6 +83,16 @@ section('Task 7: listCoursesUnderOrgUnit enriches each descendant via getCourse'
   assertEqual(/quarter:\s*['"](Winter|Spring|Summer|Fall)/.test(c) || /normalizeCourseOffering/.test(c) || /getCourse\(/.test(c), true, 'all NormalizedCourse construction sites have the new required fields')
 }
 
+section('Task 8: 019_course_quarter.sql migration')
+{
+  const sql = read('supabase/migrations/019_course_quarter.sql')
+  assertEqual(/alter table course\s+add column quarter text/i.test(sql), true, 'adds nullable quarter text column to course')
+  assertEqual(/comment on column course\.quarter/i.test(sql), true, 'has a column comment')
+  assertEqual(/quarter\s+text\s+not null/i.test(sql), false, 'quarter is nullable (no NOT NULL)')
+  assertEqual(/default\s+'/.test(sql), false, 'no DEFAULT value')
+  assertEqual(/check\s*\(/i.test(sql), false, 'no CHECK constraint')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 
 finish()
