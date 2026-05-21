@@ -1,28 +1,26 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { requireAdmin } from '@/lib/auth/require-admin'
-import { getCourse } from '@/lib/d2l/courses'
+import { deriveQuarter } from '@/lib/d2l/mappers'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
-// 70 courses × 1 D2L HTTP + ~3 Supabase round-trips per course = nominal
-// 30-60s. 300s is generous safety margin; effective on Vercel Pro. On
-// Hobby's 10s hard cap a partial run is still safe: course.quarter is
-// the canary (UPDATEd LAST per course), so a 504 mid-run leaves stale
-// course.quarter values that the next run re-tries cleanly. Child
-// UPDATEs are idempotent.
-export const maxDuration = 300
+// Pure DB-side derivation now (no D2L calls). 70 courses × 3-4 Supabase
+// round-trips per course = a few seconds total. 60s is ample.
+export const maxDuration = 60
 
 interface CourseRow {
   id: string
   name: string
   brightspace_org_unit_id: string | null
+  code: string | null
   quarter: string | null
 }
 
 interface Transition {
   courseName: string
   orgUnitId: string
+  code: string | null
   oldQuarter: string | null
   newQuarter: string
   assignmentCount: number
@@ -38,23 +36,26 @@ interface FailedCourse {
 /**
  * POST /api/admin/backfill-course-quarter
  *
- * ADMIN-gated. Server-side mirror of scripts/backfill-course-quarter.ts —
- * refetches every course from D2L via getCourse() (which delegates to
- * normalizeCourseOffering → deriveQuarter), and UPDATEs course.quarter +
- * assignment.quarter + student_work.quarter per course.
+ * ADMIN-gated. Recomputes the canonical "Season YYYY" for every course
+ * from data already in the database (no D2L calls), then UPDATEs
+ * course.quarter + assignment.quarter + student_work.quarter per course
+ * where the stored value differs from the derived value.
+ *
+ * Why no D2L: deriveQuarter() now parses NLU's Banner term code
+ * (course.code = "<sectionId>.<YYYY><TT>") as its primary signal —
+ * that data is already in the lightweight org-structure payload we
+ * sync into course.code on every run. The D2L /courses/{id} call
+ * was the previous primary signal but required the orgunits:course:read
+ * scope we don't have granted; bypassing it removes that dependency
+ * AND removes a per-course network round-trip.
  *
  * Idempotent: courses whose stored quarter already matches the derived
  * value are skipped.
  *
  * Retry-safe ordering: child rows first (assignment, student_work),
  * course.quarter LAST as the canary. A mid-course crash leaves the
- * parent stale so the next run sees the mismatch and re-tries the full
- * sequence; child UPDATEs are idempotent no-ops on re-run.
- *
- * Why a server route instead of just the CLI script: the Vercel runtime
- * has every D2L + LTI env var set already; running the CLI locally
- * requires the owner to populate .env.local with prod D2L creds. The
- * button trades a one-time setup for permanent push-button re-runs.
+ * parent stale so the next run sees the mismatch and re-tries the
+ * full sequence; child UPDATEs are idempotent no-ops on re-run.
  */
 export async function POST() {
   try {
@@ -65,7 +66,7 @@ export async function POST() {
 
     const { data: courses, error: loadErr } = await admin
       .from('course')
-      .select('id, name, brightspace_org_unit_id, quarter')
+      .select('id, name, brightspace_org_unit_id, code, quarter')
       .not('brightspace_org_unit_id', 'is', null)
       .order('name')
 
@@ -86,8 +87,17 @@ export async function POST() {
     for (const row of rows) {
       const orgUnitId = row.brightspace_org_unit_id!
       try {
-        const enriched = await getCourse(orgUnitId)
-        const derived = enriched.quarter
+        // Pure derivation from data already in the DB (no D2L call).
+        // The Banner term-code path needs only row.code; semesterName
+        // and startDate are unavailable without /courses/{id}, which
+        // we don't have scope for — pass null. If row.code doesn't
+        // match the Banner pattern (e.g., sandbox courses), the chain
+        // falls through to currentQuarter().
+        const derived = deriveQuarter({
+          semesterName: null,
+          startDate: null,
+          code: row.code,
+        })
 
         if (row.quarter === derived) {
           skipped++
@@ -130,6 +140,7 @@ export async function POST() {
         transitions.push({
           courseName: row.name,
           orgUnitId,
+          code: row.code,
           oldQuarter: row.quarter,
           newQuarter: derived,
           assignmentCount: asgnCount ?? 0,
