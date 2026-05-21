@@ -103,5 +103,19 @@ section('Task 6: Tools Passlinks tab + panel + prefetch')
   assertEqual(/\/api\/admin\/passlinks\/revoke-all/.test(pp) && /confirm\(/.test(pp), true, 'revoke-all confirm-gated')
 }
 
+section('Tier-2 (PR #26): passlink endpoint signs out existing session before redirect')
+{
+  // A passlink represents the subject the link was issued to. Clicking
+  // it should ALWAYS land you as that subject, regardless of any
+  // existing browser session. Without this, an admin or coach session
+  // in the same browser collides with the new student session and the
+  // user ends up bounced to /v2/demo (per the PR #25 thread).
+  const r = stripComments(read('src/app/api/auth/passlink/route.ts'))
+  assertEqual(/createServerClient/.test(r) && /from 'next\/headers'/.test(r), true, 'imports createServerClient + cookies() for sign-out')
+  assertEqual(/PERSONA_COOKIE/.test(r), true, 'imports PERSONA_COOKIE (cleared on response so getV2Identity doesn\'t short-circuit on a stale demo persona)')
+  assertEqual(/supabase\.auth\.signOut\(\)/.test(r), true, 'signs out any existing Supabase session before redirect')
+  assertEqual(/applySessionReset/.test(r), true, 'applies captured signOut clear-cookies + PERSONA_COOKIE clear to the redirect response')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 finish()
