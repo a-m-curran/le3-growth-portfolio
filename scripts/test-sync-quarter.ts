@@ -75,12 +75,18 @@ section('Task 6: getCourse() requests full CourseOffering + uses mapper')
   assertEqual(/lpGet<\{\s*Identifier:\s*string;\s*Name:\s*string;\s*Code:[\s\S]{0,80}IsActive:\s*boolean\s*\}>/.test(c), false, 'old minimal inline type removed')
 }
 
-section('Task 7: listCoursesUnderOrgUnit enriches each descendant via getCourse')
+section('Task 7: listCoursesUnderOrgUnit builds NormalizedCourse from descendants payload (no per-course D2L call)')
 {
   const c = stripComments(read('src/lib/d2l/courses.ts'))
-  assertEqual(/export async function listCoursesUnderOrgUnit[\s\S]{0,1500}getCourse\(/.test(c), true, 'listCoursesUnderOrgUnit calls getCourse() for enrichment')
+  // Maps descendants directly via normalizeCourseOffering (the wasteful per-
+  // descendant getCourse() loop was removed once Banner-code derivation made
+  // /courses/{id} unnecessary — and that endpoint 403s under our scope anyway).
+  assertEqual(/export async function listCoursesUnderOrgUnit[\s\S]{0,1500}\.map\([\s\S]{0,200}normalizeCourseOffering\(/.test(c), true, 'listCoursesUnderOrgUnit maps descendants via normalizeCourseOffering directly')
+  // Regression-proof: no per-descendant getCourse() call in this function's body.
+  const listFunc = c.match(/export async function listCoursesUnderOrgUnit[\s\S]*?\n\}/)?.[0] ?? ''
+  assertEqual(/await\s+getCourse\(/.test(listFunc), false, 'no await getCourse() in listCoursesUnderOrgUnit body (would 403 under our scope set)')
   assertEqual(/ORG_UNIT_TYPE_COURSE_OFFERING/.test(c), true, 'self-as-course fallback preserved')
-  assertEqual(/quarter:\s*['"](Winter|Spring|Summer|Fall)/.test(c) || /normalizeCourseOffering/.test(c) || /getCourse\(/.test(c), true, 'all NormalizedCourse construction sites have the new required fields')
+  assertEqual(/normalizeCourseOffering/.test(c), true, 'normalizeCourseOffering is the NormalizedCourse construction path')
 }
 
 section('Task 8: 019_course_quarter.sql migration')
