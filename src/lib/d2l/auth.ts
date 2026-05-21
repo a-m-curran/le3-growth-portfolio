@@ -35,6 +35,13 @@ let cache: CachedToken | null = null
  * Scope to endpoint coverage:
  *   organizations:organization:read - orgstructure endpoints (course discovery)
  *   orgunit:children:read           - orgstructure children listing
+ *   orgunits:course:read            - /courses/{id} CourseOffering (Semester+StartDate
+ *                                     for per-course quarter derivation; added with the
+ *                                     course-quarter integration). Brightspace must also
+ *                                     GRANT this on the OAuth app registration — adding
+ *                                     it here without the grant is a no-op, since D2L
+ *                                     issues a token containing the intersection of
+ *                                     requested and granted scopes.
  *   enrollment:orgunit:read         - /classlist/ (enrollments per course)
  *   dropbox:folders:read            - dropbox folders listing
  *   dropbox:submissions:read        - dropbox submissions listing
@@ -47,6 +54,7 @@ let cache: CachedToken | null = null
 const VALENCE_SCOPES = [
   'organizations:organization:read',
   'orgunit:children:read',
+  'orgunits:course:read',
   'enrollment:orgunit:read',
   'dropbox:folders:read',
   'dropbox:submissions:read',
