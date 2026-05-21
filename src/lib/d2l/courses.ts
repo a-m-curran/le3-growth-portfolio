@@ -6,7 +6,7 @@
  * configured LE3 org unit and filter for course offerings.
  */
 
-import { lpGet, lpGetAllPaged } from './client'
+import { lpGet, lpGetAllPaged, ValenceRateLimitError } from './client'
 import type { D2LCourseOffering, D2LOrgUnitDescendant, NormalizedCourse } from './types'
 import { normalizeCourseOffering } from './mappers'
 
@@ -47,21 +47,35 @@ export async function listCoursesUnderOrgUnit(
     // sync isn't blocked.
     const enriched: NormalizedCourse[] = []
     for (const d of descendants) {
-      try {
-        enriched.push(await getCourse(d.Identifier))
-      } catch {
-        enriched.push(normalizeCourseOffering({
-          Identifier: d.Identifier,
-          Name: d.Name,
-          Code: d.Code || null,
-          IsActive: true,
-          Path: '',
-          StartDate: null,
-          EndDate: null,
-          Semester: null,
-        }))
+        try {
+          enriched.push(await getCourse(d.Identifier))
+        } catch (err) {
+          // Sustained D2L rate-limiting: surface so the parent task's
+          // retry policy can apply tuned backoff. Silently degrading
+          // every descendant to currentQuarter() fallback would produce
+          // 47 low-quality records when the data is actually fetchable
+          // after a brief backoff.
+          if (err instanceof ValenceRateLimitError) throw err
+          // Other failures (transient 5xx, schema mismatch on one record,
+          // etc.): degrade this single descendant to a minimal record so
+          // the rest of the sync isn't blocked, but log for ops visibility.
+          console.warn('listCoursesUnderOrgUnit: enrichment failed, using fallback', {
+            orgUnitId: d.Identifier,
+            name: d.Name,
+            err: err instanceof Error ? err.message : String(err),
+          })
+          enriched.push(normalizeCourseOffering({
+            Identifier: d.Identifier,
+            Name: d.Name,
+            Code: d.Code || null,
+            IsActive: true,
+            Path: '',
+            StartDate: null,
+            EndDate: null,
+            Semester: null,
+          }))
+        }
       }
-    }
     return enriched
   }
 
