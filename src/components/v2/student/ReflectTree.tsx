@@ -196,11 +196,6 @@ export function ReflectTree({ submissions, onRowClick }: ReflectTreeProps) {
                       >
                         <span className="text-sm font-semibold text-gray-800">
                           {cOpen ? '▾' : '▸'} {c.courseName}
-                          {c.courseCode && (
-                            <span className="text-xs font-normal text-gray-400 ml-2">
-                              {c.courseCode}
-                            </span>
-                          )}
                         </span>
                         <span className="text-xs text-gray-500">({c.total})</span>
                       </button>
