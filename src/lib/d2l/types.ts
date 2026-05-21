@@ -163,6 +163,24 @@ export interface D2LPagedResultSet<T> {
   Items: T[]
 }
 
+/** Response shape from /lp/{ver}/courses/{orgUnitId} — full CourseOffering. */
+export interface D2LCourseOffering {
+  Identifier: string
+  Name: string
+  Code: string | null
+  IsActive: boolean
+  Path: string
+  StartDate: string | null
+  EndDate: string | null
+  Semester: {
+    Identifier: string
+    Name: string
+    Code: string | null
+  } | null
+  // Other CourseOffering fields exist (Department, CourseTemplate, etc.)
+  // but the sync does not consume them.
+}
+
 // ─── NORMALIZED APPLICATION TYPES ───────────────────
 //
 // These are the shapes the sync engine and downstream code use.
@@ -175,6 +193,12 @@ export interface NormalizedCourse {
   code: string | null
   active: boolean
   instructorEmail?: string
+  /** Canonical "Season YYYY". Never null (currentQuarter() safety net guarantees a value). */
+  quarter: string
+  /** Raw D2L CourseOffering.StartDate, for traceability. */
+  startDate: string | null
+  /** Raw D2L CourseOffering.Semester.Name, for traceability. */
+  semesterName: string | null
 }
 
 export interface NormalizedEnrollment {
