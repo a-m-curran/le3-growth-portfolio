@@ -145,7 +145,7 @@ export async function syncOneCourse(
 
     for (const assignment of assignments) {
       try {
-        const assignmentRowId = await upsertAssignment(assignment, courseRowId, course.orgUnitId)
+        const assignmentRowId = await upsertAssignment(assignment, courseRowId, course.orgUnitId, course.quarter)
         counts.assignmentsSynced++
 
         // Pull submissions for this assignment
@@ -160,6 +160,7 @@ export async function syncOneCourse(
               courseRowId,
               courseName: course.name,
               courseCode: course.code,
+              courseQuarter: course.quarter,
               mode,
             })
             if (result.inserted) {
@@ -220,7 +221,6 @@ export async function syncOneCourse(
 async function upsertCourse(course: NormalizedCourse): Promise<string> {
   const admin = createAdminClient()
   const externalId = `d2l:${course.orgUnitId}`
-  const quarter = currentQuarter()
 
   const { data: existing } = await admin
     .from('course')
@@ -234,6 +234,7 @@ async function upsertCourse(course: NormalizedCourse): Promise<string> {
       .update({
         name: course.name,
         code: course.code,
+        quarter: course.quarter,
         active: course.active,
         synced_at: new Date().toISOString(),
       })
@@ -248,7 +249,7 @@ async function upsertCourse(course: NormalizedCourse): Promise<string> {
       brightspace_org_unit_id: course.orgUnitId,
       name: course.name,
       code: course.code,
-      quarter,
+      quarter: course.quarter,
       active: course.active,
     })
     .select('id')
@@ -443,11 +444,11 @@ async function upsertStudentCourse(
 async function upsertAssignment(
   assignment: NormalizedAssignment,
   courseRowId: string,
-  orgUnitId: string
+  orgUnitId: string,
+  courseQuarter: string
 ): Promise<string> {
   const admin = createAdminClient()
   const externalId = `d2l:${orgUnitId}:${assignment.folderId}`
-  const quarter = currentQuarter()
 
   const { data: existing } = await admin
     .from('assignment')
@@ -480,7 +481,7 @@ async function upsertAssignment(
       description: assignment.description,
       due_date: assignment.dueDate,
       work_type: inferWorkType(assignment.name),
-      quarter,
+      quarter: courseQuarter,
       active: assignment.active,
     })
     .select('id')
@@ -511,9 +512,10 @@ async function processSubmission(params: {
   courseRowId: string
   courseName: string
   courseCode: string | null
+  courseQuarter: string
   mode: SyncRunMode
 }): Promise<ProcessSubmissionResult> {
-  const { submission, assignment, assignmentRowId, courseName, courseCode } = params
+  const { submission, assignment, assignmentRowId, courseName, courseCode, courseQuarter } = params
   const admin = createAdminClient()
 
   // Dedup by unified key
@@ -622,7 +624,7 @@ async function processSubmission(params: {
       course_name: courseName,
       course_code: courseCode,
       submitted_at: submission.submittedAt || new Date().toISOString(),
-      quarter: currentQuarter(),
+      quarter: courseQuarter,
       week_number: weekNumber,
       attempt_number: submission.attempt,
       content,
@@ -654,7 +656,7 @@ async function processSubmission(params: {
       courseName,
       courseCode: courseCode || undefined,
       submittedAt: submission.submittedAt || new Date().toISOString(),
-      quarter: currentQuarter(),
+      quarter: courseQuarter,
       attemptNumber: submission.attempt,
       content: content || undefined,
     }

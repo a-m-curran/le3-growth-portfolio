@@ -93,6 +93,20 @@ section('Task 8: 019_course_quarter.sql migration')
   assertEqual(/check\s*\(/i.test(sql), false, 'no CHECK constraint')
 }
 
+section('Task 9: sync-course.ts uses course.quarter (not currentQuarter()) in the 4 in-scope write paths')
+{
+  const s = stripComments(read('src/lib/sync/sync-course.ts'))
+  assertEqual(/cohort:\s*currentQuarter\(\)/.test(s), true, "line 384's cohort: currentQuarter() preserved")
+  assertEqual(/upsertCourse[\s\S]{0,400}const\s+quarter\s*=\s*currentQuarter\(\)/.test(s), false, 'upsertCourse no longer reads currentQuarter() locally')
+  assertEqual(/upsertCourse[\s\S]{0,600}quarter:\s*course\.quarter/.test(s), true, 'upsertCourse writes course.quarter')
+  assertEqual(/async function upsertAssignment\([\s\S]{0,200}courseQuarter:\s*string/.test(s), true, 'upsertAssignment signature has courseQuarter: string')
+  assertEqual(/upsertAssignment[\s\S]{0,1500}quarter:\s*courseQuarter/.test(s), true, 'upsertAssignment writes courseQuarter')
+  assertEqual(/processSubmission\(params:\s*\{[\s\S]{0,400}courseQuarter:\s*string/.test(s), true, 'processSubmission params include courseQuarter: string')
+  assertEqual(/const\s*\{[^}]*courseQuarter[^}]*\}\s*=\s*params/.test(s) || /params\.courseQuarter/.test(s), true, 'processSubmission destructures or reads params.courseQuarter')
+  assertEqual(/quarter:\s*courseQuarter/.test(s), true, 'sync-course.ts writes courseQuarter for student_work')
+  assertEqual(/quarter:\s*currentQuarter\(\)/.test(s), false, 'no remaining `quarter: currentQuarter()` writes')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 
 finish()
