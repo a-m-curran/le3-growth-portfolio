@@ -33,9 +33,9 @@ export default async function V2StudentDetailPage({ params, searchParams }: Prop
   const coach = await getCurrentCoach()
   if (!coach) redirect('/login')
 
-  // In demo mode, every query in queries.ts routes through static
-  // data, so the demo-student id like 'stu_aja' works. In real mode,
-  // params.studentId is a UUID.
+  // params.studentId is a real student-table UUID. Demo personas live
+  // in the same student table, so the path is identical for real and
+  // demo students.
   const [sessionPrep, garden, notes] = await Promise.all([
     getSessionPrep(coach.id, params.studentId).catch(() => null),
     getGardenData(params.studentId).catch(() => null),
@@ -93,10 +93,6 @@ interface NoteRow {
 }
 
 async function fetchCoachNotes(coachId: string, studentId: string): Promise<CoachNote[]> {
-  // Demo mode: surface only the lastNote that getSessionPrep already
-  // returned; full notes history isn't a separate static fetch.
-  if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') return []
-
   const admin = createAdminClient()
   const { data } = await admin
     .from('coach_note')

@@ -109,19 +109,6 @@ export function NarrativeIcon({ className }: IconProps) {
   )
 }
 
-export function DemoIcon({ className }: IconProps) {
-  // Two head silhouettes side-by-side — a persona switcher feel
-  return (
-    <svg {...baseProps(className)}>
-      <circle cx="9" cy="8" r="3" />
-      <circle cx="17" cy="9" r="2.5" />
-      <path d="M3 20c0-3 3-5 6-5s6 2 6 5" />
-      <path d="M14 20c0-2.5 2-4 5-4" />
-      <path d="M19 4l-2 3M19 4l2 3" />
-    </svg>
-  )
-}
-
 export function CareerIcon({ className }: IconProps) {
   // Briefcase — concrete and unambiguous "professional/career"
   return (

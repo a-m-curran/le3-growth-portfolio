@@ -2,10 +2,10 @@
  * v2 authentication identity helper.
  *
  * Resolution order:
- *   1. If a demo persona cookie is set (set by /api/v2/demo-as), look up
- *      the matching row in `student`/`coach` by `demo_slug` and act as
- *      that real DB persona. The cookie is the slug ('stu_aja',
- *      'coach_elizabeth', etc.); demo_slug is unique per row.
+ *   1. If a demo persona cookie is set (by /demo/aja or /demo/elizabeth),
+ *      look up the matching row in `student`/`coach` by `demo_slug` and
+ *      act as that real DB persona. The cookie value is the slug
+ *      ('stu_aja' or 'coach_elizabeth'); demo_slug is unique per row.
  *   2. Otherwise, fall through to real Supabase auth — look up
  *      coach/student by `auth_user_id`.
  *
@@ -15,7 +15,7 @@
  * filter them out.
  *
  * Returns null when there's no resolvable identity — caller should
- * redirect to /v2/demo or /login.
+ * redirect to /login.
  */
 
 import { createServerClient } from '@supabase/auth-helpers-nextjs'

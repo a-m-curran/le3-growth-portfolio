@@ -2,6 +2,8 @@ import { createServerClient } from '@supabase/auth-helpers-nextjs'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+const PERSONA_COOKIE = 'le3-v2-demo-persona'
+
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
   const { pathname } = req.nextUrl
@@ -17,8 +19,6 @@ export async function middleware(req: NextRequest) {
   // enrolled.
   if (
     pathname.startsWith('/demo') ||
-    pathname === '/v2/demo' ||
-    pathname.startsWith('/v2/demo/') ||
     pathname.startsWith('/login') ||
     pathname.startsWith('/privacy') ||
     pathname.startsWith('/terms') ||
@@ -30,16 +30,23 @@ export async function middleware(req: NextRequest) {
     return res
   }
 
-  // Note on /v2/demo above: the page is intentionally public (it's the
-  // persona picker for demo-without-account exploration; see its own
-  // page.tsx header comment). Without this exemption, unauthenticated
-  // visits hit the no-session branch below and get bounced to /login,
-  // which in turn breaks the passlink → callback → /v2/today flow when
-  // the (student) layout redirects a non-student identity to /v2/demo
-  // (an intentional UX path that becomes a /login dead-end without this
-  // exemption). Match the exact path AND `/v2/demo/...` rather than a
-  // bare `startsWith('/v2/demo')` so we don't accidentally allowlist a
-  // future hypothetical /v2/demoXxx.
+  // /demo above covers the two direct-link demo routes (/demo/aja and
+  // /demo/elizabeth). Each sets the persona cookie and redirects into
+  // the relevant v2 shell — both must be reachable without a Supabase
+  // session for stakeholder demo links to work in fresh browsers.
+
+  // Demo persona cookie pass-through. v2-auth.ts treats the persona
+  // cookie as a first-class identity (it looks up the matching is_demo
+  // student/coach row by demo_slug). Without this exemption, persona
+  // visits to /v2/today, /v2/coach, and friends would dead-end at /login
+  // because no Supabase session exists. The cookie is httpOnly and only
+  // settable by the /demo/aja and /demo/elizabeth routes, and v2-auth.ts
+  // validates the slug against the DB on every request — so a tampered
+  // cookie still resolves to no identity and the downstream layout
+  // redirects to /login. Middleware just lets the request through.
+  if (req.cookies.get(PERSONA_COOKIE)?.value) {
+    return res
+  }
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

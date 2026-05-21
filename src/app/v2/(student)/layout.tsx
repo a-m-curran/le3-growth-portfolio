@@ -8,24 +8,22 @@ import { DataConsentModal } from '@/components/student/DataConsentModal'
  * regardless of the authenticated user's actual role.
  *
  * Redirects:
- *   - No identity at all → /v2/demo (persona picker) so anyone can
- *     start exploring without a real account.
- *   - Coach identity without a student persona cookie → /v2/demo so
- *     they pick a student persona to preview as. Coaches can browse
- *     the student IA, but they need to explicitly select WHICH
- *     student first — otherwise the API routes correctly return 401
- *     ("not a student"). This is the better default than silently
- *     surfacing demo data regardless of who you are.
+ *   - No identity at all → /login. Demo viewers should arrive via the
+ *     direct-link routes (/demo/aja, /demo/elizabeth), which set the
+ *     persona cookie and land them in the right shell.
+ *   - Coach identity (no student persona cookie) → /login. The student
+ *     IA is for student identities; coaches who want to preview as a
+ *     student should hit /demo/aja.
  *   - Student identity → renders the student shell with their own
  *     data (real or demo persona, same code path).
  */
 export default async function StudentGroupLayout({ children }: { children: React.ReactNode }) {
   const identity = await getV2Identity()
   if (!identity) {
-    redirect('/v2/demo')
+    redirect('/login')
   }
   if (identity.role !== 'student') {
-    redirect('/v2/demo')
+    redirect('/login')
   }
 
   const subLabel = identity.cohort

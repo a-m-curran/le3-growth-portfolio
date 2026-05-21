@@ -9,7 +9,6 @@ import {
   MeIcon,
   CaseloadIcon,
   ToolsIcon,
-  DemoIcon,
 } from './icons'
 
 /**
@@ -50,7 +49,6 @@ export const COACH_NAV: NavItem[] = [
   { key: 'today', label: 'Today', href: '/v2/coach', icon: TodayIcon },
   { key: 'caseload', label: 'Caseload', href: '/v2/coach/caseload', icon: CaseloadIcon },
   { key: 'tools', label: 'Tools', href: '/v2/coach/tools', icon: ToolsIcon, admin: true },
-  { key: 'demos', label: 'Demos', href: '/v2/demo', icon: DemoIcon, admin: true },
   { key: 'me', label: 'Me', href: '/v2/me', icon: MeIcon },
 ]
 
