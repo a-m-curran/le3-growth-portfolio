@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { WorkHeader } from './WorkHeader'
 
 /**
  * Non-typewriter, all-at-once render of a completed conversation.
@@ -18,6 +19,7 @@ interface ConversationDetail {
   id: string
   workTitle: string | null
   courseName: string | null
+  workContent: string | null
   conversationType: 'work_based' | 'open_reflection' | null
   status: 'in_progress' | 'completed'
   promptPhase1: string | null
@@ -81,19 +83,12 @@ export function ConversationFullView({ conversationId }: ConversationFullViewPro
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-8 space-y-4">
-      <header className="rounded-2xl bg-white border border-gray-200 shadow-sm p-4">
-        <div className="flex items-start gap-3">
-          <span className="text-xl" aria-hidden="true">📄</span>
-          <div className="min-w-0">
-            <h1 className="font-semibold text-gray-900 truncate">
-              {data.workTitle || 'Reflection'}
-            </h1>
-            {data.courseName && (
-              <p className="text-sm text-gray-500 mt-0.5">{data.courseName}</p>
-            )}
-          </div>
-        </div>
-      </header>
+      <WorkHeader
+        workTitle={data.workTitle}
+        courseName={data.courseName}
+        workContent={data.workContent}
+        conversationId={data.id}
+      />
 
       <PhaseSection
         n={1}

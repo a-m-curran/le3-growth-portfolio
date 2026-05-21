@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { ConversationReplay } from './ConversationReplay'
 import { ConversationFlowView } from './ConversationFlowView'
 import { ConversationFullView } from '@/components/v2/student/ConversationFullView'
+import { WorkHeader } from '@/components/v2/student/WorkHeader'
 
 /**
  * ConversationView — top-level client dispatcher for the
@@ -29,6 +30,7 @@ interface ConversationDetail {
   id: string
   workTitle: string | null
   courseName: string | null
+  workContent: string | null
   conversationType: 'work_based' | 'open_reflection' | null
   status: 'in_progress' | 'completed'
   isDemo?: boolean
@@ -105,32 +107,15 @@ export function ConversationView({ conversationId }: Props) {
   // In-progress path unchanged.
   return (
     <div className="max-w-2xl mx-auto px-6 py-8">
-      <WorkHeader workTitle={data.workTitle} courseName={data.courseName} />
-      <ConversationFlowView conversation={data} />
-    </div>
-  )
-}
-
-function WorkHeader({
-  workTitle,
-  courseName,
-}: {
-  workTitle: string | null
-  courseName: string | null
-}) {
-  return (
-    <div className="mb-6 p-4 rounded-2xl bg-white border border-gray-200 shadow-sm">
-      <div className="flex items-start gap-3">
-        <span className="text-xl" aria-hidden="true">📄</span>
-        <div className="min-w-0">
-          <h1 className="font-semibold text-gray-900 truncate">
-            {workTitle || 'Reflection'}
-          </h1>
-          {courseName && (
-            <p className="text-sm text-gray-500 mt-0.5">{courseName}</p>
-          )}
-        </div>
+      <div className="mb-6">
+        <WorkHeader
+          workTitle={data.workTitle}
+          courseName={data.courseName}
+          workContent={data.workContent}
+          conversationId={data.id}
+        />
       </div>
+      <ConversationFlowView conversation={data} />
     </div>
   )
 }
