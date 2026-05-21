@@ -7,6 +7,7 @@ import { LTIInspectorPanel } from '@/components/coach/LTIInspectorPanel'
 import { LiveActivityPanel } from '@/components/coach/LiveActivityPanel'
 import { RecoverExtractionsPanel } from '@/components/coach/RecoverExtractionsPanel'
 import { PasslinksPanel } from '@/components/coach/PasslinksPanel'
+import { CourseQuarterBackfillPanel } from '@/components/coach/CourseQuarterBackfillPanel'
 import type { SyncRun } from '@/lib/types'
 import type { RosterRow } from '@/lib/auth/passlink-admin'
 
@@ -40,6 +41,7 @@ export function ToolsView({ recentSyncRuns, lastSuccessful, passlinkRoster }: To
           <SyncStatusPanel recentRuns={recentSyncRuns} lastSuccessful={lastSuccessful} />
           <SyncInspectorPanel />
           <RecoverExtractionsPanel />
+          <CourseQuarterBackfillPanel />
         </div>
       )}
       {tab === 'lti' && <LTIInspectorPanel />}
