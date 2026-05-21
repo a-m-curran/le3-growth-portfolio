@@ -65,6 +65,7 @@ export async function GET(
       title: string
       course_name: string | null
       course_code: string | null
+      content: string | null
     } | null
     conversation_skill_tag: Array<{
       skill_id: string
@@ -81,7 +82,7 @@ export async function GET(
         'duration_seconds, quarter, week_number, work_context, ' +
         'prompt_phase_1, response_phase_1, prompt_phase_2, response_phase_2, ' +
         'prompt_phase_3, response_phase_3, synthesis_text, suggested_insight, ' +
-        'student_work(title, course_name, course_code), ' +
+        'student_work(title, course_name, course_code, content), ' +
         'conversation_skill_tag(skill_id, confidence, student_confirmed, rationale)'
     )
     .eq('id', params.id)
@@ -179,6 +180,10 @@ export async function GET(
     workTitle: work?.title ?? null,
     courseName: work?.course_name ?? null,
     courseCode: work?.course_code ?? null,
+    // Surfaced so the conversation header can offer an expandable
+    // "show submission" panel — helps students remember the assignment
+    // when they're reflecting days/weeks after the original submission.
+    workContent: work?.content ?? null,
     promptPhase1: convRow.prompt_phase_1,
     responsePhase1: convRow.response_phase_1,
     promptPhase2: convRow.prompt_phase_2,
