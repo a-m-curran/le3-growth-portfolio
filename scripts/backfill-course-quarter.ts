@@ -11,6 +11,15 @@
  * backfill. Final exit code is 1 if any course errored (so an
  * automation can detect partial failures); 0 otherwise.
  *
+ * Retry safety: course.quarter is UPDATEd LAST. Supabase/PostgREST
+ * has no per-script transaction primitive, so the three UPDATEs run
+ * sequentially. If the script crashes mid-course, course.quarter
+ * stays on the OLD value; the next run's idempotency check sees the
+ * mismatch and re-tries the whole sequence. Child UPDATEs are
+ * idempotent (writing the same value is a no-op). If we updated
+ * course.quarter FIRST, a mid-course crash would orphan stale
+ * child rows that re-runs would skip.
+ *
  * Requires env (.env.local): NEXT_PUBLIC_SUPABASE_URL,
  * SUPABASE_SERVICE_ROLE_KEY, plus the D2L Valence env the existing
  * sync code reads (D2L_VALENCE_INSTANCE_URL / CLIENT_ID / etc.).
@@ -71,23 +80,11 @@ async function main(): Promise<void> {
         continue
       }
 
-      // Update course.quarter.
-      const { error: courseErr } = await supabase
-        .from('course')
-        .update({ quarter: derived })
-        .eq('id', row.id)
-      if (courseErr) throw new Error(`course update failed: ${courseErr.message}`)
+      // Order matters: child rows first, course (the idempotency canary) last.
+      // If we crash mid-course, course.quarter stays on the OLD value so the
+      // next run re-tries the whole sequence; child UPDATEs are idempotent.
 
-      // Update assignment.quarter for all assignments under this course.
-      const { error: asgnErr, count: asgnCount } = await supabase
-        .from('assignment')
-        .update({ quarter: derived }, { count: 'exact' })
-        .eq('course_id', row.id)
-      if (asgnErr) throw new Error(`assignment update failed: ${asgnErr.message}`)
-
-      // Update student_work.quarter for all student_work rows under those
-      // assignments. Two-step because PostgREST doesn't support nested
-      // UPDATE…WHERE…IN(SELECT) directly: fetch assignment IDs first.
+      // 1. Fetch assignment IDs (needed for the student_work .in() filter).
       const { data: asgnIds, error: asgnIdsErr } = await supabase
         .from('assignment')
         .select('id')
@@ -95,6 +92,16 @@ async function main(): Promise<void> {
       if (asgnIdsErr) throw new Error(`assignment id fetch failed: ${asgnIdsErr.message}`)
       const ids = (asgnIds || []).map(a => a.id as string)
 
+      // 2. Update assignment.quarter for all assignments under this course.
+      const { error: asgnErr, count: asgnCount } = await supabase
+        .from('assignment')
+        .update({ quarter: derived }, { count: 'exact' })
+        .eq('course_id', row.id)
+      if (asgnErr) throw new Error(`assignment update failed: ${asgnErr.message}`)
+
+      // 3. Update student_work.quarter for all student_work rows under those
+      // assignments. Two-step because PostgREST doesn't support nested
+      // UPDATE…WHERE…IN(SELECT) directly.
       let workCount = 0
       if (ids.length > 0) {
         const { error: workErr, count: wc } = await supabase
@@ -104,6 +111,14 @@ async function main(): Promise<void> {
         if (workErr) throw new Error(`student_work update failed: ${workErr.message}`)
         workCount = wc ?? 0
       }
+
+      // 4. LAST: update course.quarter. If everything above succeeded,
+      // this commits the new quarter as the canonical value for this course.
+      const { error: courseErr } = await supabase
+        .from('course')
+        .update({ quarter: derived })
+        .eq('id', row.id)
+      if (courseErr) throw new Error(`course update failed: ${courseErr.message}`)
 
       console.log(`  → ${row.name}: "${row.quarter ?? '(null)'}" → "${derived}" (assignments: ${asgnCount ?? 0}, student_work: ${workCount})`)
       updated++
