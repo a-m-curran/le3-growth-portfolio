@@ -17,6 +17,8 @@ export async function middleware(req: NextRequest) {
   // enrolled.
   if (
     pathname.startsWith('/demo') ||
+    pathname === '/v2/demo' ||
+    pathname.startsWith('/v2/demo/') ||
     pathname.startsWith('/login') ||
     pathname.startsWith('/privacy') ||
     pathname.startsWith('/terms') ||
@@ -27,6 +29,17 @@ export async function middleware(req: NextRequest) {
   ) {
     return res
   }
+
+  // Note on /v2/demo above: the page is intentionally public (it's the
+  // persona picker for demo-without-account exploration; see its own
+  // page.tsx header comment). Without this exemption, unauthenticated
+  // visits hit the no-session branch below and get bounced to /login,
+  // which in turn breaks the passlink → callback → /v2/today flow when
+  // the (student) layout redirects a non-student identity to /v2/demo
+  // (an intentional UX path that becomes a /login dead-end without this
+  // exemption). Match the exact path AND `/v2/demo/...` rather than a
+  // bare `startsWith('/v2/demo')` so we don't accidentally allowlist a
+  // future hypothetical /v2/demoXxx.
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
