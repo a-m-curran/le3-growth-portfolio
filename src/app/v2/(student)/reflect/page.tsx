@@ -19,7 +19,7 @@ export default function V2ReflectPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Reflect</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Reflect on submitted student work.
+          Pick a piece of work to talk through. Your reflections become part of your growth story.
         </p>
       </div>
       <ReflectView />

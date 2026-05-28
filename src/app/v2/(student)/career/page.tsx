@@ -19,7 +19,7 @@ export default function V2CareerPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Career</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Resume language and interview talking points, synthesized from your growth narratives.
+          How to talk about your growth — in resumes, in interviews, in your own words.
         </p>
       </div>
       <CareerView />

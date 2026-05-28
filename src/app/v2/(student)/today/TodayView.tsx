@@ -103,10 +103,10 @@ export function TodayView() {
         <h1 className="text-2xl font-bold text-gray-900">Today</h1>
         <p className="text-sm text-gray-500 mt-1">
           {totalActionable > 0
-            ? `${totalActionable} thing${totalActionable === 1 ? '' : 's'} to reflect on`
+            ? `${totalActionable} piece${totalActionable === 1 ? '' : 's'} of work waiting for you`
             : hasAnyContent
-            ? `You're up to date — nothing waiting on you right now`
-            : `Welcome — your portfolio will fill in as you submit work`}
+            ? `You're caught up. Nothing waiting on you right now.`
+            : `Your portfolio fills in as you submit work.`}
         </p>
       </div>
 
