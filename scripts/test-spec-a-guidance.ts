@@ -42,5 +42,20 @@ section('Item 1: page subtitle calibration')
   assertEqual(/think through it together\./.test(journal), true, 'journal subtitle unchanged (voice bar)')
 }
 
+section('Item 2: RecentSubmissions component')
+{
+  const c = stripComments(read('src/components/v2/student/RecentSubmissions.tsx'))
+  assertEqual(/'use client'/.test(c), true, 'client component')
+  assertEqual(/export function RecentSubmissions/.test(c), true, 'RecentSubmissions exported')
+  assertEqual(/SubmissionRow/.test(c) && /surface=['"]today['"]/.test(c), true, 'reuses SubmissionRow surface=today')
+  assertEqual(/status === 'unreflected'/.test(c) && /status === 'in_progress'/.test(c), true, 'filters to unreflected + in_progress')
+  assertEqual(/status === 'completed'/.test(c), false, 'does NOT include completed')
+  assertEqual(/activeInProgress/.test(c) && /conversationId/.test(c), true, 'de-dupes the active in-progress (banner) item')
+  assertEqual(/submittedAt/.test(c) && /sort/.test(c), true, 'sorts by submittedAt')
+  assertEqual(/const CAP = 10/.test(c) && /slice\(0, CAP\)/.test(c), true, 'caps at 10')
+  assertEqual(/\/v2\/reflect/.test(c), true, 'overflow link to /v2/reflect')
+  assertEqual(/caught up/i.test(c), true, 'empty state copy present')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 finish()
