@@ -33,10 +33,10 @@ section('Item 1: page subtitle calibration')
   assertEqual(/Your story for each skill, built from how you talk about your work\./.test(narrative), true, 'narrative subtitle calibrated')
 
   const today = stripComments(read('src/app/v2/(student)/today/TodayView.tsx'))
-  assertEqual(/of work waiting for you/.test(today), true, 'today actionable subtitle calibrated')
+  assertEqual(/pick something to reflect on when you're ready/.test(today), true, 'today actionable subtitle is non-numeric')
   assertEqual(/You're caught up\. Nothing waiting on you right now\./.test(today), true, 'today caught-up subtitle calibrated')
   assertEqual(/Your portfolio fills in as you submit work\./.test(today), true, 'today welcome subtitle calibrated')
-  assertEqual(/things? to reflect on/.test(today), false, 'old today subtitle removed')
+  assertEqual(/waiting for you/.test(today), false, 'numeric "waiting for you" count line removed from Today')
 
   const journal = stripComments(read('src/app/v2/(student)/journal/page.tsx'))
   assertEqual(/think through it together\./.test(journal), true, 'journal subtitle unchanged (voice bar)')
