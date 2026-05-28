@@ -30,5 +30,18 @@ section('Task 1: POST /api/student/skill-definition')
   assertEqual(/student_id:\s*studentId|student_id:\s*resolved/.test(r), true, 'writes resolved student id, not a body-supplied one')
 }
 
+section('Task 2: GET /api/student/skill/[skillId]/unreflected-work')
+{
+  const r = stripComments(read('src/app/api/student/skill/[skillId]/unreflected-work/route.ts'))
+  assertEqual(/export async function GET/.test(r), true, 'exports GET')
+  assertEqual(/export const runtime = 'nodejs'/.test(r) && /export const dynamic = 'force-dynamic'/.test(r), true, 'runtime/dynamic set')
+  assertEqual(/getV2StudentId/.test(r), true, 'student-scoped via getV2StudentId')
+  assertEqual(/work_skill_tag/.test(r), true, 'reads work_skill_tag for the skill')
+  assertEqual(/activeInProgress/.test(r) && /items/.test(r), true, 'returns { activeInProgress, items }')
+  assertEqual(/in_progress/.test(r) && /completed/.test(r), true, 'excludes work with in_progress/completed conversations')
+  assertEqual(/slice\(0, 5\)|limit\(5\)|\.slice\(0,5\)/.test(r), true, 'caps at 5')
+  assertEqual(/status:\s*'unreflected'/.test(r), true, 'items carry status unreflected')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 finish()
