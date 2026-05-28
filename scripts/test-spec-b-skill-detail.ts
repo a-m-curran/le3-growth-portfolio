@@ -43,5 +43,19 @@ section('Task 2: GET /api/student/skill/[skillId]/unreflected-work')
   assertEqual(/status:\s*'unreflected'/.test(r), true, 'items carry status unreflected')
 }
 
+section('Task 3: SkillDefinitionEditor + editable definition')
+{
+  const e = stripComments(read('src/components/panels/SkillDefinitionEditor.tsx'))
+  assertEqual(/'use client'/.test(e), true, 'editor is client component')
+  assertEqual(/export function SkillDefinitionEditor/.test(e), true, 'SkillDefinitionEditor exported')
+  assertEqual(/\/api\/student\/skill-definition/.test(e), true, 'posts to skill-definition endpoint')
+  assertEqual(/definitionText/.test(e) && /personalExample/.test(e) && /whyItMatters/.test(e), true, 'three fields')
+  const p = stripComments(read('src/components/panels/SkillPanel.tsx'))
+  assertEqual(/editable\??:\s*boolean/.test(p), true, 'SkillPanel takes editable prop')
+  assertEqual(/SkillDefinitionEditor/.test(p), true, 'renders the editor when editing')
+  assertEqual(/editable\s*&&/.test(p), true, 'gates editor affordance on editable')
+  assertEqual(/router\.refresh\(\)/.test(p), true, 'refreshes after save')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 finish()
