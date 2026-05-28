@@ -15,5 +15,5 @@ interface Props {
  * the same beautiful layout from the same code.
  */
 export function GrowthView({ data }: Props) {
-  return <GrowthGrid data={data} />
+  return <GrowthGrid data={data} editable />
 }

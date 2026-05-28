@@ -32,15 +32,19 @@ import { SkillPanel } from '@/components/panels/SkillPanel'
 interface Props {
   data: GardenData
   showHeader?: boolean
+  editable?: boolean
 }
 
-export function GrowthGrid({ data, showHeader = true }: Props) {
+export function GrowthGrid({ data, showHeader = true, editable = false }: Props) {
   const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null)
   const selected = selectedSkillId
     ? data.plants.find(p => p.skillId === selectedSkillId) ?? null
     : null
 
   const pillarGroups = groupByPillar(data.plants)
+  const undefinedSkills = editable
+    ? data.plants.filter(p => !p.currentDefinition)
+    : []
 
   return (
     <>
@@ -58,6 +62,21 @@ export function GrowthGrid({ data, showHeader = true }: Props) {
             <strong className="text-gray-900">{data.quartersActive}</strong> quarter{data.quartersActive === 1 ? '' : 's'} active
           </span>
         </div>
+      )}
+
+      {editable && undefinedSkills.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setSelectedSkillId(undefinedSkills[0].skillId)}
+          className="w-full mb-4 text-left rounded-xl border border-green-200 bg-green-50 px-4 py-3 hover:bg-green-100 transition-colors"
+        >
+          <span className="text-sm font-medium text-green-900">
+            {undefinedSkills.length} skill{undefinedSkills.length === 1 ? '' : 's'} still need{undefinedSkills.length === 1 ? 's' : ''} your words
+          </span>
+          <span className="block text-xs text-green-700 mt-0.5">
+            Tap to define what {undefinedSkills.length === 1 ? 'it means' : 'they mean'} to you →
+          </span>
+        </button>
       )}
 
       <div className="space-y-6">
@@ -87,7 +106,7 @@ export function GrowthGrid({ data, showHeader = true }: Props) {
       </div>
 
       {selected && (
-        <SkillPanel plant={selected} onClose={() => setSelectedSkillId(null)} />
+        <SkillPanel plant={selected} onClose={() => setSelectedSkillId(null)} editable={editable} />
       )}
     </>
   )

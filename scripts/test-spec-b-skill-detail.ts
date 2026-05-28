@@ -68,5 +68,17 @@ section('Task 4: SkillPanel work-to-reflect section')
   assertEqual(/editable\s*&&/.test(p), true, 'section gated on editable')
 }
 
+section('Task 5: GrowthGrid editable threading + nudge')
+{
+  const g = stripComments(read('src/components/v2/growth/GrowthGrid.tsx'))
+  assertEqual(/editable\??:\s*boolean/.test(g), true, 'GrowthGrid takes editable prop')
+  assertEqual(/editable=\{editable\}|editable=\{true\}/.test(g) || /editable\}/.test(g), true, 'passes editable to SkillPanel')
+  assertEqual(/currentDefinition/.test(g) && /editable\s*&&/.test(g), true, 'nudge gated on editable, keys off missing definition')
+  const v = stripComments(read('src/app/v2/(student)/growth/GrowthView.tsx'))
+  assertEqual(/<GrowthGrid[\s\S]{0,120}editable/.test(v), true, 'student GrowthView passes editable')
+  const sd = stripComments(read('src/app/v2/(coach)/coach/[studentId]/StudentDetailView.tsx'))
+  assertEqual(/<GrowthGrid[^>]*editable/.test(sd), false, 'coach StudentDetailView does NOT pass editable (stays read-only)')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 finish()
