@@ -68,18 +68,15 @@ export async function POST(req: Request) {
     .limit(1)
   const nextVersion = ((existing?.[0]?.version as number | undefined) ?? 0) + 1
 
-  // Demote any current row(s), then insert the new current version.
-  const { error: demoteErr } = await admin
-    .from('student_skill_definition')
-    .update({ is_current: false })
-    .eq('student_id', studentId)
-    .eq('skill_id', skillId)
-    .eq('is_current', true)
-  if (demoteErr) {
-    return NextResponse.json({ ok: false, error: `Demote failed: ${demoteErr.message}` }, { status: 500 })
-  }
-
-  const { error: insertErr } = await admin
+  // Insert-first, then demote the OTHER current rows. There is no
+  // multi-statement transaction over the Supabase JS client, so the two
+  // writes can't be atomic. Ordering insert-before-demote makes the
+  // failure mode fail safe: if the demote fails after the insert, the
+  // student transiently has TWO is_current rows (readers take the first
+  // / .limit(1), so they still see *a* definition) rather than ZERO
+  // (which would render "No definition on file yet" despite history).
+  // The next successful save reconciles to a single current row.
+  const { data: inserted, error: insertErr } = await admin
     .from('student_skill_definition')
     .insert({
       student_id: studentId,
@@ -91,8 +88,23 @@ export async function POST(req: Request) {
       is_current: true,
       prompted_by: 'self_initiated',
     })
-  if (insertErr) {
-    return NextResponse.json({ ok: false, error: `Insert failed: ${insertErr.message}` }, { status: 500 })
+    .select('id')
+    .single()
+  if (insertErr || !inserted) {
+    return NextResponse.json({ ok: false, error: `Insert failed: ${insertErr?.message ?? 'no row'}` }, { status: 500 })
+  }
+
+  const { error: demoteErr } = await admin
+    .from('student_skill_definition')
+    .update({ is_current: false })
+    .eq('student_id', studentId)
+    .eq('skill_id', skillId)
+    .eq('is_current', true)
+    .neq('id', inserted.id as string)
+  if (demoteErr) {
+    // Non-fatal: the new definition is saved and current; a stale prior
+    // current row will be reconciled on the next save. Surface success.
+    console.warn('skill-definition: demote of prior current row failed (non-fatal):', demoteErr.message)
   }
 
   return NextResponse.json({ ok: true })
