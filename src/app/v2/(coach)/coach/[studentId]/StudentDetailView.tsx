@@ -276,7 +276,10 @@ function PortfolioTab({ garden }: { garden: GardenData | null }) {
   // coach sees when looking at the same student" is the point — pillar
   // tints, artwork-per-skill, hover trailers and skill-detail drill-in
   // all work the same way here.
-  return <GrowthGrid data={garden} />
+  // Coach surface: opt in to the SDT assessment display (level names +
+  // the panel's coach/self block). The student's own Growth tab does NOT
+  // pass this, so students never see their coach's private assessment.
+  return <GrowthGrid data={garden} showCoachAssessment />
 }
 
 function NotesTab({

@@ -16,9 +16,15 @@ interface SkillPanelProps {
   plant: GardenPlant
   onClose: () => void
   editable?: boolean
+  /**
+   * Whether to show the coach's SDT assessment (level + Coach/Self gap).
+   * Defaults false — fail-safe so students never see their coach's
+   * private assessment. Only the coach surface opts in.
+   */
+  showCoachAssessment?: boolean
 }
 
-export function SkillPanel({ plant, onClose, editable = false }: SkillPanelProps) {
+export function SkillPanel({ plant, onClose, editable = false, showCoachAssessment = false }: SkillPanelProps) {
   const router = useRouter()
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
@@ -106,24 +112,26 @@ export function SkillPanel({ plant, onClose, editable = false }: SkillPanelProps
               </button>
             </div>
 
-            {/* SDT Level */}
-            <div className="mb-6 p-3 rounded-lg" style={{ backgroundColor: config.bg }}>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-lg">{config.emoji}</span>
-                <span className="font-semibold" style={{ color: config.color }}>
-                  {config.name}
-                </span>
-              </div>
-              <div className="text-xs text-gray-600">
-                Coach: {config.name}
-                {selfLevelName && ` · Self: ${selfLevelName}`}
-                {selfLevelName && (
-                  <span className={aligned ? ' text-green-600' : ' text-amber-600'}>
-                    {aligned ? ' ✓ Aligned' : ' — Gap worth discussing'}
+            {/* SDT Level — coach assessment; hidden from students (fail-safe via showCoachAssessment) */}
+            {showCoachAssessment && (
+              <div className="mb-6 p-3 rounded-lg" style={{ backgroundColor: config.bg }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-lg">{config.emoji}</span>
+                  <span className="font-semibold" style={{ color: config.color }}>
+                    {config.name}
                   </span>
-                )}
+                </div>
+                <div className="text-xs text-gray-600">
+                  Coach: {config.name}
+                  {selfLevelName && ` · Self: ${selfLevelName}`}
+                  {selfLevelName && (
+                    <span className={aligned ? ' text-green-600' : ' text-amber-600'}>
+                      {aligned ? ' ✓ Aligned' : ' — Gap worth discussing'}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Definition Journey */}
             <div className="mb-6">

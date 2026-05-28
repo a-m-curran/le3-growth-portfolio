@@ -33,9 +33,16 @@ interface Props {
   data: GardenData
   showHeader?: boolean
   editable?: boolean
+  /**
+   * Whether to show the coach's SDT assessment (level names on cards +
+   * the SDT block in the panel). Default false — fail-safe so students
+   * never see their coach's private assessment; only the coach surface
+   * opts in.
+   */
+  showCoachAssessment?: boolean
 }
 
-export function GrowthGrid({ data, showHeader = true, editable = false }: Props) {
+export function GrowthGrid({ data, showHeader = true, editable = false, showCoachAssessment = false }: Props) {
   const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null)
   const selected = selectedSkillId
     ? data.plants.find(p => p.skillId === selectedSkillId) ?? null
@@ -97,6 +104,7 @@ export function GrowthGrid({ data, showHeader = true, editable = false }: Props)
                     key={plant.skillId}
                     plant={plant}
                     onClick={() => setSelectedSkillId(plant.skillId)}
+                    showCoachAssessment={showCoachAssessment}
                   />
                 ))}
               </div>
@@ -106,13 +114,18 @@ export function GrowthGrid({ data, showHeader = true, editable = false }: Props)
       </div>
 
       {selected && (
-        <SkillPanel plant={selected} onClose={() => setSelectedSkillId(null)} editable={editable} />
+        <SkillPanel
+          plant={selected}
+          onClose={() => setSelectedSkillId(null)}
+          editable={editable}
+          showCoachAssessment={showCoachAssessment}
+        />
       )}
     </>
   )
 }
 
-function SkillCard({ plant, onClick }: { plant: GardenPlant; onClick: () => void }) {
+function SkillCard({ plant, onClick, showCoachAssessment }: { plant: GardenPlant; onClick: () => void; showCoachAssessment: boolean }) {
   const level = plant.sdtLevel as 1 | 2 | 3 | 4 | 5
   const config = SDT_LEVELS[level]
   const palette = getPillarPalette(plant.pillarName)
@@ -143,7 +156,9 @@ function SkillCard({ plant, onClick }: { plant: GardenPlant; onClick: () => void
       onBlur={() => setHovering(false)}
       className="group flex flex-col items-center p-3 rounded-xl border transition-all focus:outline-none focus:ring-2 focus:ring-offset-1"
       style={{ ...cardStyle, ...{ '--tw-ring-color': palette.surfaceBorder } as React.CSSProperties }}
-      aria-label={`${plant.skillName}: ${config.name} level, ${plant.conversationCount} conversation${plant.conversationCount === 1 ? '' : 's'}`}
+      aria-label={showCoachAssessment
+        ? `${plant.skillName}: ${config.name} level, ${plant.conversationCount} conversation${plant.conversationCount === 1 ? '' : 's'}`
+        : `${plant.skillName}: ${plant.conversationCount} conversation${plant.conversationCount === 1 ? '' : 's'}`}
     >
       <div className="w-28 h-28 sm:w-32 sm:h-32 transition-transform group-hover:scale-105">
         <SkillVisual plant={plant} hovering={hovering} />
@@ -155,10 +170,20 @@ function SkillCard({ plant, onClick }: { plant: GardenPlant; onClick: () => void
         >
           {plant.skillName}
         </div>
-        <div className="text-[10px] mt-0.5" style={{ color: config.color }}>
-          {config.name}
-          {plant.conversationCount > 0 && (
-            <span className="text-gray-400 ml-1">· {plant.conversationCount}</span>
+        <div className="text-[10px] mt-0.5" style={showCoachAssessment ? { color: config.color } : undefined}>
+          {showCoachAssessment ? (
+            <>
+              {config.name}
+              {plant.conversationCount > 0 && (
+                <span className="text-gray-400 ml-1">· {plant.conversationCount}</span>
+              )}
+            </>
+          ) : (
+            plant.conversationCount > 0 && (
+              <span className="text-gray-400">
+                {plant.conversationCount} conversation{plant.conversationCount === 1 ? '' : 's'}
+              </span>
+            )
           )}
         </div>
       </div>
