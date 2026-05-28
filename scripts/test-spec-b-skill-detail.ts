@@ -57,5 +57,16 @@ section('Task 3: SkillDefinitionEditor + editable definition')
   assertEqual(/router\.refresh\(\)/.test(p), true, 'refreshes after save')
 }
 
+section('Task 4: SkillPanel work-to-reflect section')
+{
+  const p = stripComments(read('src/components/panels/SkillPanel.tsx'))
+  assertEqual(/unreflected-work/.test(p), true, 'fetches unreflected-work endpoint')
+  assertEqual(/useStartReflection/.test(p), true, 'uses useStartReflection')
+  assertEqual(/InProgressInterstitial/.test(p), true, 'renders InProgressInterstitial')
+  assertEqual(/SubmissionRow/.test(p), true, 'renders SubmissionRow rows')
+  assertEqual(/Work to reflect on/.test(p), true, 'section heading present')
+  assertEqual(/editable\s*&&/.test(p), true, 'section gated on editable')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 finish()
