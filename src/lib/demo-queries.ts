@@ -56,6 +56,8 @@ export function getGardenData(studentId: string): GardenData {
       sdtLevel: coachAssessment ? SDT_LEVEL_MAP[coachAssessment.sdtLevel] : 1,
       selfLevel: selfAssessment ? SDT_LEVEL_MAP[selfAssessment.sdtLevel] : null,
       currentDefinition: currentDef?.definitionText ?? null,
+      currentPersonalExample: currentDef?.personalExample ?? null,
+      currentWhyItMatters: currentDef?.whyItMatters ?? null,
       previousDefinition: previousDef?.definitionText ?? null,
       definitionRevised: !!previousDef && !!currentDef,
       conversationCount: skillConversations.length,
