@@ -1,20 +1,47 @@
 'use client'
 
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import type { GardenPlant } from '@/lib/types'
 import { SDT_LEVELS } from '@/lib/constants'
 import { ConversationPanel } from './ConversationPanel'
-import { useState } from 'react'
+import { SkillDefinitionEditor } from './SkillDefinitionEditor'
+import { SubmissionRow } from '@/components/v2/student/SubmissionRow'
+import { InProgressInterstitial } from '@/components/v2/student/InProgressInterstitial'
+import { useStartReflection } from '@/components/v2/student/use-start-reflection'
+import type { ActiveInProgress, SubmissionItem } from '@/components/v2/student/types'
 
 interface SkillPanelProps {
   plant: GardenPlant
   onClose: () => void
+  editable?: boolean
 }
 
-export function SkillPanel({ plant, onClose }: SkillPanelProps) {
+export function SkillPanel({ plant, onClose, editable = false }: SkillPanelProps) {
+  const router = useRouter()
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
+  const [editingDefinition, setEditingDefinition] = useState(false)
+  const [unreflected, setUnreflected] = useState<SubmissionItem[]>([])
+  const [active, setActive] = useState<ActiveInProgress | null>(null)
+
+  useEffect(() => {
+    if (!editable) return
+    let cancelled = false
+    fetch(`/api/student/skill/${plant.skillId}/unreflected-work`, { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : { activeInProgress: null, items: [] }))
+      .then((d: { activeInProgress: ActiveInProgress | null; items: SubmissionItem[] }) => {
+        if (cancelled) return
+        setActive(d.activeInProgress ?? null)
+        setUnreflected(d.items ?? [])
+      })
+      .catch(() => { if (!cancelled) { setActive(null); setUnreflected([]) } })
+    return () => { cancelled = true }
+  }, [editable, plant.skillId])
+
+  const { onSubmissionClick, interstitialFor, closeInterstitial, startError } =
+    useStartReflection({ active, onRefresh: () => router.refresh() })
   const level = plant.sdtLevel as 1 | 2 | 3 | 4 | 5
   const config = SDT_LEVELS[level]
 
@@ -100,40 +127,82 @@ export function SkillPanel({ plant, onClose }: SkillPanelProps) {
 
             {/* Definition Journey */}
             <div className="mb-6">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3 border-b pb-1">
-                Definition Journey
-              </h3>
+              <div className="flex items-center justify-between mb-3 border-b pb-1">
+                <h3 className="text-sm font-semibold text-gray-700">Definition Journey</h3>
+                {editable && !editingDefinition && (
+                  <button
+                    type="button"
+                    onClick={() => setEditingDefinition(true)}
+                    className="text-xs text-green-700 hover:text-green-900"
+                  >
+                    {plant.currentDefinition ? '✎ Edit' : '+ Define this skill'}
+                  </button>
+                )}
+              </div>
 
-              {plant.previousDefinition && (
-                <div className="mb-3">
-                  <p className="text-xs text-gray-400 mb-1">Earlier definition</p>
-                  <p className="text-sm text-gray-600 italic">
-                    &ldquo;{plant.previousDefinition}&rdquo;
-                  </p>
-                </div>
-              )}
-
-              {plant.previousDefinition && plant.currentDefinition && (
-                <div className="text-center text-xs text-green-600 my-2">
-                  ↓ across {plant.conversationCount} conversations ↓
-                </div>
-              )}
-
-              {plant.currentDefinition && (
-                <div>
-                  {plant.definitionRevised && (
-                    <p className="text-xs text-gray-400 mb-1">Current definition</p>
+              {editingDefinition ? (
+                <SkillDefinitionEditor
+                  skillId={plant.skillId}
+                  initialDefinition={plant.currentDefinition}
+                  initialPersonalExample={null}
+                  initialWhyItMatters={null}
+                  onSaved={() => {
+                    setEditingDefinition(false)
+                    router.refresh()
+                  }}
+                  onCancel={() => setEditingDefinition(false)}
+                />
+              ) : (
+                <>
+                  {plant.previousDefinition && (
+                    <div className="mb-3">
+                      <p className="text-xs text-gray-400 mb-1">Earlier definition</p>
+                      <p className="text-sm text-gray-600 italic">
+                        &ldquo;{plant.previousDefinition}&rdquo;
+                      </p>
+                    </div>
                   )}
-                  <p className="text-sm text-gray-800 italic font-medium">
-                    &ldquo;{plant.currentDefinition}&rdquo;
-                  </p>
-                </div>
-              )}
 
-              {!plant.currentDefinition && (
-                <p className="text-sm text-gray-400 italic">No definition on file yet.</p>
+                  {plant.previousDefinition && plant.currentDefinition && (
+                    <div className="text-center text-xs text-green-600 my-2">
+                      ↓ across {plant.conversationCount} conversations ↓
+                    </div>
+                  )}
+
+                  {plant.currentDefinition && (
+                    <div>
+                      {plant.definitionRevised && (
+                        <p className="text-xs text-gray-400 mb-1">Current definition</p>
+                      )}
+                      <p className="text-sm text-gray-800 italic font-medium">
+                        &ldquo;{plant.currentDefinition}&rdquo;
+                      </p>
+                    </div>
+                  )}
+
+                  {!plant.currentDefinition && (
+                    <p className="text-sm text-gray-400 italic">No definition on file yet.</p>
+                  )}
+                </>
               )}
             </div>
+
+            {/* Work to reflect on */}
+            {editable && unreflected.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3 border-b pb-1">
+                  Work to reflect on ({unreflected.length})
+                </h3>
+                {startError && <p className="text-xs text-red-700 mb-2">{startError}</p>}
+                <ul className="space-y-0.5">
+                  {unreflected.map(item => (
+                    <li key={item.id}>
+                      <SubmissionRow item={item} surface="today" onClick={onSubmissionClick} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* Conversations */}
             <div className="mb-6">
@@ -176,6 +245,16 @@ export function SkillPanel({ plant, onClose }: SkillPanelProps) {
         <ConversationPanel
           conversationId={selectedConvId}
           onClose={() => setSelectedConvId(null)}
+        />
+      )}
+
+      {/* In-progress interstitial when starting from a work-to-reflect row */}
+      {interstitialFor && active && (
+        <InProgressInterstitial
+          active={active}
+          newWork={interstitialFor}
+          onClose={closeInterstitial}
+          onStarted={() => router.refresh()}
         />
       )}
     </>
