@@ -80,5 +80,23 @@ section('Task 5: GrowthGrid editable threading + nudge')
   assertEqual(/<GrowthGrid[^>]*editable/.test(sd), false, 'coach StudentDetailView does NOT pass editable (stays read-only)')
 }
 
+section('Hide SDT assessment from students (showCoachAssessment gate)')
+{
+  const p = stripComments(read('src/components/panels/SkillPanel.tsx'))
+  assertEqual(/showCoachAssessment\??:\s*boolean/.test(p), true, 'SkillPanel takes showCoachAssessment prop')
+  assertEqual(/showCoachAssessment\s*&&[\s\S]{0,800}Coach:/.test(p), true, 'SDT block (Coach: ...) gated on showCoachAssessment')
+
+  const g = stripComments(read('src/components/v2/growth/GrowthGrid.tsx'))
+  assertEqual(/showCoachAssessment\??:\s*boolean/.test(g), true, 'GrowthGrid takes showCoachAssessment prop')
+  assertEqual(/showCoachAssessment=\{showCoachAssessment\}/.test(g), true, 'threads showCoachAssessment to SkillCard + SkillPanel')
+  assertEqual(/showCoachAssessment\s*\?[\s\S]{0,200}config\.name/.test(g), true, 'SkillCard level name gated on showCoachAssessment')
+
+  const sd = stripComments(read('src/app/v2/(coach)/coach/[studentId]/StudentDetailView.tsx'))
+  assertEqual(/<GrowthGrid[^>]*showCoachAssessment/.test(sd), true, 'coach StudentDetailView opts in to showCoachAssessment')
+
+  const v = stripComments(read('src/app/v2/(student)/growth/GrowthView.tsx'))
+  assertEqual(/showCoachAssessment/.test(v), false, 'student GrowthView does NOT pass showCoachAssessment (SDT stays hidden)')
+}
+
 // >>> NEXT TASK SECTION INSERTED ABOVE THIS LINE <<<
 finish()
