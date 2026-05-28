@@ -55,6 +55,11 @@ section('Task 3: SkillDefinitionEditor + editable definition')
   assertEqual(/SkillDefinitionEditor/.test(p), true, 'renders the editor when editing')
   assertEqual(/editable\s*&&/.test(p), true, 'gates editor affordance on editable')
   assertEqual(/router\.refresh\(\)/.test(p), true, 'refreshes after save')
+  // Re-edit data-loss guard: the editor writes a FULL new version, so it must be
+  // pre-filled with the student's current example/why — not blank (which would
+  // silently wipe them on save). See GardenPlant.currentPersonalExample/currentWhyItMatters.
+  assertEqual(/initialPersonalExample=\{plant\.currentPersonalExample\}/.test(p), true, 'editor fed current personal example (guards re-edit data loss)')
+  assertEqual(/initialWhyItMatters=\{plant\.currentWhyItMatters\}/.test(p), true, 'editor fed current why-it-matters (guards re-edit data loss)')
 }
 
 section('Task 4: SkillPanel work-to-reflect section')

@@ -178,7 +178,7 @@ export async function getGardenData(studentId: string): Promise<GardenData> {
 
   const conversations = (convoRows || []).map(c => snakeToCamel(c) as unknown as GrowthConversation & { studentWork?: { title: string } })
   const assessments = (assessmentRows || []).map(a => snakeToCamel(a) as unknown as { skillId: string; assessorType: string; sdtLevel: SdtLevel })
-  const definitions = (definitionRows || []).map(d => snakeToCamel(d) as unknown as { skillId: string; definitionText: string; isCurrent: boolean; id: string })
+  const definitions = (definitionRows || []).map(d => snakeToCamel(d) as unknown as { skillId: string; definitionText: string; personalExample: string | null; whyItMatters: string | null; isCurrent: boolean; id: string })
 
   const plants: GardenPlant[] = (skillRows || []).map((skillRow: Record<string, unknown>) => {
     const skill = snakeToCamel(skillRow) as unknown as { id: string; name: string; pillarId: string }
@@ -213,6 +213,8 @@ export async function getGardenData(studentId: string): Promise<GardenData> {
       sdtLevel: coachAssessment ? SDT_LEVEL_MAP[coachAssessment.sdtLevel] : 1,
       selfLevel: selfAssessment ? SDT_LEVEL_MAP[selfAssessment.sdtLevel] : null,
       currentDefinition: currentDef?.definitionText ?? null,
+      currentPersonalExample: currentDef?.personalExample ?? null,
+      currentWhyItMatters: currentDef?.whyItMatters ?? null,
       previousDefinition: previousDef?.definitionText ?? null,
       definitionRevised: !!previousDef && !!currentDef,
       conversationCount: skillConvos.length,

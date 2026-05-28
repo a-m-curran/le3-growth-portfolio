@@ -152,8 +152,8 @@ export function SkillPanel({ plant, onClose, editable = false, showCoachAssessme
                 <SkillDefinitionEditor
                   skillId={plant.skillId}
                   initialDefinition={plant.currentDefinition}
-                  initialPersonalExample={null}
-                  initialWhyItMatters={null}
+                  initialPersonalExample={plant.currentPersonalExample}
+                  initialWhyItMatters={plant.currentWhyItMatters}
                   onSaved={() => {
                     setEditingDefinition(false)
                     router.refresh()

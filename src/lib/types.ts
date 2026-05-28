@@ -238,6 +238,8 @@ export interface GardenPlant {
   sdtLevel: number // 1-4, from most recent coach assessment
   selfLevel: number | null
   currentDefinition: string | null
+  currentPersonalExample: string | null
+  currentWhyItMatters: string | null
   previousDefinition: string | null
   definitionRevised: boolean
   conversationCount: number
