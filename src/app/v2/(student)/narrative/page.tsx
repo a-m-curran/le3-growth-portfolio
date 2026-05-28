@@ -23,7 +23,7 @@ export default function V2NarrativePage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Narrative</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Your growth story for each skill, built from your conversations and reflections.
+          Your story for each skill, built from how you talk about your work.
         </p>
       </div>
       <NarrativeView />

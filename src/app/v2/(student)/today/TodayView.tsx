@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { pillarStripeStyle } from '@/components/v2/PillarStripe'
 import { InProgressBanner } from '@/components/v2/student/InProgressBanner'
 import { InProgressInterstitial } from '@/components/v2/student/InProgressInterstitial'
-import { TodayBuckets } from '@/components/v2/student/TodayBuckets'
+import { RecentSubmissions } from '@/components/v2/student/RecentSubmissions'
 import { useStartReflection } from '@/components/v2/student/use-start-reflection'
 import type { ActiveInProgress, SubmissionItem } from '@/components/v2/student/types'
 
@@ -16,7 +16,7 @@ import type { ActiveInProgress, SubmissionItem } from '@/components/v2/student/t
  *   1. Greeting / hero
  *   2. LTI pinned (when arriving from Brightspace) — unchanged
  *   3. InProgressBanner (if activeInProgress)
- *   4. TodayBuckets (Today / This week / Earlier)
+ *   4. RecentSubmissions (10 most recent actionable, newest first)
  *   5. WeekStatsCard — unchanged
  *   6. RecentJournalSection — unchanged
  *   7. QuickActions — unchanged
@@ -103,10 +103,10 @@ export function TodayView() {
         <h1 className="text-2xl font-bold text-gray-900">Today</h1>
         <p className="text-sm text-gray-500 mt-1">
           {totalActionable > 0
-            ? `${totalActionable} thing${totalActionable === 1 ? '' : 's'} to reflect on`
+            ? `${totalActionable} piece${totalActionable === 1 ? '' : 's'} of work waiting for you`
             : hasAnyContent
-            ? `You're up to date — nothing waiting on you right now`
-            : `Welcome — your portfolio will fill in as you submit work`}
+            ? `You're caught up. Nothing waiting on you right now.`
+            : `Your portfolio fills in as you submit work.`}
         </p>
       </div>
 
@@ -125,7 +125,11 @@ export function TodayView() {
 
       {startError && <p className="text-xs text-red-700">{startError}</p>}
 
-      <TodayBuckets submissions={data.submissions} onRowClick={onSubmissionClick} />
+      <RecentSubmissions
+        submissions={data.submissions}
+        activeInProgress={data.activeInProgress}
+        onRowClick={onSubmissionClick}
+      />
 
       <WeekStatsCard stats={data.weekStats} />
 

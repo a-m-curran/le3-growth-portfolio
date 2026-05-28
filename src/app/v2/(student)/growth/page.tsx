@@ -28,7 +28,7 @@ export default async function V2GrowthPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Growth</h1>
         <p className="text-sm text-gray-500 mt-1">
-          How your skills are growing across the program. Each visual is its own — click any to see the conversations behind it.
+          Watch your skills grow over time. Click any to see the conversations behind it.
         </p>
       </div>
       <GrowthView data={data} />
