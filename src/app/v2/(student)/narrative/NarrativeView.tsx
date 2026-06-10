@@ -150,7 +150,6 @@ function NarrativeCard({
   onOpenConversation: (conversationId: string) => void
 }) {
   const [text, setText] = useState(item.narrativeText)
-  const [richness, setRichness] = useState(item.narrativeRichness)
   const [annotations, setAnnotations] = useState(item.annotations)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -177,7 +176,6 @@ function NarrativeCard({
         return
       }
       setText(j.narrativeText ?? null)
-      setRichness(j.richness ?? null)
       // Demo mode returns annotations alongside the narrative so
       // the inline source links light up immediately after Generate.
       // Real mode doesn't have a post-processing pass yet, so the
@@ -191,15 +189,6 @@ function NarrativeCard({
       setLoading(false)
     }
   }
-
-  const richnessTone =
-    richness === 'rich'
-      ? { bg: '#dcfce7', text: '#166534', label: 'rich' }
-      : richness === 'developing'
-      ? { bg: '#fef3c7', text: '#92400e', label: 'developing' }
-      : richness === 'thin'
-      ? { bg: '#f1f5f9', text: '#475569', label: 'thin' }
-      : null
 
   return (
     <article
@@ -222,14 +211,6 @@ function NarrativeCard({
       <div className="flex items-start justify-between mb-3">
         <h3 className="font-semibold text-gray-900">{item.skillName}</h3>
         <div className="flex items-center gap-2 shrink-0">
-          {richnessTone && (
-            <span
-              className="text-[10px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wider"
-              style={{ backgroundColor: richnessTone.bg, color: richnessTone.text }}
-            >
-              {richnessTone.label}
-            </span>
-          )}
           {item.version > 0 && (
             <span className="text-[10px] text-gray-400">v{item.version}</span>
           )}
