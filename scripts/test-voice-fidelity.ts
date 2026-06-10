@@ -41,4 +41,18 @@ section('floors scale with richness')
   assertEqual(scoreVoiceFidelity(generated, corpus, 'rich').passed, false, 'rich needs >=3 grounded phrases')
 }
 
+section('golden case — the real Aja/Empathy regression')
+{
+  // Her actual words (excerpt) vs. the documented CURRENT generic output.
+  // The current output must fail; this locks the bar so a regression back
+  // to generic, ungrounded prose with the antithesis-flip tell is caught.
+  const ajaWords =
+    "this girl Tanya her essay had a really weak thesis but she's so sweet and she clearly worked hard on it I kept writing things like great job and interesting point and then I stopped and was like this isn't helpful but telling her the truth felt mean I rewrote my feedback I tried to be specific instead of just nice and I thought about what I would want someone to tell me"
+  const currentGeneric =
+    "You've always cared about people. But there's a difference between caring and understanding. You're building the kind of empathy that doesn't just feel — it listens."
+  const r = scoreVoiceFidelity(currentGeneric, ajaWords, 'rich')
+  assertEqual(r.passed, false, 'the current generic narrative fails the bar')
+  assertEqual(r.bannedConstructions.length >= 1, true, 'and its ending flags as an AI-ism')
+}
+
 finish()
