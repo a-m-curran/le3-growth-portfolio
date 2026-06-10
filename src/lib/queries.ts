@@ -191,9 +191,16 @@ export async function getGardenData(studentId: string): Promise<GardenData> {
     const currentDef = definitions.find(d => d.skillId === skill.id && d.isCurrent)
     const previousDef = definitions.find(d => d.skillId === skill.id && !d.isCurrent)
 
+    // The conversation rows come from snakeToCamel(c), which is SHALLOW:
+    // it camelCases only top-level keys, so the embedded relation
+    // `conversation_skill_tag(*)` becomes `conversationSkillTag` and its
+    // array items keep their snake_case keys (`skill_id`). The previous
+    // code read `c.skillTags` / `t.skillId` — both undefined — so this
+    // filter silently matched nothing and completed conversations never
+    // appeared under any skill (conversationCount was always 0).
     const skillConvos = conversations.filter(c =>
-      (c as unknown as { skillTags?: { skillId: string }[] }).skillTags?.some(
-        (t: { skillId: string }) => t.skillId === skill.id
+      (c as unknown as { conversationSkillTag?: { skill_id: string }[] }).conversationSkillTag?.some(
+        (t: { skill_id: string }) => t.skill_id === skill.id
       )
     )
 
