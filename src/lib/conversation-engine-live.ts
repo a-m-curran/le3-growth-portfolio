@@ -296,7 +296,13 @@ export async function generateCareerOutput(
     const text = await llm().generate(
       CAREER_OUTPUT_SYSTEM_PROMPT,
       userPrompt + extra,
-      { temperature: 0.4, maxTokens: 2000 }
+      // Career synthesizes EVERY skill's resumeLanguage + first-person talking
+      // points + verbatim-duplicated annotations into one JSON object, so the
+      // output scales with skill count. 2000 tokens truncated the JSON for
+      // students with ~3+ skills (incomplete → parse fell back to an empty
+      // career output); 16000 covers even the richest current profiles.
+      // The scalable fix is a per-skill split (roadmap #6: caching + splitting).
+      { temperature: 0.4, maxTokens: 16000 }
     )
     const parsed = parseJsonFromLLM<{
       resumeSummary: string
