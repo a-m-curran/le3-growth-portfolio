@@ -168,19 +168,28 @@ export function scoreVoiceFidelity(
     }
   }
 
-  // Greedy longest-match walk over the generated text.
+  // Greedy longest-match walk over the generated text. Take the LONGEST
+  // student span at each position, then SKIP PAST it. Advancing past the
+  // match (not by one word) makes each contiguous grounded region count
+  // once — else a single long verbatim overlap inflates groundedPhraseCount
+  // by emitting a distinct sub-span at every offset inside it (which would
+  // let one verbatim sentence clear even the rich floor of 3).
   const grounded = new Set<string>()
   const covered = new Array<boolean>(genWords.length).fill(false)
-  for (let i = 0; i < genWords.length; i++) {
+  let i = 0
+  while (i < genWords.length) {
     const maxHere = Math.min(MAX_SPAN, genWords.length - i)
+    let matched = 0
     for (let n = maxHere; n >= MIN_SPAN; n--) {
       const span = genWords.slice(i, i + n).join(' ')
       if (corpusNgrams.has(span)) {
         grounded.add(span)
         for (let k = i; k < i + n; k++) covered[k] = true
+        matched = n
         break
       }
     }
+    i += matched > 0 ? matched : 1
   }
 
   const groundedPhrases = Array.from(grounded)
