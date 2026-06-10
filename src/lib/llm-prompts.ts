@@ -846,15 +846,15 @@ the underlying moment.
 
 OUTPUT FORMAT (respond with valid JSON only, no markdown):
 {
-  "resumeSummary": "3-4 sentence professional summary suitable for the top of a resume. Emphasize transferable skills and growth mindset. Use action verbs. Write in third person.",
+  "resumeSummary": "2-3 sentence professional summary suitable for the top of a resume. Emphasize transferable skills and growth mindset. Use action verbs. Write in third person.",
   "skillDescriptions": [
     {
       "skillId": "skill_...",
       "skillName": "...",
       "resumeLanguage": "1-2 sentences in resume style. Action verb + specific accomplishment + result. Professional but authentic.",
       "talkingPoints": [
-        "A talking point in the student's own voice — first person, reusing their real phrases, the way they'd say it out loud",
-        "Another, same first-person student voice"
+        "A SHORT (1-2 sentence) talking point in the student's own voice — first person, reusing their real phrases, the way they'd say it out loud",
+        "At most one more, same first-person student voice"
       ],
       "annotations": [
         {
@@ -876,7 +876,10 @@ RULES:
   words (shown per skill under "The student's own words for this skill") wherever
   they fit. e.g. "When I gave Tanya feedback, I realized 'great job' wasn't
   actually helping her."
-- Include 2-3 talking points per skill that has a narrative. Skip skills with no narrative.
+- Include 1-2 talking points per skill that has a narrative. Skip skills with no narrative.
+- KEEP IT BRIEF. Each talking point is 1-2 sentences — a hook the student can
+  expand on out loud, not the whole story. The narratives already hold the full
+  arc; this output is a springboard, so brevity beats completeness.
 - The resume summary should read as a cohesive professional story.
 
 ANNOTATIONS — HOW TO EMIT THEM:

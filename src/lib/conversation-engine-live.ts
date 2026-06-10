@@ -300,7 +300,10 @@ export async function generateCareerOutput(
       // points + verbatim-duplicated annotations into one JSON object, so the
       // output scales with skill count. 2000 tokens truncated the JSON for
       // students with ~3+ skills (incomplete → parse fell back to an empty
-      // career output); 16000 covers even the richest current profiles.
+      // career output). Brevity is enforced by the prompt (1-2 short talking
+      // points per skill — the career surface is a springboard toward the
+      // careermap/apply tools, not the story); 16000 is a never-truncate
+      // guard, not a target — cost tracks tokens actually generated.
       // The scalable fix is a per-skill split (roadmap #6: caching + splitting).
       { temperature: 0.4, maxTokens: 16000 }
     )
