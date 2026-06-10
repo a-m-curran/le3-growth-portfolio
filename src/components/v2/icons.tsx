@@ -31,16 +31,16 @@ export function TodayIcon({ className }: IconProps) {
 }
 
 export function GrowthIcon({ className }: IconProps) {
-  // Three rising arcs of different heights — a small bar chart that
-  // suggests progress without anchoring to a specific metaphor (plant,
-  // mountain, etc). Lets the page name carry the abstraction.
+  // A sprout: stem rising from soil with two leaves. Returns to the
+  // garden/plant metaphor the surface already uses internally
+  // (GardenPlant, archetypes) — warmer and more specific than a
+  // generic chart.
   return (
     <svg {...baseProps(className)}>
-      <path d="M4 20V14" />
-      <path d="M10 20V10" />
-      <path d="M16 20V6" />
-      <path d="M22 20V4" />
-      <path d="M3 20h20" />
+      <path d="M12 22V13" />
+      <path d="M12 13C12 9 15 6 19 6 19 10 16 13 12 13Z" />
+      <path d="M12 16C12 13 9.5 10.5 6 10.5 6 13.5 8.5 16 12 16Z" />
+      <path d="M7 22h10" />
     </svg>
   )
 }
