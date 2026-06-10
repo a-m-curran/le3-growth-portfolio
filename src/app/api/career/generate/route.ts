@@ -54,6 +54,10 @@ export async function POST() {
           sentence: string
           conversationId: string
         }> | null) ?? [],
+        studentPhrases:
+          ((n.data_sources_used as Record<string, unknown> | null)
+            ?.voiceFidelity as { groundedPhrases?: string[] } | undefined)
+            ?.groundedPhrases ?? [],
       }))
 
     if (narratives.length === 0) {

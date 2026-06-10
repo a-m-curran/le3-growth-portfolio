@@ -853,8 +853,8 @@ OUTPUT FORMAT (respond with valid JSON only, no markdown):
       "skillName": "...",
       "resumeLanguage": "1-2 sentences in resume style. Action verb + specific accomplishment + result. Professional but authentic.",
       "talkingPoints": [
-        "Interview-ready talking point 1 (1-2 sentences, STAR format where possible)",
-        "Interview-ready talking point 2"
+        "A talking point in the student's own voice — first person, reusing their real phrases, the way they'd say it out loud",
+        "Another, same first-person student voice"
       ],
       "annotations": [
         {
@@ -871,10 +871,13 @@ RULES:
   navigated, initiated, adapted, facilitated, synthesized, etc.
 - Ground claims in specific examples from the narratives where possible.
 - Don't oversell. The student's actual growth is impressive on its own.
-- Talking points should be conversational, as if the student is telling the story
-  in an interview. First person ("I").
+- Talking points must sound like the STUDENT talking out loud in an interview —
+  first person, in their real phrasing, NOT resume-speak. Reuse the student's own
+  words (shown per skill under "The student's own words for this skill") wherever
+  they fit. e.g. "When I gave Tanya feedback, I realized 'great job' wasn't
+  actually helping her."
 - Include 2-3 talking points per skill that has a narrative. Skip skills with no narrative.
-- The resume summary should feel cohesive, not just a list of skills.
+- The resume summary should read as a cohesive professional story.
 
 ANNOTATIONS — HOW TO EMIT THEM:
 - For each skill, emit annotation entries for the sentences in your resumeLanguage
@@ -891,7 +894,15 @@ ANNOTATIONS — HOW TO EMIT THEM:
 - If a narrative had no citations in its input (the source narrative wasn't
   grounded), you may emit an empty annotations array for that skill.
 - Annotations are scoped to each skill — a sentence in skill A's talking points
-  cannot cite skill B's narrative. Stay within the per-skill scope.`
+  cannot cite skill B's narrative. Stay within the per-skill scope.
+
+BANNED CONSTRUCTIONS (these are the tell of AI writing — never use them):
+- The antithesis flip: "it's not X — it's Y", "not just X, but Y",
+  "isn't about X, it's about Y", "doesn't just X — it Y".
+  WRONG: "It's not just about the grade — it's about who you became."
+  RIGHT: "I stopped chasing the grade and started caring whether I actually understood it."
+- Before returning, scan your resumeSummary, resumeLanguage, and talkingPoints
+  for any "not X — Y" / "not just" pivot shape and rewrite it as a plain statement.`
 
 export function buildCareerOutputContext(
   studentName: string,
@@ -905,6 +916,10 @@ export function buildCareerOutputContext(
      * forward into its resumeLanguage / talkingPoints annotations.
      */
     citations?: Array<{ sentence: string; conversationId: string }>
+    /** The student's own grounded phrases for this skill (from the narrative's
+     *  voice-fidelity scoring) — raw material for re-grounding the talking
+     *  points in their phrasing. Empty when the source narrative wasn't scored. */
+    studentPhrases?: string[]
   }[]
 ): string {
   const parts = [
@@ -917,6 +932,10 @@ export function buildCareerOutputContext(
   for (const n of narratives) {
     parts.push(`--- ${n.skillName} (${n.skillId}) ---`)
     parts.push(n.narrativeText)
+    if (n.studentPhrases && n.studentPhrases.length > 0) {
+      parts.push('')
+      parts.push(`The student's own words for this skill: ${n.studentPhrases.map(p => `"${p}"`).join('; ')}`)
+    }
     if (n.citations && n.citations.length > 0) {
       parts.push('')
       parts.push('CITATIONS for this narrative (sentence → source conversationId):')
