@@ -732,6 +732,13 @@ export interface NarrativeContext {
     /** The course this work belonged to, if known. */
     courseName?: string
     synthesisText: string
+    /**
+     * The student's OWN words for this conversation — their raw phase
+     * responses, lightly capped. The generator mirrors these directly;
+     * without them it can only paraphrase the synthesis (which reads
+     * generic). Assembled by the route from response_phase_1/2/3.
+     */
+    responseText: string
     suggestedInsight: string
     keyMoments?: { phase: number; quote: string; significance: string }[]
   }[]
@@ -797,6 +804,9 @@ export function buildNarrativeContext(ctx: NarrativeContext): string {
       parts.push(`     Assignment prompt: ${desc}`)
     }
     parts.push(`     Synthesis: ${c.synthesisText}`)
+    if (c.responseText) {
+      parts.push(`     STUDENT'S OWN WORDS: ${c.responseText}`)
+    }
     parts.push(`     Insight: ${c.suggestedInsight}`)
     if (c.keyMoments && c.keyMoments.length > 0) {
       c.keyMoments.forEach(m => {

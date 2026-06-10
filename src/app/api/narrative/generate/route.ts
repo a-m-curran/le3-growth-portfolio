@@ -95,6 +95,10 @@ export async function POST(request: Request) {
         workDescription: (work?.description as string) || undefined,
         courseName: (work?.course_name as string) || undefined,
         synthesisText: (c.synthesis_text as string) || '',
+        responseText: [c.response_phase_1, c.response_phase_2, c.response_phase_3]
+          .filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
+          .map(p => (p.length > 800 ? p.slice(0, 800) + '…' : p))
+          .join(' '),
         suggestedInsight: (c.suggested_insight as string) || '',
         keyMoments: [] as { phase: number; quote: string; significance: string }[],
       }
