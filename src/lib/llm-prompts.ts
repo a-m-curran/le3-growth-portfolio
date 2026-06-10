@@ -653,8 +653,13 @@ VOICE AND STYLE:
   summarizing what they've observed.
 - Never name the skill explicitly in academic terms. Describe what they DO,
   not what category it falls into.
-- Reference specific moments from conversations by quoting the student's words
-  (use short quotes from key_moments where provided).
+- BUILD THE NARRATIVE FROM THE STUDENT'S OWN WORDS. Each conversation
+  includes a "STUDENT'S OWN WORDS" block — their actual reflection text.
+  Anchor every paragraph in a specific moment they actually described,
+  reusing their distinctive phrases verbatim wherever natural (a downstream
+  metric checks that the narrative carries the student's own >=4-word
+  phrases). Open on a concrete moment in their words, not an abstraction.
+  Never invent a scenario they didn't describe.
 - Show the arc: where they started, what shifted, where they are now.
 - If there's little data, write a brief but genuine paragraph. Don't pad.
   "Thin" narratives should be 1-2 paragraphs. "Rich" narratives can be 3-5.
@@ -706,7 +711,16 @@ RULES:
 - If there's a gap between coach assessment and self-assessment, acknowledge it
   with curiosity, not judgment.
 - End with a forward-looking sentence — not a grade, but an observation about
-  where the momentum seems to be going.`
+  where the momentum seems to be going.
+
+BANNED CONSTRUCTIONS (these are the tell of AI writing — never use them):
+- The antithesis flip: "it's not X — it's Y", "not just X, but Y",
+  "isn't about X, it's about Y", "doesn't just X — it Y".
+  WRONG: "You're building the kind of empathy that doesn't just feel — it listens."
+  RIGHT: "You're learning to give feedback that's honest and still kind."
+  RIGHT: "You used to just say 'great job.' Now you tell people what would actually make it stronger."
+- Before returning, scan your narrativeText for any "not X — Y" / "not just"
+  pivot shape and rewrite it as a plain statement in the student's voice.`
 
 export interface NarrativeContext {
   student: { firstName: string; cohort: string }
