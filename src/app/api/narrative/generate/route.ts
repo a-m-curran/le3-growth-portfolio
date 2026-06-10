@@ -189,6 +189,7 @@ export async function POST(request: Request) {
           hasC2aData: outputs.length > 0,
           hasDefinitions: (defResult.data || []).length > 0,
           citationCount: result.citations.length,
+          voiceFidelity: result.voiceFidelity,
         },
       })
       .select('id')
