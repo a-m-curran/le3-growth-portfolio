@@ -653,8 +653,13 @@ VOICE AND STYLE:
   summarizing what they've observed.
 - Never name the skill explicitly in academic terms. Describe what they DO,
   not what category it falls into.
-- Reference specific moments from conversations by quoting the student's words
-  (use short quotes from key_moments where provided).
+- BUILD THE NARRATIVE FROM THE STUDENT'S OWN WORDS. Each conversation
+  includes a "STUDENT'S OWN WORDS" block — their actual reflection text.
+  Anchor every paragraph in a specific moment they actually described,
+  reusing their distinctive phrases verbatim wherever natural (a downstream
+  metric checks that the narrative carries the student's own >=4-word
+  phrases). Open on a concrete moment in their words, not an abstraction.
+  Never invent a scenario they didn't describe.
 - Show the arc: where they started, what shifted, where they are now.
 - If there's little data, write a brief but genuine paragraph. Don't pad.
   "Thin" narratives should be 1-2 paragraphs. "Rich" narratives can be 3-5.
@@ -706,7 +711,16 @@ RULES:
 - If there's a gap between coach assessment and self-assessment, acknowledge it
   with curiosity, not judgment.
 - End with a forward-looking sentence — not a grade, but an observation about
-  where the momentum seems to be going.`
+  where the momentum seems to be going.
+
+BANNED CONSTRUCTIONS (these are the tell of AI writing — never use them):
+- The antithesis flip: "it's not X — it's Y", "not just X, but Y",
+  "isn't about X, it's about Y", "doesn't just X — it Y".
+  WRONG: "You're building the kind of empathy that doesn't just feel — it listens."
+  RIGHT: "You're learning to give feedback that's honest and still kind."
+  RIGHT: "You used to just say 'great job.' Now you tell people what would actually make it stronger."
+- Before returning, scan your narrativeText for any "not X — Y" / "not just"
+  pivot shape and rewrite it as a plain statement in the student's voice.`
 
 export interface NarrativeContext {
   student: { firstName: string; cohort: string }
@@ -732,6 +746,13 @@ export interface NarrativeContext {
     /** The course this work belonged to, if known. */
     courseName?: string
     synthesisText: string
+    /**
+     * The student's OWN words for this conversation — their raw phase
+     * responses, lightly capped. The generator mirrors these directly;
+     * without them it can only paraphrase the synthesis (which reads
+     * generic). Assembled by the route from response_phase_1/2/3.
+     */
+    responseText: string
     suggestedInsight: string
     keyMoments?: { phase: number; quote: string; significance: string }[]
   }[]
@@ -797,6 +818,9 @@ export function buildNarrativeContext(ctx: NarrativeContext): string {
       parts.push(`     Assignment prompt: ${desc}`)
     }
     parts.push(`     Synthesis: ${c.synthesisText}`)
+    if (c.responseText) {
+      parts.push(`     STUDENT'S OWN WORDS: ${c.responseText}`)
+    }
     parts.push(`     Insight: ${c.suggestedInsight}`)
     if (c.keyMoments && c.keyMoments.length > 0) {
       c.keyMoments.forEach(m => {
@@ -822,15 +846,15 @@ the underlying moment.
 
 OUTPUT FORMAT (respond with valid JSON only, no markdown):
 {
-  "resumeSummary": "3-4 sentence professional summary suitable for the top of a resume. Emphasize transferable skills and growth mindset. Use action verbs. Write in third person.",
+  "resumeSummary": "2-3 sentence professional summary suitable for the top of a resume. Emphasize transferable skills and growth mindset. Use action verbs. Write in third person.",
   "skillDescriptions": [
     {
       "skillId": "skill_...",
       "skillName": "...",
       "resumeLanguage": "1-2 sentences in resume style. Action verb + specific accomplishment + result. Professional but authentic.",
       "talkingPoints": [
-        "Interview-ready talking point 1 (1-2 sentences, STAR format where possible)",
-        "Interview-ready talking point 2"
+        "A SHORT (1-2 sentence) talking point in the student's own voice — first person, reusing their real phrases, the way they'd say it out loud",
+        "At most one more, same first-person student voice"
       ],
       "annotations": [
         {
@@ -847,10 +871,16 @@ RULES:
   navigated, initiated, adapted, facilitated, synthesized, etc.
 - Ground claims in specific examples from the narratives where possible.
 - Don't oversell. The student's actual growth is impressive on its own.
-- Talking points should be conversational, as if the student is telling the story
-  in an interview. First person ("I").
-- Include 2-3 talking points per skill that has a narrative. Skip skills with no narrative.
-- The resume summary should feel cohesive, not just a list of skills.
+- Talking points must sound like the STUDENT talking out loud in an interview —
+  first person, in their real phrasing, NOT resume-speak. Reuse the student's own
+  words (shown per skill under "The student's own words for this skill") wherever
+  they fit. e.g. "When I gave Tanya feedback, I realized 'great job' wasn't
+  actually helping her."
+- Include 1-2 talking points per skill that has a narrative. Skip skills with no narrative.
+- KEEP IT BRIEF. Each talking point is 1-2 sentences — a hook the student can
+  expand on out loud, not the whole story. The narratives already hold the full
+  arc; this output is a springboard, so brevity beats completeness.
+- The resume summary should read as a cohesive professional story.
 
 ANNOTATIONS — HOW TO EMIT THEM:
 - For each skill, emit annotation entries for the sentences in your resumeLanguage
@@ -867,7 +897,15 @@ ANNOTATIONS — HOW TO EMIT THEM:
 - If a narrative had no citations in its input (the source narrative wasn't
   grounded), you may emit an empty annotations array for that skill.
 - Annotations are scoped to each skill — a sentence in skill A's talking points
-  cannot cite skill B's narrative. Stay within the per-skill scope.`
+  cannot cite skill B's narrative. Stay within the per-skill scope.
+
+BANNED CONSTRUCTIONS (these are the tell of AI writing — never use them):
+- The antithesis flip: "it's not X — it's Y", "not just X, but Y",
+  "isn't about X, it's about Y", "doesn't just X — it Y".
+  WRONG: "It's not just about the grade — it's about who you became."
+  RIGHT: "I stopped chasing the grade and started caring whether I actually understood it."
+- Before returning, scan your resumeSummary, resumeLanguage, and talkingPoints
+  for any "not X — Y" / "not just" pivot shape and rewrite it as a plain statement.`
 
 export function buildCareerOutputContext(
   studentName: string,
@@ -881,6 +919,10 @@ export function buildCareerOutputContext(
      * forward into its resumeLanguage / talkingPoints annotations.
      */
     citations?: Array<{ sentence: string; conversationId: string }>
+    /** The student's own grounded phrases for this skill (from the narrative's
+     *  voice-fidelity scoring) — raw material for re-grounding the talking
+     *  points in their phrasing. Empty when the source narrative wasn't scored. */
+    studentPhrases?: string[]
   }[]
 ): string {
   const parts = [
@@ -893,6 +935,10 @@ export function buildCareerOutputContext(
   for (const n of narratives) {
     parts.push(`--- ${n.skillName} (${n.skillId}) ---`)
     parts.push(n.narrativeText)
+    if (n.studentPhrases && n.studentPhrases.length > 0) {
+      parts.push('')
+      parts.push(`The student's own words for this skill: ${n.studentPhrases.map(p => `"${p}"`).join('; ')}`)
+    }
     if (n.citations && n.citations.length > 0) {
       parts.push('')
       parts.push('CITATIONS for this narrative (sentence → source conversationId):')

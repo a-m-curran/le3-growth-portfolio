@@ -1,6 +1,7 @@
 import type { StudentWork, ConversationOutput } from './types'
 import { getClient } from './llm-client'
 import { createAdminClient } from './supabase-admin'
+import { scoreVoiceFidelity } from './voice-fidelity'
 import {
   PHASE_1_SYSTEM_PROMPT,
   PHASE_2_SYSTEM_PROMPT,
@@ -256,6 +257,10 @@ export async function generateCareerOutput(
      * resume sentences and talking points with the same conversationIds.
      */
     citations?: Array<{ sentence: string; conversationId: string }>
+    /** The student's own grounded phrases for this skill (from the narrative's
+     *  voice-fidelity scoring) — raw material for re-grounding the talking
+     *  points in their phrasing. Empty when the source narrative wasn't scored. */
+    studentPhrases?: string[]
   }[]
 ): Promise<{
   resumeSummary: string
@@ -272,22 +277,10 @@ export async function generateCareerOutput(
      */
     annotations: Array<{ sentence: string; conversationId: string }>
   }[]
+  voiceFidelity: { groundedPhraseCount: number; coverage: number; passed: boolean; groundedPhrases: string[] }
 }> {
-  const text = await llm().generate(
-    CAREER_OUTPUT_SYSTEM_PROMPT,
-    buildCareerOutputContext(studentName, narratives),
-    { temperature: 0.4, maxTokens: 2000 }
-  )
-  const parsed = parseJsonFromLLM<{
-    resumeSummary: string
-    skillDescriptions: Array<{
-      skillId: string
-      skillName: string
-      resumeLanguage: string
-      talkingPoints: string[]
-      annotations?: Array<{ sentence: string; conversationId: string }>
-    }>
-  }>(text, { resumeSummary: text, skillDescriptions: [] })
+  const careerCorpus = narratives.flatMap(n => n.studentPhrases ?? []).join(' ')
+  const userPrompt = buildCareerOutputContext(studentName, narratives)
 
   // Build the per-skill set of valid conversationIds (the ones we passed
   // INTO the prompt) so we can drop hallucinated ids the model might emit.
@@ -299,36 +292,101 @@ export async function generateCareerOutput(
     )
   }
 
-  // Validate each skill's annotations: sentence must appear verbatim in
-  // resumeLanguage or one of the talkingPoints for THAT skill, and the
-  // conversationId must be one of the citations we passed in for that
-  // same skill. Anything else gets silently dropped — the UI's nullish
-  // fallback handles a missing/empty annotations list cleanly.
-  const skillDescriptions = parsed.skillDescriptions.map(sd => {
-    const allowedHaystack = [sd.resumeLanguage, ...(sd.talkingPoints ?? [])]
-      .filter(Boolean)
-      .join('\n')
-    const allowedIds = allowedConvoIdsBySkill.get(sd.skillId) ?? new Set<string>()
-    const validAnnotations = (sd.annotations ?? []).filter(
-      a =>
-        typeof a.sentence === 'string' &&
-        typeof a.conversationId === 'string' &&
-        a.sentence.length > 0 &&
-        allowedIds.has(a.conversationId) &&
-        allowedHaystack.includes(a.sentence)
+  const genOnce = async (extra: string) => {
+    const text = await llm().generate(
+      CAREER_OUTPUT_SYSTEM_PROMPT,
+      userPrompt + extra,
+      // Career synthesizes EVERY skill's resumeLanguage + first-person talking
+      // points + verbatim-duplicated annotations into one JSON object, so the
+      // output scales with skill count. 2000 tokens truncated the JSON for
+      // students with ~3+ skills (incomplete → parse fell back to an empty
+      // career output). Brevity is enforced by the prompt (1-2 short talking
+      // points per skill — the career surface is a springboard toward the
+      // careermap/apply tools, not the story); 16000 is a never-truncate
+      // guard, not a target — cost tracks tokens actually generated.
+      // The scalable fix is a per-skill split (roadmap #6: caching + splitting).
+      { temperature: 0.4, maxTokens: 16000 }
     )
-    return {
-      skillId: sd.skillId,
-      skillName: sd.skillName,
-      resumeLanguage: sd.resumeLanguage,
-      talkingPoints: sd.talkingPoints ?? [],
-      annotations: validAnnotations,
+    const parsed = parseJsonFromLLM<{
+      resumeSummary: string
+      skillDescriptions: Array<{
+        skillId: string
+        skillName: string
+        resumeLanguage: string
+        talkingPoints: string[]
+        annotations?: Array<{ sentence: string; conversationId: string }>
+      }>
+    }>(text, { resumeSummary: text, skillDescriptions: [] })
+
+    // Validate each skill's annotations: sentence must appear verbatim in
+    // resumeLanguage or one of the talkingPoints for THAT skill, and the
+    // conversationId must be one of the citations we passed in for that
+    // same skill. Anything else gets silently dropped — the UI's nullish
+    // fallback handles a missing/empty annotations list cleanly.
+    const skillDescriptions = parsed.skillDescriptions.map(sd => {
+      const allowedHaystack = [sd.resumeLanguage, ...(sd.talkingPoints ?? [])]
+        .filter(Boolean)
+        .join('\n')
+      const allowedIds = allowedConvoIdsBySkill.get(sd.skillId) ?? new Set<string>()
+      const validAnnotations = (sd.annotations ?? []).filter(
+        a =>
+          typeof a.sentence === 'string' &&
+          typeof a.conversationId === 'string' &&
+          a.sentence.length > 0 &&
+          allowedIds.has(a.conversationId) &&
+          allowedHaystack.includes(a.sentence)
+      )
+      return {
+        skillId: sd.skillId,
+        skillName: sd.skillName,
+        resumeLanguage: sd.resumeLanguage,
+        talkingPoints: sd.talkingPoints ?? [],
+        annotations: validAnnotations,
+      }
+    })
+    return { resumeSummary: parsed.resumeSummary, skillDescriptions }
+  }
+
+  let result = await genOnce('')
+  let careerFidelity = scoreVoiceFidelity(
+    result.skillDescriptions.flatMap(sd => sd.talkingPoints).join(' '),
+    careerCorpus,
+    // 'rich' floor is intentional — career synthesizes the whole portfolio, so
+    // it should carry several of the student's phrases.
+    'rich'
+  )
+  // Only gate when there's a corpus to ground against; otherwise ship as-is.
+  if (careerCorpus.trim() && !careerFidelity.passed) {
+    const retry = await genOnce(
+      '\n\nREVISION: Make the talkingPoints sound like the student actually ' +
+        'talking — first person, reusing their own words shown under "The student\'s ' +
+        'own words for this skill". Remove any "not X — it\'s Y" construction. ' +
+        'Return the same JSON shape.'
+    )
+    const retryFidelity = scoreVoiceFidelity(
+      retry.skillDescriptions.flatMap(sd => sd.talkingPoints).join(' '),
+      careerCorpus,
+      'rich'
+    )
+    const retryIsBetter =
+      (retryFidelity.passed && !careerFidelity.passed) ||
+      (retryFidelity.passed === careerFidelity.passed &&
+        retryFidelity.groundedPhraseCount >= careerFidelity.groundedPhraseCount)
+    if (retryIsBetter) {
+      result = retry
+      careerFidelity = retryFidelity
     }
-  })
+  }
 
   return {
-    resumeSummary: parsed.resumeSummary,
-    skillDescriptions,
+    resumeSummary: result.resumeSummary,
+    skillDescriptions: result.skillDescriptions,
+    voiceFidelity: {
+      groundedPhraseCount: careerFidelity.groundedPhraseCount,
+      coverage: careerFidelity.coverage,
+      passed: careerFidelity.passed,
+      groundedPhrases: careerFidelity.groundedPhrases,
+    },
   }
 }
 
@@ -345,17 +403,57 @@ export async function generateSkillNarrative(
    * surface couldn't parse it cleanly.
    */
   citations: Array<{ sentence: string; conversationId: string }>
+  voiceFidelity: { groundedPhraseCount: number; coverage: number; passed: boolean; groundedPhrases: string[] }
 }> {
-  const text = await llm().generate(
-    NARRATIVE_GENERATION_SYSTEM_PROMPT,
-    buildNarrativeContext(ctx),
-    { temperature: 0.5, maxTokens: 2000 }
-  )
-  const parsed = parseJsonFromLLM<{
+  // The student's own words, assembled for the fidelity check.
+  const studentCorpus = [
+    ...ctx.conversations.map(c => c.responseText).filter(Boolean),
+    ...ctx.definitions.map(d => d.text),
+  ].join(' ')
+
+  type NarrativeJson = {
     narrativeText: string
     richness: 'thin' | 'developing' | 'rich'
     citations?: Array<{ sentence: string; conversationId: string }>
-  }>(text, { narrativeText: text, richness: 'thin', citations: [] })
+  }
+  const userPrompt = buildNarrativeContext(ctx)
+
+  const genOnce = async (extra: string): Promise<NarrativeJson> => {
+    const raw = await llm().generate(
+      NARRATIVE_GENERATION_SYSTEM_PROMPT,
+      userPrompt + extra,
+      { temperature: 0.5, maxTokens: 2000 }
+    )
+    return parseJsonFromLLM<NarrativeJson>(raw, { narrativeText: raw, richness: 'thin', citations: [] })
+  }
+
+  let parsed = await genOnce('')
+  let fidelity = scoreVoiceFidelity(parsed.narrativeText, studentCorpus, parsed.richness)
+  // Only retry when there's a corpus to ground against — an empty corpus
+  // (no student prose, no definitions) can never raise the score, so a
+  // second generation would be pure waste on this hot path.
+  if (studentCorpus.trim() && !fidelity.passed) {
+    // Degrade, never block: try once more with a stronger nudge. A weaker
+    // narrative still ships.
+    const retry = await genOnce(
+      '\n\nREVISION: Use MORE of the student\'s own words verbatim — anchor each ' +
+        'paragraph in a specific moment they described. Remove any "not X — it\'s Y" ' +
+        'construction. Return the same JSON shape.'
+    )
+    const retryFidelity = scoreVoiceFidelity(retry.narrativeText, studentCorpus, retry.richness)
+    // Prefer an attempt that PASSES — the retry's job is often to clear a
+    // banned AI-ism, which flips `passed` without necessarily raising the
+    // phrase count. Only when both share the same passed-state do we keep
+    // whichever grounded more of the student's words.
+    const retryIsBetter =
+      (retryFidelity.passed && !fidelity.passed) ||
+      (retryFidelity.passed === fidelity.passed &&
+        retryFidelity.groundedPhraseCount >= fidelity.groundedPhraseCount)
+    if (retryIsBetter) {
+      parsed = retry
+      fidelity = retryFidelity
+    }
+  }
 
   // Validate every citation: sentence must be findable in narrativeText AND
   // conversationId must be one we provided in the context. Drop any that
@@ -375,6 +473,12 @@ export async function generateSkillNarrative(
     narrativeText: parsed.narrativeText,
     richness: parsed.richness,
     citations: validCitations,
+    voiceFidelity: {
+      groundedPhraseCount: fidelity.groundedPhraseCount,
+      coverage: fidelity.coverage,
+      passed: fidelity.passed,
+      groundedPhrases: fidelity.groundedPhrases,
+    },
   }
 }
 
